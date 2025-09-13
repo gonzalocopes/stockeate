@@ -1,0 +1,83 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Usa el host del pooler para conexiones normales
+  url       = env("DATABASE_URL")
+  // Usa la conexión directa (sin -pooler) para migraciones/introspección
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model User {
+  id        String       @id @default(uuid())
+  email     String       @unique
+  password  String
+  createdAt DateTime     @default(now())
+  branches  BranchUser[]
+}
+
+model Branch {
+  id       String       @id @default(uuid())
+  name     String
+  users    BranchUser[]
+  products Product[]
+  remitos  Remito[]
+}
+
+model BranchUser {
+  id       String @id @default(uuid())
+  role     String
+  userId   String
+  branchId String
+  user     User   @relation(fields: [userId], references: [id])
+  branch   Branch @relation(fields: [branchId], references: [id])
+}
+
+model Product {
+  id         String       @id @default(uuid())
+  branchId   String
+  code       String       @unique // único global para el MVP
+  name       String
+  price      Decimal      @default(0)
+  stock      Int          @default(0)
+  version    Int          @default(0)
+  updatedAt  DateTime     @updatedAt
+  branch     Branch       @relation(fields: [branchId], references: [id])
+  RemitoItem RemitoItem[]
+}
+
+model Remito {
+  id             String       @id @default(uuid())
+  branchId       String
+  tmpNumber      String       @unique
+  officialNumber String?      @unique
+  customer       String?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  items          RemitoItem[]
+  branch         Branch       @relation(fields: [branchId], references: [id])
+}
+
+model RemitoItem {
+  id        String  @id @default(uuid())
+  remitoId  String
+  productId String
+  qty       Int
+  unitPrice Decimal @default(0)
+  remito    Remito  @relation(fields: [remitoId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model StockMove {
+  id        String   @id @default(uuid())
+  productId String
+  branchId  String
+  qty       Int
+  type      String // 'IN' | 'OUT'
+  ref       String?
+  createdAt DateTime @default(now())
+}
