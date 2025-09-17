@@ -32,7 +32,7 @@
     },
 
     "plugins": [
-      "expo-barcode-scanner",
+      "expo-camera",
       "expo-sqlite",
       [
         "expo-splash-screen",

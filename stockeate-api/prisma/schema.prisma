@@ -5,11 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Usa el host del pooler para conexiones normales
-  url       = env("DATABASE_URL")
-  // Usa la conexión directa (sin -pooler) para migraciones/introspección
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
