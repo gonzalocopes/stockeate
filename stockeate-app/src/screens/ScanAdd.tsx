@@ -1,54 +1,218 @@
-﻿import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, Button } from "react-native";
-import { BarCodeScanner } from "expo-barcode-scanner";
-import { DB } from "../db";
-import { useBatch } from "../stores/batch";
-import { api } from "../api";
-import { useBranch } from "../stores/branch";
+﻿// src/screens/ScanAdd.tsx
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View, Text, Button, FlatList, TouchableOpacity, TextInput, Platform
+} from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { BarCodeScanner } from 'expo-barcode-scanner';
+import * as Haptics from 'expo-haptics';
+//import { DB } from '../db';
+import { useBatch } from '../stores/batch';
+import { useBranch } from '../stores/branch';
+import ProductEditModal from '../components/ProductEditModal';
 
 export default function ScanAdd({ navigation }: any) {
-  const [perm, setPerm] = useState<boolean | null>(null);
-  const { addOrInc, asArray, inc, dec, remove } = useBatch();
-  const branchId = useBranch((s) => s.branchId);
+  // Sucursal
+  const getBranchId = () => useBranch.getState().id;
 
-  useEffect(() => { (async () => { const { status } = await BarCodeScanner.requestPermissionsAsync(); setPerm(status === "granted"); })(); }, []);
-  if (perm === null) return <Text>Pidiendo permiso</Text>;
-  if (perm === false) return <Text>Sin permiso de cámara</Text>;
+  // Lote
+  const { items, addOrInc, dec, remove, totalQty } = useBatch();
 
-  const handleScan = async (code: string) => {
-    let p = DB.getProductByCode(code);
-    if (!p) {
-      try {
-        const r = await api.get(`/products/by-code/${encodeURIComponent(code)}`);
-        p = DB.upsertProduct({ ...r.data, branch_id: r.data.branchId });
-      } catch {
-        p = DB.upsertProduct({ code, name: `Producto ${code}`, price: 0, stock: 0, branch_id: branchId });
+  // Cámara
+  const [hasPerm, setHasPerm] = useState<boolean | null>(null);
+  const isFocused = useIsFocused();
+  const scanLock = useRef(false); // evita dobles lecturas
+
+  // Manual
+  const [manualCode, setManualCode] = useState('');
+
+  // Modal nuevo producto
+  const [editVisible, setEditVisible] = useState(false);
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS === 'web') {
+        setHasPerm(true);
+        return;
       }
-    }
-    addOrInc({ id: p.id, code: p.code, name: p.name, unitPrice: p.price ?? 0 });
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPerm(status === 'granted');
+    })();
+  }, []);
+
+  const addScannedToBatch = (p: any) => {
+    addOrInc(
+      {
+        product_id: p.id,
+        code: p.code,
+        name: p.name,
+        unit_price: p.price ?? 0,
+      },
+      1
+    );
   };
 
-  const items = asArray();
+  const onScan = async (code: string) => {
+    const branchId = getBranchId();
+    if (!branchId) {
+      alert('Seleccioná una sucursal primero');
+      return;
+    }
+    // evitar doble evento
+    if (scanLock.current) return;
+    scanLock.current = true;
+    setTimeout(() => (scanLock.current = false), 700);
+
+    try { await Haptics.selectionAsync(); } catch {}
+
+    let p = DB.getProductByCode(code);
+    if (p) {
+      addScannedToBatch(p);
+      setManualCode('');
+      return;
+    }
+    // Producto inexistente -> abrir modal para completar nombre y precio
+    setPendingCode(code);
+    setEditVisible(true);
+  };
+
+  const handleSaveNewProduct = (data: { name: string; price: number }) => {
+    const branchId = getBranchId();
+    if (!branchId || !pendingCode) {
+      setEditVisible(false);
+      setPendingCode(null);
+      return;
+    }
+
+    const created = DB.upsertProduct({
+      code: pendingCode,
+      name: data.name,
+      price: data.price,
+      stock: 0,
+      branch_id: branchId,
+    });
+
+    addScannedToBatch(created);
+    setEditVisible(false);
+    setPendingCode(null);
+    setManualCode('');
+  };
+
+  const renderItem = ({ item }: any) => (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderColor: '#eee',
+      }}
+    >
+      <Text style={{ flex: 1 }}>
+        {item.code} — {item.name}
+      </Text>
+      <TouchableOpacity
+        onPress={() => dec(item.code)}
+        style={{ paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderRadius: 6 }}
+      >
+        <Text>-</Text>
+      </TouchableOpacity>
+      <Text style={{ width: 30, textAlign: 'center' }}>{item.qty}</Text>
+      <TouchableOpacity
+        onPress={() => addOrInc(item, 1)}
+        style={{ paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderRadius: 6 }}
+      >
+        <Text>+</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => remove(item.code)} style={{ paddingHorizontal: 12, paddingVertical: 4 }}>
+        <Text>🗑️</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <View style={{ flex:1 }}>
-      <BarCodeScanner onBarCodeScanned={({ data }) => handleScan(data)} style={{ flex:1 }} />
-      <View style={{ padding:12 }}>
-        <Text style={{ fontWeight:"600" }}>Lote actual</Text>
-        <FlatList
-          data={items} keyExtractor={(i)=>i.id}
-          renderItem={({item})=>(
-            <View style={{ flexDirection:"row", justifyContent:"space-between", paddingVertical:6 }}>
-              <Text>{item.name} x{item.qty}</Text>
-              <View style={{ flexDirection:"row", gap:6 }}>
-                <Button title="-" onPress={()=>dec(item.id)} />
-                <Button title="+" onPress={()=>inc(item.id)} />
-                <Button title="x" onPress={()=>remove(item.id)} />
-              </View>
+    <View style={{ flex: 1, padding: 12, gap: 12 }}>
+      <Text style={{ fontSize: 18, fontWeight: '600' }}>Escanear / Agregar</Text>
+
+      {/* Cámara (solo nativo) */}
+      {Platform.OS !== 'web' ? (
+        hasPerm === null ? (
+          <Text>Solicitando permiso de cámara…</Text>
+        ) : hasPerm ? (
+          isFocused ? (
+            <View style={{ borderWidth: 1, borderRadius: 12, overflow: 'hidden', height: 260 }}>
+              <BarCodeScanner
+                onBarCodeScanned={({ data }) => onScan(String(data))}
+                barCodeTypes={[
+                  BarCodeScanner.Constants.BarCodeType.ean13,
+                  BarCodeScanner.Constants.BarCodeType.ean8,
+                  BarCodeScanner.Constants.BarCodeType.code128,
+                  BarCodeScanner.Constants.BarCodeType.code39,
+                  BarCodeScanner.Constants.BarCodeType.qr,
+                ]}
+                style={{ width: '100%', height: '100%' }}
+              />
             </View>
-          )}
+          ) : (
+            <Text>La cámara se pausa cuando salís de esta pantalla.</Text>
+          )
+        ) : (
+          <Text>Sin permiso de cámara. Habilitalo en Ajustes o usá entrada manual.</Text>
+        )
+      ) : (
+        <View
+          style={{
+            borderWidth: 1,
+            borderRadius: 12,
+            height: 200,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text>BarCodeScanner no está soportado en web — usá el campo manual.</Text>
+        </View>
+      )}
+
+      {/* Entrada manual */}
+      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <TextInput
+          style={{ borderWidth: 1, borderRadius: 8, padding: 8, flex: 1 }}
+          placeholder="Código manual"
+          value={manualCode}
+          onChangeText={setManualCode}
+          onSubmitEditing={() => {
+            const c = manualCode.trim();
+            if (c) onScan(c);
+          }}
         />
-        <Button title="Formar remito" onPress={()=>navigation.navigate("RemitoForm")} />
+        <Button title="Agregar" onPress={() => {
+          const c = manualCode.trim();
+          if (c) onScan(c);
+        }} />
       </View>
+
+      <Text style={{ fontWeight: '600' }}>Lote actual: {totalQty()} items</Text>
+      <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderItem} />
+
+      <Button
+        title="Formar remito"
+        disabled={items.length === 0}
+        onPress={() => navigation.navigate('RemitoForm')}
+      />
+
+      <ProductEditModal
+        visible={editVisible}
+        code={pendingCode}
+        initialName={pendingCode ?? ''}
+        initialPrice={0}
+        onCancel={() => {
+          setEditVisible(false);
+          setPendingCode(null);
+        }}
+        onSave={handleSaveNewProduct}
+      />
     </View>
   );
 }

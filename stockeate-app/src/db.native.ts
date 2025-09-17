@@ -84,4 +84,19 @@ export const DB = {
       [uid(), data.product_id, data.branch_id, data.qty, data.type, data.ref ?? null, now()]
     );
   },
+  // NUEVO:
+  setRemitoPdfPath(remitoId: string, path: string) {
+    db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
+  },
+  getRemitoById(remitoId: string) {
+    return db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ?? null;
+  },
+  getRemitoItems(remitoId: string) {
+    return db.getAllSync<any>(
+      `SELECT ri.*, p.code, p.name FROM remito_items ri
+       JOIN products p ON p.id=ri.product_id
+       WHERE ri.remito_id=?`,
+      [remitoId]
+    );
+  },
 };

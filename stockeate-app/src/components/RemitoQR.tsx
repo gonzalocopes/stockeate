@@ -1,14 +1,12 @@
-﻿import React from "react";
-import { View, Text } from "react-native";
-import QRCode from "react-native-qrcode-svg";
+﻿import React from 'react';
+import QRCode from 'react-native-qrcode-svg';
+import { View } from 'react-native';
 
-export default function RemitoQR({ data }:{ data:string }) {
+export default function RemitoQR({ data, size = 180 }: { data: any; size?: number }) {
+  const payload = JSON.stringify(data);
   return (
-    <View style={{ alignItems:"center", padding:16 }}>
-      <QRCode value={data} size={240} />
-      <Text style={{ marginTop:8, textAlign:"center" }}>
-        Escaneá este QR con la app para ver el remito
-      </Text>
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <QRCode value={payload} size={size} />
     </View>
   );
 }

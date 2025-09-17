@@ -66,4 +66,17 @@ export const DB = {
     const m: Move = { id: uid(), product_id: data.product_id, branch_id: data.branch_id, qty: data.qty, type: data.type, ref: data.ref ?? null, created_at: now(), synced: 0 };
     MOVES.push(m); flush();
   },
+  // NUEVO:
+  setRemitoPdfPath(remitoId: string, path: string){
+    const r = REMITOS.find(x => x.id === remitoId); if (!r) return;
+    r.pdf_path = path; flush();
+  },
+  getRemitoById(remitoId: string){
+    return REMITOS.find(r => r.id === remitoId) ?? null;
+  },
+  getRemitoItems(remitoId: string){
+    return RITEMS
+      .filter(it => it.remito_id === remitoId)
+      .map(it => ({ ...it, code: (PRODUCTS.find(p => p.id === it.product_id)?.code ?? ''), name: (PRODUCTS.find(p => p.id === it.product_id)?.name ?? '') }));
+  },
 };

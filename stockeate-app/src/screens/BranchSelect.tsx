@@ -1,38 +1,12 @@
 ﻿import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Button,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Button, ActivityIndicator } from 'react-native';
 import { api } from '../api';
 import { useBranch } from '../stores/branch';
-import { useAuth } from '../stores/auth';
 
 type Branch = { id: string; name: string };
 
 export default function BranchSelect({ navigation }: any) {
   const setBranch = useBranch((s) => s.set);
-  const logout = useAuth((s) => s.logout);
-
-  // Botón "Cerrar sesión" en header
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Button
-          title="Cerrar sesión"
-          color="#d00"
-          onPress={async () => {
-            await logout();
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-          }}
-        />
-      ),
-    });
-  }, [navigation, logout]);
-
   const [branches, setBranches] = useState<Branch[]>([]);
   const [sel, setSel] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,9 +23,7 @@ export default function BranchSelect({ navigation }: any) {
       } catch (e: any) {
         console.error('BRANCHES_FAIL', e?.response?.data || e?.message || e);
         const d = e?.response?.data;
-        const msg = Array.isArray(d?.message)
-          ? d.message.join(', ')
-          : d?.message || e?.message || 'No pude cargar sucursales';
+        const msg = Array.isArray(d?.message) ? d.message.join(', ') : d?.message || e?.message || 'No pude cargar sucursales';
         setErr(msg);
       } finally {
         setLoading(false);
@@ -76,15 +48,13 @@ export default function BranchSelect({ navigation }: any) {
 
   return (
     <View style={{ flex: 1, padding: 16 }}>
-      <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
-        Elegí sucursal
-      </Text>
+      <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>Elegí sucursal</Text>
 
       {loading && <ActivityIndicator />}
       {err ? <Text style={{ color: 'red', marginBottom: 8 }}>{err}</Text> : null}
 
       {!loading && !err && branches.length === 0 ? (
-        <Text>No hay sucursales. Creá una en el backend y volvé a intentar.</Text>
+        <Text>No hay sucursales. Creá una en el backend (Prisma Studio) y volvé a intentar.</Text>
       ) : (
         <FlatList
           data={branches}
@@ -96,9 +66,9 @@ export default function BranchSelect({ navigation }: any) {
       <Button
         title="Continuar"
         disabled={!sel}
-        onPress={() => {
+        onPress={async () => {
           if (!sel) return;
-          setBranch(sel.id);
+          await setBranch(sel.id, sel.name); // 👈 guarda id + name persistente
           navigation.replace('Home');
         }}
       />

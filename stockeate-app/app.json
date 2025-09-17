@@ -7,9 +7,16 @@
     "icon": "./assets/images/icon.png",
     "scheme": "stockeateapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": { "supportsTablet": true },
+
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Necesitamos la cámara para escanear códigos."
+      }
+    },
+
     "android": {
+      "permissions": ["CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,11 +26,14 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
+
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-barcode-scanner",
+      "expo-sqlite",
       [
         "expo-splash-screen",
         {
@@ -35,6 +45,9 @@
         }
       ]
     ],
-    "experiments": { "reactCompiler": true }
+
+    "experiments": {
+      "reactCompiler": true
+    }
   }
 }
