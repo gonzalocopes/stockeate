@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QR Codes de Prueba - Stockeate</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .qr-container {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .qr-code {
+        text-align: center;
+        margin: 15px 0;
+      }
+      .qr-data {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 12px;
+        margin: 10px 0;
+      }
+      h1 {
+        color: #007aff;
+        text-align: center;
+      }
+      h3 {
+        color: #333;
+        border-bottom: 2px solid #007aff;
+        padding-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔍 QR Codes de Prueba - Stockeate</h1>
+    <p>
+      Escaneá estos códigos QR con tu app para probar las diferentes
+      funcionalidades:
+    </p>
+
+    <div class="qr-container">
+      <h3>1. Producto con datos completos (JSON)</h3>
+      <div class="qr-code" id="qr1"></div>
+      <div class="qr-data">
+        {"code": "7891234567890", "name": "Coca Cola 500ml", "price": 350}
+      </div>
+    </div>
+
+    <div class="qr-container">
+      <h3>2. Producto con formato pipe</h3>
+      <div class="qr-code" id="qr2"></div>
+      <div class="qr-data">7891234567891|Pepsi 500ml|320</div>
+    </div>
+
+    <div class="qr-container">
+      <h3>3. Producto con precio decimal</h3>
+      <div class="qr-code" id="qr3"></div>
+      <div class="qr-data">
+        {"code": "7891234567892", "name": "Agua Mineral 1L", "price": 125.50}
+      </div>
+    </div>
+
+    <div class="qr-container">
+      <h3>4. Código simple (sin datos adicionales)</h3>
+      <div class="qr-code" id="qr4"></div>
+      <div class="qr-data">7891234567893</div>
+    </div>
+
+    <div class="qr-container">
+      <h3>5. Producto con nombre largo</h3>
+      <div class="qr-code" id="qr5"></div>
+      <div class="qr-data">
+        {"code": "7891234567894", "name": "Galletitas Oreo Chocolate 118g",
+        "price": 280}
+      </div>
+    </div>
+
+    <div class="qr-container">
+      <h3>6. Producto sin precio (solo código y nombre)</h3>
+      <div class="qr-code" id="qr6"></div>
+      <div class="qr-data">7891234567895|Leche Entera 1L|0</div>
+    </div>
+
+    <script>
+      // Datos para los QR codes
+      const qrData = [
+        '{"code": "7891234567890", "name": "Coca Cola 500ml", "price": 350}',
+        "7891234567891|Pepsi 500ml|320",
+        '{"code": "7891234567892", "name": "Agua Mineral 1L", "price": 125.50}',
+        "7891234567893",
+        '{"code": "7891234567894", "name": "Galletitas Oreo Chocolate 118g", "price": 280}',
+        "7891234567895|Leche Entera 1L|0",
+      ];
+
+      // Generar los QR codes
+      qrData.forEach((data, index) => {
+        QRCode.toCanvas(
+          document.createElement("canvas"),
+          data,
+          {
+            width: 200,
+            margin: 2,
+            color: {
+              dark: "#000000",
+              light: "#FFFFFF",
+            },
+          },
+          function (error, canvas) {
+            if (error) {
+              console.error("Error generando QR:", error);
+              return;
+            }
+            document.getElementById(`qr${index + 1}`).appendChild(canvas);
+          }
+        );
+      });
+    </script>
+  </body>
+</html>
