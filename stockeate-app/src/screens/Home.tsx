@@ -1,5 +1,5 @@
 ﻿import React, { useEffect } from "react";
-import { View, Button, Alert } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { useAuth } from "../stores/auth";
 
 export default function Home({ navigation }: any) {
@@ -9,37 +9,83 @@ export default function Home({ navigation }: any) {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Button
-          title="Cerrar sesión"
-          color="#d00"
+        <TouchableOpacity
           onPress={async () => {
-            // sin Alert para que funcione igual en web
             await logout();
-            // forzamos volver al Login por si la navegación quedó en cache
             navigation.reset({ index: 0, routes: [{ name: "Login" }] });
           }}
-        />
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: "#dc3545",
+            borderRadius: 6,
+            marginRight: 8,
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
+            Cerrar sesión
+          </Text>
+        </TouchableOpacity>
       ),
     });
   }, [navigation, logout]);
 
   return (
-    <View style={{ padding:16, gap:12 }}>
-      <Button title="Agregar productos (escaneo)" onPress={()=>navigation.navigate("ScanAdd")} />
-      <Button title="Formar remito con lote actual" onPress={()=>navigation.navigate("RemitoForm")} />
-      <Button title="Historial de remitos (próximo)" onPress={()=>{}} />
+    <View style={{ flex: 1, padding: 16, gap: 12 }}>
+      <Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>
+        Menú Principal
+      </Text>
 
-      {/* Botón extra dentro de la pantalla */}
-      <View style={{ marginTop: 8 }}>
-        <Button
-          title="Cerrar sesión"
-          color="#d00"
-          onPress={async () => {
-            await logout();
-            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-          }}
-        />
-      </View>
+      <TouchableOpacity
+        style={{
+          backgroundColor: "#007AFF",
+          paddingVertical: 16,
+          paddingHorizontal: 20,
+          borderRadius: 8,
+          alignItems: "center",
+        }}
+        onPress={() => navigation.navigate("ScanAdd")}
+        activeOpacity={0.8}
+      >
+        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+          📱 Agregar productos (escaneo)
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
+          backgroundColor: "#28a745",
+          paddingVertical: 16,
+          paddingHorizontal: 20,
+          borderRadius: 8,
+          alignItems: "center",
+        }}
+        onPress={() => navigation.navigate("RemitoForm")}
+        activeOpacity={0.8}
+      >
+        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+          📋 Formar remito con lote actual
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
+          backgroundColor: "#6c757d",
+          paddingVertical: 16,
+          paddingHorizontal: 20,
+          borderRadius: 8,
+          alignItems: "center",
+          opacity: 0.7,
+        }}
+        onPress={() => {}}
+        activeOpacity={0.8}
+        disabled={true}
+      >
+        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+          📊 Historial de remitos (próximo)
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
