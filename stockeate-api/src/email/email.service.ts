@@ -34,13 +34,14 @@ export class EmailService {
     `;
 
     try {
-      const res = await this.resend.emails.send({
+      const { data, error } = await this.resend.emails.send({
         from: this.from,
         to,
         subject,
         html,
       });
-      if (!res?.id) throw new Error('Resend send() returned no id');
+      if (error) throw error;
+      if (!data?.id) throw new Error('Resend send() returned no id');
     } catch (e) {
       throw new InternalServerErrorException('No se pudo enviar el email de recuperación');
     }

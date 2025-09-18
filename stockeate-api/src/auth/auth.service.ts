@@ -39,11 +39,9 @@ export class AuthService {
   }
 
   // -------- Password Reset por email con código de 6 dígitos --------
-
   async forgot(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-
-    // siempre respondemos OK para no filtrar existencia
+    // Siempre respondemos OK para no filtrar existencia
     if (!user) return;
 
     // invalidar tokens viejos
@@ -53,7 +51,7 @@ export class AuthService {
     const expiresAt = addMinutes(new Date(), 30);
 
     await this.prisma.passwordReset.create({
-      data: { userId: user.id, token: code, expiresAt }, // usamos token para el código
+      data: { userId: user.id, token: code, expiresAt }, // token = código
     });
 
     await this.email.sendPasswordResetCode(user.email, code);
