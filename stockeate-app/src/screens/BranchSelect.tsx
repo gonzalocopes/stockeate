@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { api } from "../api";
 import { useBranch } from "../stores/branch";
-import { pullBranchCatalog } from "../sync"; // 👈 NUEVO
+import { pullBranchCatalog } from "../sync"; // 👈 pull del catálogo
 
 type Branch = { id: string; name: string };
 
@@ -18,7 +18,7 @@ export default function BranchSelect({ navigation }: any) {
   const [sel, setSel] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false); // 👈 NUEVO (descarga catálogo)
+  const [syncing, setSyncing] = useState(false); // 👈 estado del pull
 
   useEffect(() => {
     (async () => {
@@ -70,7 +70,7 @@ export default function BranchSelect({ navigation }: any) {
             marginTop: 4,
           }}
         >
-          ✓ Seleccionada
+        ✓ Seleccionada
         </Text>
       )}
     </TouchableOpacity>
@@ -80,17 +80,16 @@ export default function BranchSelect({ navigation }: any) {
     if (!sel || syncing) return;
     setSyncing(true);
     try {
-      // Persistimos selección de sucursal
+      // 1) Persistir sucursal elegida
       await setBranch(sel.id, sel.name);
-
-      // 👇 Descargamos catálogo de esa sucursal y lo mergeamos en SQLite
+      // 2) Intentar descargar catálogo (puede fallar si el endpoint no existe aún)
       await pullBranchCatalog(sel.id);
-
-      navigation.replace("Home");
     } catch (e) {
       console.log("SYNC_BRANCH_CATALOG_FAIL", e);
+      // No bloqueamos: continuamos igual a Home
     } finally {
       setSyncing(false);
+      navigation.replace("Home"); // 👈 pasar a Home aunque el pull falle
     }
   };
 
