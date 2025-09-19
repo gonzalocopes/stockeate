@@ -156,6 +156,12 @@ export default function ScanAdd({ navigation, route }: any) {
       if (p) {
         addScannedToBatch(p);
         setManualCode("");
+
+        // 👇 NUEVO: también upsert al server por si p existía solo en local
+        await syncProductOnline(
+          { code: p.code, name: p.name, price: p.price ?? 0, branch_id: branchId },
+          branchId
+        );
       } else {
         // Producto inexistente -> abrir modal para completar datos
         setPendingCode(code);
@@ -170,13 +176,11 @@ export default function ScanAdd({ navigation, route }: any) {
 
     // ---- MODO AGREGAR A SUCURSAL ----
     if (p) {
-      // Ya existe en la sucursal → nada que editar; opcionalmente podríamos abrir edición rápida
-      // Enviamos upsert online por si hay cambios futuros (no hace daño)
+      // Ya existe en la sucursal
       await syncProductOnline(
         { code: p.code, name: p.name, price: p.price ?? 0, branch_id: branchId },
         branchId
       );
-      // Mensajito en el banner superior
       setLastScanned(`${code} (ya estaba en la sucursal)`);
       setTimeout(() => setScanEnabled(true), COOLDOWN_MS);
       return;

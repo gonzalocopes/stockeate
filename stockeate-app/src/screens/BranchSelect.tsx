@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { api } from "../api";
 import { useBranch } from "../stores/branch";
+import { pullBranchCatalog } from "../sync"; // 👈 NUEVO
 
 type Branch = { id: string; name: string };
 
@@ -17,6 +18,7 @@ export default function BranchSelect({ navigation }: any) {
   const [sel, setSel] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false); // 👈 NUEVO (descarga catálogo)
 
   useEffect(() => {
     (async () => {
@@ -74,6 +76,24 @@ export default function BranchSelect({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  const onContinue = async () => {
+    if (!sel || syncing) return;
+    setSyncing(true);
+    try {
+      // Persistimos selección de sucursal
+      await setBranch(sel.id, sel.name);
+
+      // 👇 Descargamos catálogo de esa sucursal y lo mergeamos en SQLite
+      await pullBranchCatalog(sel.id);
+
+      navigation.replace("Home");
+    } catch (e) {
+      console.log("SYNC_BRANCH_CATALOG_FAIL", e);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <View style={{ flex: 1, padding: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>
@@ -105,25 +125,26 @@ export default function BranchSelect({ navigation }: any) {
           borderRadius: 8,
           alignItems: "center",
           marginTop: 16,
+          opacity: syncing ? 0.85 : 1,
         }}
-        onPress={async () => {
-          if (!sel) return;
-          await setBranch(sel.id, sel.name); // 👈 guarda id + name persistente
-          navigation.replace("Home");
-        }}
+        onPress={onContinue}
         activeOpacity={0.8}
-        disabled={!sel}
+        disabled={!sel || syncing}
       >
-        <Text
-          style={{
-            color: "white",
-            fontWeight: "600",
-            fontSize: 16,
-            opacity: sel ? 1 : 0.7,
-          }}
-        >
-          {sel ? `Continuar con ${sel.name}` : "Seleccioná una sucursal"}
-        </Text>
+        {syncing ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text
+            style={{
+              color: "white",
+              fontWeight: "600",
+              fontSize: 16,
+              opacity: sel ? 1 : 0.7,
+            }}
+          >
+            {sel ? `Continuar con ${sel.name}` : "Seleccioná una sucursal"}
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );
