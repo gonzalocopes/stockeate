@@ -11,12 +11,20 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import { CameraView, Camera } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import { Audio } from "expo-av";
 import { DB } from "../db.native";
 import { useBatch } from "../stores/batch";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
+import { api } from "../api";
 
-export default function ScanAdd({ navigation }: any) {
+// Config de escaneo
+const COOLDOWN_MS = 1000;        // bloquea ~1s después de leer
+const SAME_CODE_BLOCK_MS = 900;  // evita mismo código por 0.9s
+
+type Mode = "batch" | "catalog"; // batch = crear remito (lote) | catalog = agregar a sucursal
+
+export default function ScanAdd({ navigation, route }: any) {
   // Sucursal
   const getBranchId = () => useBranch.getState().id;
 
@@ -26,7 +34,16 @@ export default function ScanAdd({ navigation }: any) {
   // Cámara
   const [hasPerm, setHasPerm] = useState<boolean | null>(null);
   const isFocused = useIsFocused();
-  const scanLock = useRef(false); // evita dobles lecturas
+
+  // Habilitador del handler (estado para forzar re-render del CameraView)
+  const [scanEnabled, setScanEnabled] = useState(true);
+
+  // Anti-repetidos
+  const lastDataRef = useRef<string | null>(null);
+  const lastAtRef = useRef<number>(0);
+
+  // Sonido
+  const [beep, setBeep] = useState<Audio.Sound | null>(null);
 
   // Manual
   const [manualCode, setManualCode] = useState("");
@@ -38,15 +55,40 @@ export default function ScanAdd({ navigation }: any) {
   // Feedback visual
   const [lastScanned, setLastScanned] = useState<string>("");
 
+  // Modo (toggle)
+  const initialMode: Mode = route?.params?.mode === "catalog" ? "catalog" : "batch";
+  const [mode, setMode] = useState<Mode>(initialMode);
+
   useEffect(() => {
     (async () => {
       if (Platform.OS === "web") {
         setHasPerm(true);
-        return;
+      } else {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        setHasPerm(status === "granted");
       }
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPerm(status === "granted");
     })();
+  }, []);
+
+  // Cargar beep
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require("../../assets/beep.mp3"),
+          { volume: 0.9 }
+        );
+        if (mounted) setBeep(sound);
+      } catch (e) {
+        console.warn("No se pudo cargar assets/beep.mp3", e);
+      }
+    })();
+    return () => {
+      mounted = false;
+      beep?.unloadAsync();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addScannedToBatch = (p: any) => {
@@ -61,71 +103,98 @@ export default function ScanAdd({ navigation }: any) {
     );
   };
 
-  const onScan = async (code: string) => {
+  async function syncProductOnline(product: any, branchId: string | null) {
+    try {
+      await api.post("/sync", {
+        branchId: branchId ?? null,
+        products: [product],
+        stockMoves: [],
+        remitos: [],
+        remitoItems: [],
+      });
+    } catch (e) {
+      // Si falla, lo dejamos solo local y evitamos romper flujo
+      console.log("⚠️ No se pudo sincronizar producto online:", e?.toString?.());
+    }
+  }
+
+  const onScan = async (raw: string) => {
+    const code = String(raw).trim();
+    if (!code || !scanEnabled) return;
+
     const branchId = getBranchId();
     if (!branchId) {
       alert("Seleccioná una sucursal primero");
       return;
     }
 
+    // Evitar “pegado” sobre el mismo código por un rato corto
+    const now = Date.now();
+    if (lastDataRef.current === code && now - lastAtRef.current < SAME_CODE_BLOCK_MS) {
+      return;
+    }
+    lastDataRef.current = code;
+    lastAtRef.current = now;
+
+    // Bloqueamos el handler hasta que pase el cooldown
+    setScanEnabled(false);
+
     console.log("Código escaneado:", code);
     setLastScanned(code);
 
-    // Feedback sonoro y táctil ANTES de verificar scanLock
+    // Feedback: vibración + beep del dispositivo
     try {
-      // Múltiples tipos de feedback para asegurar que se escuche/sienta
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      await Haptics.selectionAsync(); // Sonido más confiable
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.log("Error con feedback:", error);
-    }
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await beep?.replayAsync();
+    } catch {}
 
-    // Buscar producto existente en la base de datos
-    let p = DB.getProductByCode(code);
-    if (p) {
-      // SIEMPRE agregar al lote, sin importar scanLock (para stackear productos iguales)
-      addScannedToBatch(p);
-      setManualCode("");
+    // Buscar producto local
+    const p = DB.getProductByCode(code);
 
-      // Aplicar scanLock DESPUÉS de agregar el producto
-      if (scanLock.current) {
-        console.log("⏸️ ScanLock activo, pero producto agregado");
+    if (mode === "batch") {
+      // ---- MODO CREAR REMITO ----
+      if (p) {
+        addScannedToBatch(p);
+        setManualCode("");
+      } else {
+        // Producto inexistente -> abrir modal para completar datos
+        setPendingCode(code);
+        setEditVisible(true);
+        // el scanEnabled se re-activa al cerrar/guardar el modal
         return;
       }
-      scanLock.current = true;
-      setTimeout(() => {
-        scanLock.current = false;
-        console.log("🔓 ScanLock liberado");
-      }, 300);
+      // Rehabilitar escaneo luego de ~1s
+      setTimeout(() => setScanEnabled(true), COOLDOWN_MS);
       return;
     }
 
-    // Para productos nuevos, sí verificar scanLock para evitar múltiples modales
-    if (scanLock.current) {
-      console.log("⏸️ onScan bloqueado por scanLock para producto nuevo");
+    // ---- MODO AGREGAR A SUCURSAL ----
+    if (p) {
+      // Ya existe en la sucursal → nada que editar; opcionalmente podríamos abrir edición rápida
+      // Enviamos upsert online por si hay cambios futuros (no hace daño)
+      await syncProductOnline(
+        { code: p.code, name: p.name, price: p.price ?? 0, branch_id: branchId },
+        branchId
+      );
+      // Mensajito en el banner superior
+      setLastScanned(`${code} (ya estaba en la sucursal)`);
+      setTimeout(() => setScanEnabled(true), COOLDOWN_MS);
+      return;
+    } else {
+      // No existe → crear con modal (nombre, precio, stock inicial)
+      setPendingCode(code);
+      setEditVisible(true);
+      // Rehabilitamos al cerrar/guardar
       return;
     }
-    scanLock.current = true;
-
-    // Producto inexistente -> abrir modal para completar nombre y precio
-    setPendingCode(code);
-    setEditVisible(true);
-
-    // Pausa cuando aparece el modal para evitar escaneos múltiples
-    setTimeout(() => {
-      scanLock.current = false;
-      console.log("🔓 ScanLock liberado después del modal");
-    }, 300); // 300ms de pausa
   };
 
-  const handleSaveNewProduct = (data: { name: string; price: number }) => {
+  const handleSaveNewProduct = async (data: { name: string; price: number; stock?: number }) => {
     const branchId = getBranchId();
     if (!branchId || !pendingCode) {
       setEditVisible(false);
       setPendingCode(null);
-      // Liberar scanLock al cancelar
-      scanLock.current = false;
+      setScanEnabled(true);
       return;
     }
 
@@ -133,20 +202,32 @@ export default function ScanAdd({ navigation }: any) {
       code: pendingCode,
       name: data.name,
       price: data.price,
-      stock: 0,
+      stock: data.stock ?? 0,
       branch_id: branchId,
     });
 
-    addScannedToBatch(created);
+    if (mode === "batch") {
+      addScannedToBatch(created);
+    }
+
+    // Intento de sync online (upsert por code)
+    await syncProductOnline(
+      { code: created.code, name: created.name, price: created.price ?? 0, branch_id: branchId },
+      branchId
+    );
+
     setEditVisible(false);
     setPendingCode(null);
     setManualCode("");
 
-    // Liberar scanLock después de guardar, con una pequeña pausa adicional
-    setTimeout(() => {
-      scanLock.current = false;
-      console.log("🔓 ScanLock liberado después de guardar producto");
-    }, 300);
+    // Pequeño delay por UX y re-habilitamos escaneo
+    setTimeout(() => setScanEnabled(true), 250);
+  };
+
+  const handleCancelModal = () => {
+    setEditVisible(false);
+    setPendingCode(null);
+    setScanEnabled(true);
   };
 
   const renderItem = ({ item }: any) => (
@@ -215,8 +296,43 @@ export default function ScanAdd({ navigation }: any) {
         Escanear Código de Barras
       </Text>
 
+      {/* Toggle de modo */}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => setMode("batch")}
+          style={{
+            flex: 1,
+            paddingVertical: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: mode === "batch" ? "#007AFF" : "#cbd5e1",
+            backgroundColor: mode === "batch" ? "#e6f0ff" : "white",
+            alignItems: "center",
+          }}
+          activeOpacity={0.9}
+        >
+          <Text style={{ fontWeight: "700", color: "#0f172a" }}>Crear remito</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setMode("catalog")}
+          style={{
+            flex: 1,
+            paddingVertical: 10,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: mode === "catalog" ? "#007AFF" : "#cbd5e1",
+            backgroundColor: mode === "catalog" ? "#e6f0ff" : "white",
+            alignItems: "center",
+          }}
+          activeOpacity={0.9}
+        >
+          <Text style={{ fontWeight: "700", color: "#0f172a" }}>Agregar a sucursal</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Último código escaneado */}
-      {lastScanned && (
+      {lastScanned ? (
         <View
           style={{
             backgroundColor: "#e3f2fd",
@@ -231,7 +347,7 @@ export default function ScanAdd({ navigation }: any) {
             ✅ Último escaneado: {lastScanned}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Cámara (solo nativo) */}
       {Platform.OS !== "web" ? (
@@ -251,17 +367,14 @@ export default function ScanAdd({ navigation }: any) {
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
-                onBarcodeScanned={({ data, type }) => {
-                  console.log("🔍 Detectado:", data, "Tipo:", type);
-
-                  if (scanLock.current) {
-                    console.log("⏸️ Escáner bloqueado, ignorando...");
-                    return;
-                  }
-
-                  console.log("✅ Procesando código:", data);
-                  onScan(String(data));
-                }}
+                onBarcodeScanned={
+                  scanEnabled
+                    ? ({ data }) => {
+                        console.log("🔍 Detectado:", data);
+                        onScan(String(data));
+                      }
+                    : undefined
+                }
                 barcodeScannerSettings={{
                   barcodeTypes: [
                     "ean13",
@@ -337,8 +450,7 @@ export default function ScanAdd({ navigation }: any) {
           }}
         >
           <Text>
-            El escáner de códigos no está soportado en web — usá el campo
-            manual.
+            El escáner de códigos no está soportado en web — usá el campo manual.
           </Text>
         </View>
       )}
@@ -388,49 +500,59 @@ export default function ScanAdd({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <Text style={{ fontWeight: "600" }}>Lote actual: {totalQty()} items</Text>
-      <FlatList
-        data={items}
-        keyExtractor={(i) => i.code}
-        renderItem={renderItem}
-      />
+      {/* Sección lote solo en modo "Crear remito" */}
+      {mode === "batch" ? (
+        <>
+          <Text style={{ fontWeight: "600" }}>Lote actual: {totalQty()} items</Text>
+          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderItem} />
 
-      <TouchableOpacity
-        style={{
-          backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d",
-          paddingVertical: 12,
-          borderRadius: 8,
-          alignItems: "center",
-          marginTop: 8,
-        }}
-        onPress={() => navigation.navigate("RemitoForm")}
-        activeOpacity={0.8}
-        disabled={items.length === 0}
-      >
-        <Text
+          <TouchableOpacity
+            style={{
+              backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d",
+              paddingVertical: 12,
+              borderRadius: 8,
+              alignItems: "center",
+              marginTop: 8,
+            }}
+            onPress={() => navigation.navigate("RemitoForm")}
+            activeOpacity={0.8}
+            disabled={items.length === 0}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "600",
+                fontSize: 16,
+                opacity: items.length > 0 ? 1 : 0.7,
+              }}
+            >
+              Formar remito ({totalQty()} items)
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View
           style={{
-            color: "white",
-            fontWeight: "600",
-            fontSize: 16,
-            opacity: items.length > 0 ? 1 : 0.7,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: "#cbd5e1",
+            borderRadius: 10,
+            backgroundColor: "#f8fafc",
           }}
         >
-          Formar remito ({totalQty()} items)
-        </Text>
-      </TouchableOpacity>
+          <Text style={{ color: "#0f172a" }}>
+            Modo <Text style={{ fontWeight: "700" }}>Agregar a sucursal</Text>: los códigos escaneados se
+            guardan en el catálogo de la sucursal. Los productos nuevos te pedirán Nombre, Precio y Stock inicial.
+          </Text>
+        </View>
+      )}
 
       <ProductEditModal
         visible={editVisible}
         code={pendingCode}
         initialName={pendingCode ?? ""}
         initialPrice={0}
-        onCancel={() => {
-          setEditVisible(false);
-          setPendingCode(null);
-          // Liberar scanLock al cancelar el modal
-          scanLock.current = false;
-          console.log("🔓 ScanLock liberado al cancelar modal");
-        }}
+        onCancel={handleCancelModal}
         onSave={handleSaveNewProduct}
       />
     </View>

@@ -1,5 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { Modal, View, Text, TextInput, Button, TouchableOpacity, Platform } from 'react-native';
+// src/components/ProductEditModal.tsx
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView,
+} from "react-native";
 
 type Props = {
   visible: boolean;
@@ -7,83 +19,217 @@ type Props = {
   initialName?: string;
   initialPrice?: number;
   onCancel: () => void;
-  onSave: (data: { name: string; price: number }) => void;
+  onSave: (data: { name: string; price: number; stock?: number }) => void;
 };
 
 export default function ProductEditModal({
   visible,
   code,
-  initialName = '',
+  initialName = "",
   initialPrice = 0,
   onCancel,
   onSave,
 }: Props) {
   const [name, setName] = useState(initialName);
   const [priceStr, setPriceStr] = useState(String(initialPrice ?? 0));
+  const [stockStr, setStockStr] = useState("0");
+
+  const nameRef = useRef<TextInput>(null);
+  const priceRef = useRef<TextInput>(null);
+  const stockRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
-      setName(initialName || (code ?? ''));
+      setName(initialName || (code ?? ""));
       setPriceStr(String(initialPrice ?? 0));
+      setStockStr("0");
+      setTimeout(() => {
+        nameRef.current?.focus();
+      }, 200);
     }
   }, [visible, code, initialName, initialPrice]);
 
+  const parsePrice = () => {
+    const v = parseFloat(priceStr.replace(",", "."));
+    return isNaN(v) ? 0 : v;
+  };
+
+  const parseStock = () => {
+    const n = parseInt(stockStr.replace(",", ".").split(".")[0] || "0", 10);
+    return isNaN(n) ? 0 : n;
+    // Si querés permitir stock decimal, cambiamos a parseFloat.
+  };
+
   const handleSave = () => {
-    const p = parseFloat((priceStr || '0').replace(',', '.'));
-    if (!name.trim()) {
-      alert('Ingresá un nombre');
-      return;
-    }
-    if (isNaN(p) || p < 0) {
-      alert('Precio inválido');
-      return;
-    }
-    onSave({ name: name.trim(), price: p });
+    const price = parsePrice();
+    const stock = parseStock();
+    const nm = name.trim();
+    if (!nm) return;
+    onSave({ name: nm, price, stock });
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={{ flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onCancel}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View
           style={{
-            backgroundColor: 'white',
-            padding: 16,
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            gap: 12,
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "flex-end",
           }}
         >
-          <Text style={{ fontSize: 16, fontWeight: '700' }}>
-            Nuevo producto {code ? `(${code})` : ''}
-          </Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
+          >
+            <View
+              style={{
+                backgroundColor: "white",
+                padding: 16,
+                borderTopLeftRadius: 16,
+                borderTopRightRadius: 16,
+                maxHeight: "80%",
+              }}
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 4,
+                    backgroundColor: "#e2e8f0",
+                    borderRadius: 2,
+                  }}
+                />
+              </View>
 
-          <Text>Nombre</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Nombre del producto"
-            style={{ borderWidth: 1, borderRadius: 8, padding: 8 }}
-          />
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  marginBottom: 12,
+                }}
+              >
+                Nuevo producto ({code ?? ""})
+              </Text>
 
-          <Text>Precio</Text>
-          <TextInput
-            value={priceStr}
-            onChangeText={setPriceStr}
-            keyboardType={Platform.OS === 'web' ? 'decimal' : 'numeric'}
-            placeholder="0"
-            style={{ borderWidth: 1, borderRadius: 8, padding: 8 }}
-          />
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ gap: 12, paddingBottom: 12 }}
+              >
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontWeight: "600" }}>Nombre</Text>
+                  <TextInput
+                    ref={nameRef}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Nombre del producto"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#cbd5e1",
+                      borderRadius: 8,
+                      padding: 10,
+                      backgroundColor: "#ffffff",
+                    }}
+                    returnKeyType="next"
+                    onSubmitEditing={() => priceRef.current?.focus()}
+                  />
+                </View>
 
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Button title="Cancelar" color="#999" onPress={onCancel} />
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontWeight: "600" }}>Precio</Text>
+                  <TextInput
+                    ref={priceRef}
+                    value={priceStr}
+                    onChangeText={setPriceStr}
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#cbd5e1",
+                      borderRadius: 8,
+                      padding: 10,
+                      backgroundColor: "#ffffff",
+                    }}
+                    returnKeyType="next"
+                    onSubmitEditing={() => stockRef.current?.focus()}
+                  />
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontWeight: "600" }}>
+                    Stock inicial <Text style={{ color: "#64748b" }}>(opcional)</Text>
+                  </Text>
+                  <TextInput
+                    ref={stockRef}
+                    value={stockStr}
+                    onChangeText={setStockStr}
+                    placeholder="0"
+                    keyboardType="number-pad"
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#cbd5e1",
+                      borderRadius: 8,
+                      padding: 10,
+                      backgroundColor: "#ffffff",
+                    }}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSave}
+                  />
+                </View>
+              </ScrollView>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginTop: 8,
+                  gap: 12,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={onCancel}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#f1f5f9",
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#334155", fontWeight: "600" }}>
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleSave}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#007AFF",
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "white", fontWeight: "700" }}>
+                    Guardar
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Button title="Guardar" onPress={handleSave} />
-            </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

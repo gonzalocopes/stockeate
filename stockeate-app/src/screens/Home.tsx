@@ -71,6 +71,22 @@ export default function Home({ navigation }: any) {
 
       <TouchableOpacity
         style={{
+          backgroundColor: "#0ea5e9",
+          paddingVertical: 16,
+          paddingHorizontal: 20,
+          borderRadius: 8,
+          alignItems: "center",
+        }}
+        onPress={() => navigation.navigate("BranchProducts")}
+        activeOpacity={0.8}
+      >
+        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+          📦 Ver productos de la sucursal
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
           backgroundColor: "#6c757d",
           paddingVertical: 16,
           paddingHorizontal: 20,

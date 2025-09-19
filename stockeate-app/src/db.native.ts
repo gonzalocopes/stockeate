@@ -43,7 +43,15 @@ export function initDb() {
       unit_price REAL DEFAULT 0
     );
   `);
+
+  // columna "archived" si falta
+  const cols = db.getAllSync<any>("PRAGMA table_info(products)") as { name: string }[];
+  const hasArchived = cols?.some((c) => c.name === "archived");
+  if (!hasArchived) {
+    db.runSync("ALTER TABLE products ADD COLUMN archived INTEGER DEFAULT 0");
+  }
 }
+
 const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -51,18 +59,24 @@ export const DB = {
   getProductByCode(code: string) {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
+
   upsertProduct(p: any) {
     db.runSync(
-      `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at)
-       VALUES(?,?,?,?,?,?,?,?)
+      `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
+       VALUES(?,?,?,?,?,?,?,?,?)
        ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, updated_at=excluded.updated_at`,
-      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now()]
+      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
     );
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
   },
+
   incrementStock(productId: string, qty: number) {
-    db.runSync("UPDATE products SET stock = stock + ?, version = version + 1, updated_at = ? WHERE id = ?", [qty, now(), productId]);
+    db.runSync(
+      "UPDATE products SET stock = stock + ?, version = version + 1, updated_at = ? WHERE id = ?",
+      [qty, now(), productId]
+    );
   },
+
   insertRemito(data: any) {
     const id = uid();
     db.runSync(
@@ -72,19 +86,22 @@ export const DB = {
     );
     return id;
   },
+
   insertRemitoItem(data: any) {
     db.runSync(
       `INSERT INTO remito_items(id,remito_id,product_id,qty,unit_price) VALUES(?,?,?,?,?)`,
       [uid(), data.remito_id, data.product_id, data.qty, data.unit_price ?? 0]
     );
   },
+
   insertStockMove(data: any) {
     db.runSync(
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
       [uid(), data.product_id, data.branch_id, data.qty, data.type, data.ref ?? null, now()]
     );
   },
-  // NUEVO:
+
+  // PDF helpers
   setRemitoPdfPath(remitoId: string, path: string) {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
@@ -98,5 +115,98 @@ export const DB = {
        WHERE ri.remito_id=?`,
       [remitoId]
     );
+  },
+
+  // ===== Activos / Archivados =====
+  listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+    const q = `%${search.trim()}%`;
+    if (search.trim()) {
+      return db.getAllSync<any>(
+        `SELECT * FROM products
+         WHERE branch_id=? AND archived=0 AND (code LIKE ? OR name LIKE ?)
+         ORDER BY name ASC
+         LIMIT ? OFFSET ?`,
+        [branchId, q, q, limit, offset]
+      );
+    }
+    return db.getAllSync<any>(
+      `SELECT * FROM products
+       WHERE branch_id=? AND archived=0
+       ORDER BY name ASC
+       LIMIT ? OFFSET ?`,
+      [branchId, limit, offset]
+    );
+  },
+
+  listArchivedByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+    const q = `%${search.trim()}%`;
+    if (search.trim()) {
+      return db.getAllSync<any>(
+        `SELECT * FROM products
+         WHERE branch_id=? AND archived=1 AND (code LIKE ? OR name LIKE ?)
+         ORDER BY updated_at DESC
+         LIMIT ? OFFSET ?`,
+        [branchId, q, q, limit, offset]
+      );
+    }
+    return db.getAllSync<any>(
+      `SELECT * FROM products
+       WHERE branch_id=? AND archived=1
+       ORDER BY updated_at DESC
+       LIMIT ? OFFSET ?`,
+      [branchId, limit, offset]
+    );
+  },
+
+  updateProductNamePrice(productId: string, name: string, price: number) {
+    db.runSync(
+      `UPDATE products SET name=?, price=?, version=version+1, updated_at=? WHERE id=?`,
+      [name, price, now(), productId]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  adjustStock(productId: string, branchId: string, delta: number, reason: string = "Ajuste inventario") {
+    db.runSync(
+      "UPDATE products SET stock = stock + ?, version = version + 1, updated_at=? WHERE id=?",
+      [delta, now(), productId]
+    );
+    db.runSync(
+      `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
+      [uid(), productId, branchId, delta, "adjust", reason, now()]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  setStockExact(productId: string, branchId: string, target: number, reason = "Fijar stock") {
+    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
+    const current = Number(cur?.stock ?? 0);
+    const delta = target - current;
+    db.runSync(
+      "UPDATE products SET stock = ?, version = version + 1, updated_at=? WHERE id=?",
+      [target, now(), productId]
+    );
+    db.runSync(
+      `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
+      [uid(), productId, branchId, delta, "set", reason, now()]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  canDeleteProduct(productId: string): boolean {
+    const r = db.getFirstSync<any>(`SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`, [productId]);
+    return Number(r?.cnt ?? 0) === 0;
+  },
+
+  deleteProduct(productId: string) {
+    db.runSync(`DELETE FROM stock_moves WHERE product_id=?`, [productId]);
+    db.runSync(`DELETE FROM products WHERE id=?`, [productId]);
+  },
+
+  archiveProduct(productId: string) {
+    db.runSync(`UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+  },
+  unarchiveProduct(productId: string) {
+    db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
   },
 };
