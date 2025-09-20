@@ -21,6 +21,9 @@ import BranchArchived from "./src/screens/BranchArchived";
 import RemitosHub from "./src/screens/RemitoHub";
 // 👇 NUEVO: remito de ENTRADA (ingreso)
 import RemitoIngreso from "./src/screens/RemitoIngreso";
+// 👇 NUEVO: historial + detalle
+import RemitosHistory from "./src/screens/RemitosHistory";
+import RemitoDetail from "./src/screens/RemitoDetail";
 
 const Stack = createNativeStackNavigator();
 
@@ -62,6 +65,10 @@ export default function App() {
           <Stack.Screen name="RemitoForm" component={RemitoForm} options={{ title: "Formar remito" }} />
           {/* 👇 NUEVO: remito de ENTRADA */}
           <Stack.Screen name="RemitoIngreso" component={RemitoIngreso} options={{ title: "Remito de entrada" }} />
+          {/* 👇 NUEVO: historial + detalle */}
+          <Stack.Screen name="RemitosHistory" component={RemitosHistory} options={{ title: "Historial de remitos" }} />
+          <Stack.Screen name="RemitoDetail" component={RemitoDetail} options={{ title: "Remito" }} />
+
           <Stack.Screen name="RemitoResult" component={RemitoResult} options={{ title: "Remito generado" }} />
           {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
           <Stack.Screen

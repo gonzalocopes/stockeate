@@ -71,6 +71,38 @@ export default function RemitoHub({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
+      {/* Historial de remitos */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate("RemitosHistory")}
+        style={{
+          backgroundColor: "#0ea5e9",
+          paddingVertical: 16,
+          borderRadius: 10,
+        }}
+        activeOpacity={0.9}
+      >
+        <Text
+          style={{
+            color: "white",
+            fontWeight: "800",
+            textAlign: "center",
+            fontSize: 16,
+          }}
+        >
+          🗂️ Historial de remitos
+        </Text>
+        <Text
+          style={{
+            color: "white",
+            opacity: 0.9,
+            textAlign: "center",
+            marginTop: 4,
+          }}
+        >
+          Buscá por número, cliente/proveedor o producto.
+        </Text>
+      </TouchableOpacity>
+
       {/* Transferencia entre sucursales (próximo) */}
       <TouchableOpacity
         disabled
