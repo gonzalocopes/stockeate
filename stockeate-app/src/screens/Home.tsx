@@ -39,7 +39,7 @@ export default function Home({ navigation }: any) {
         Menú Principal
       </Text>
 
-      {/* Agregar productos (solo catálogo / sucursal) */}
+      {/* Agregar productos (sólo catálogo / sucursal) */}
       <TouchableOpacity
         style={{
           backgroundColor: "#1d4ed8",
@@ -50,8 +50,8 @@ export default function Home({ navigation }: any) {
         }}
         onPress={() =>
           navigation.navigate("ScanAdd", {
-            mode: "catalog",      // abre en modo "Agregar a sucursal"
-            // forceCatalog: true, // si luego querés ocultar el toggle dentro de ScanAdd
+            mode: "catalog",
+            forceCatalog: true,
           })
         }
         activeOpacity={0.9}
@@ -61,7 +61,7 @@ export default function Home({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
-      {/* Remitos */}
+      {/* Remitos → Hub nuevo */}
       <TouchableOpacity
         style={{
           backgroundColor: "#22c55e",
@@ -70,7 +70,7 @@ export default function Home({ navigation }: any) {
           borderRadius: 8,
           alignItems: "center",
         }}
-        onPress={() => navigation.navigate("RemitoForm")}
+        onPress={() => navigation.navigate("RemitosHub")}
         activeOpacity={0.9}
       >
         <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
@@ -95,7 +95,7 @@ export default function Home({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
-      {/* Historial de remitos (placeholder deshabilitado) */}
+      {/* Historial (placeholder) */}
       <TouchableOpacity
         style={{
           backgroundColor: "#6c757d",

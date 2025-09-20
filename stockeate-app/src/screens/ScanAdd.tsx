@@ -14,7 +14,7 @@ import { CameraView, Camera } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
 import { DB } from "../db.native";
-import { useBatch } from "../stores/batch";          // (queda, aunque no se usa en catálogo)
+import { useBatch } from "../stores/batch";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
 import { api } from "../api";
@@ -24,6 +24,7 @@ const COOLDOWN_MS = 1000;        // bloquea ~1s después de leer
 const SAME_CODE_BLOCK_MS = 900;  // evita mismo código por 0.9s
 
 type Mode = "batch" | "catalog";
+
 type CatalogAdded = {
   id: string;
   code: string;
@@ -34,13 +35,14 @@ type CatalogAdded = {
 };
 
 export default function ScanAdd({ navigation, route }: any) {
-  // 👇 Forzado a catálogo por defecto (oculta tabs y desactiva remitos aquí)
-  const forceCatalog: boolean = route?.params?.forceCatalog ?? true;
+  // Modo inicial: si nos llaman con mode:"batch" desde Remitos, usamos batch; sino, catálogo
+  const initialMode: Mode = route?.params?.mode === "batch" ? "batch" : "catalog";
+  const [mode] = useState<Mode>(initialMode);
 
   // Sucursal
   const getBranchId = () => useBranch.getState().id;
 
-  // Lote (queda por compatibilidad, pero no se muestra en UI)
+  // Lote (para modo batch / remito)
   const { items, addOrInc, dec, remove, totalQty } = useBatch();
 
   // Cámara
@@ -68,9 +70,6 @@ export default function ScanAdd({ navigation, route }: any) {
 
   // Feedback visual
   const [lastScanned, setLastScanned] = useState<string>("");
-
-  // Modo fijo en catálogo
-  const [mode, setMode] = useState<Mode>("catalog");
 
   // Lista “agregados en esta sesión” (solo catálogo)
   const [catalogAdds, setCatalogAdds] = useState<CatalogAdded[]>([]);
@@ -148,7 +147,7 @@ export default function ScanAdd({ navigation, route }: any) {
     }
   }
 
-  // Helpers “agregados”
+  // Helpers “agregados” (catálogo)
   const bumpCatalogAdded = (p: {id: string; code: string; name: string; price?: number; stock?: number}) => {
     setCatalogAdds((cur) => {
       const ix = cur.findIndex((r) => r.code === p.code);
@@ -158,14 +157,7 @@ export default function ScanAdd({ navigation, route }: any) {
         return copy;
       }
       return [
-        {
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          price: p.price ?? 0,
-          stock: p.stock ?? 0,
-          count: 1,
-        },
+        { id: p.id, code: p.code, name: p.name, price: p.price ?? 0, stock: p.stock ?? 0, count: 1 },
         ...cur,
       ];
     });
@@ -183,7 +175,7 @@ export default function ScanAdd({ navigation, route }: any) {
     });
   };
 
-  // Comitear a stock real lo agregado en la sesión
+  // Comitear a stock real lo agregado en la sesión (catálogo)
   const commitCatalogAdds = async () => {
     const branchId = getBranchId();
     if (!branchId || committing || catalogAdds.length === 0) return;
@@ -226,9 +218,7 @@ export default function ScanAdd({ navigation, route }: any) {
 
     setScanEnabled(false);
 
-    console.log("Código escaneado:", code);
     setLastScanned(code);
-
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await beep?.replayAsync();
@@ -236,7 +226,22 @@ export default function ScanAdd({ navigation, route }: any) {
 
     const p = DB.getProductByCode(code);
 
-    // ⚙️ Catálogo (modo único)
+    if (mode === "batch") {
+      // ---- MODO REMITO / LOTE ----
+      if (p) {
+        addScannedToBatch(p);
+      } else {
+        setPendingCode(code);
+        setEditNameInit(code);
+        setEditPriceInit(0);
+        setEditVisible(true);
+        return;
+      }
+      setTimeout(() => setScanEnabled(true), COOLDOWN_MS);
+      return;
+    }
+
+    // ---- MODO CATÁLOGO ----
     if (p) {
       bumpCatalogAdded(p);
       setLastScanned(`${code} (ya estaba en la sucursal) — sumado a tu lista`);
@@ -269,15 +274,17 @@ export default function ScanAdd({ navigation, route }: any) {
       branch_id: branchId,
     });
 
-    bumpCatalogAdded(created);
-    setLastScanned(`${created.code} agregado a la sucursal ✅`);
-
-    await syncProductOnline({ code: created.code, name: created.name, price: created.price ?? 0, branch_id: branchId }, branchId);
+    if (mode === "batch") {
+      addScannedToBatch(created);
+    } else {
+      bumpCatalogAdded(created);
+      setLastScanned(`${created.code} agregado a la sucursal ✅`);
+      await syncProductOnline({ code: created.code, name: created.name, price: created.price ?? 0, branch_id: branchId }, branchId);
+    }
 
     setEditVisible(false);
     setPendingCode(null);
     setManualCode("");
-
     setTimeout(() => setScanEnabled(true), 250);
   };
 
@@ -295,21 +302,126 @@ export default function ScanAdd({ navigation, route }: any) {
     setEditVisible(true);
   };
 
+  // Render de item del lote (batch)
+  const renderBatchRow = ({ item }: any) => (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderColor: "#eee",
+      }}
+    >
+      <Text style={{ flex: 1 }}>
+        {item.code} — {item.name}
+      </Text>
+      <TouchableOpacity
+        onPress={() => dec(item.code)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 4,
+          borderWidth: 1,
+          borderColor: "#007AFF",
+          backgroundColor: "#f8f9fa",
+          borderRadius: 6,
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={{ color: "#007AFF", fontWeight: "600" }}>-</Text>
+      </TouchableOpacity>
+      <Text style={{ width: 30, textAlign: "center", fontWeight: "600" }}>
+        {item.qty}
+      </Text>
+      <TouchableOpacity
+        onPress={() => addOrInc(item, 1)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 4,
+          borderWidth: 1,
+          borderColor: "#007AFF",
+          backgroundColor: "#007AFF",
+          borderRadius: 6,
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={{ color: "white", fontWeight: "600" }}>+</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => remove(item.code)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 4,
+          backgroundColor: "#dc3545",
+          borderRadius: 6,
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={{ fontSize: 12 }}>🗑️</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Render de item agregado en sesión (catálogo)
   const renderCatalogAdded = ({ item }: { item: CatalogAdded }) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: "#eef2f7" }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderColor: "#eef2f7",
+      }}
+    >
       <View style={{ flex: 1 }}>
         <Text style={{ fontWeight: "600" }}>{item.name}</Text>
         <Text style={{ color: "#64748b", fontSize: 12 }}>{item.code}</Text>
-        <Text style={{ color: "#334155", fontSize: 12 }}>Precio: ${item.price} — Stock: {item.stock}</Text>
+        <Text style={{ color: "#334155", fontSize: 12 }}>
+          Precio: ${item.price} — Stock: {item.stock}
+        </Text>
       </View>
-      <TouchableOpacity onPress={() => setCount(item.code, -1)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#007AFF", backgroundColor: "#f8f9fa", borderRadius: 8 }} activeOpacity={0.8}>
+      <TouchableOpacity
+        onPress={() => setCount(item.code, -1)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderWidth: 1,
+          borderColor: "#007AFF",
+          backgroundColor: "#f8f9fa",
+          borderRadius: 8,
+        }}
+        activeOpacity={0.8}
+      >
         <Text style={{ color: "#007AFF", fontWeight: "700" }}>-</Text>
       </TouchableOpacity>
-      <Text style={{ width: 26, textAlign: "center", fontWeight: "700" }}>{item.count}</Text>
-      <TouchableOpacity onPress={() => setCount(item.code, +1)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#007AFF", borderRadius: 8 }} activeOpacity={0.8}>
+      <Text style={{ width: 26, textAlign: "center", fontWeight: "700" }}>
+        {item.count}
+      </Text>
+      <TouchableOpacity
+        onPress={() => setCount(item.code, +1)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          backgroundColor: "#007AFF",
+          borderRadius: 8,
+        }}
+        activeOpacity={0.8}
+      >
         <Text style={{ color: "white", fontWeight: "700" }}>+</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => reopenEditFromCatalog(item.code)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#0ea5e9", marginLeft: 6 }} activeOpacity={0.8}>
+      <TouchableOpacity
+        onPress={() => reopenEditFromCatalog(item.code)}
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderRadius: 8,
+          backgroundColor: "#0ea5e9",
+          marginLeft: 6,
+        }}
+        activeOpacity={0.8}
+      >
         <Text style={{ color: "white", fontWeight: "700" }}>Editar</Text>
       </TouchableOpacity>
     </View>
@@ -319,14 +431,25 @@ export default function ScanAdd({ navigation, route }: any) {
 
   return (
     <View style={{ flex: 1, padding: 12, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "600" }}>Escanear Código de Barras</Text>
-
-      {/* 🚫 Sin tabs, fijo en catálogo */}
+      <Text style={{ fontSize: 18, fontWeight: "600" }}>
+        Escanear Código de Barras
+      </Text>
 
       {/* Último código escaneado */}
       {lastScanned ? (
-        <View style={{ backgroundColor: "#e3f2fd", padding: 8, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: "#90caf9" }}>
-          <Text style={{ fontSize: 12, color: "#1565c0" }}>✅ Último escaneado: {lastScanned}</Text>
+        <View
+          style={{
+            backgroundColor: "#e3f2fd",
+            padding: 8,
+            borderRadius: 6,
+            marginBottom: 8,
+            borderWidth: 1,
+            borderColor: "#90caf9",
+          }}
+        >
+          <Text style={{ fontSize: 12, color: "#1565c0" }}>
+            ✅ Último escaneado: {lastScanned}
+          </Text>
         </View>
       ) : null}
 
@@ -336,16 +459,73 @@ export default function ScanAdd({ navigation, route }: any) {
           <Text>Solicitando permiso de cámara…</Text>
         ) : hasPerm ? (
           isFocused ? (
-            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 260, position: "relative" }}>
+            <View
+              style={{
+                borderWidth: 1,
+                borderRadius: 12,
+                overflow: "hidden",
+                height: 260,
+                position: "relative",
+              }}
+            >
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
-                onBarcodeScanned={scanEnabled ? ({ data }) => { onScan(String(data)); } : undefined}
-                barcodeScannerSettings={{ barcodeTypes: ["ean13","ean8","code128","code39","code93","upc_a","upc_e","codabar","itf14"] }}
+                onBarcodeScanned={
+                  scanEnabled ? ({ data }) => onScan(String(data)) : undefined
+                }
+                barcodeScannerSettings={{
+                  barcodeTypes: [
+                    "ean13",
+                    "ean8",
+                    "code128",
+                    "code39",
+                    "code93",
+                    "upc_a",
+                    "upc_e",
+                    "codabar",
+                    "itf14",
+                  ],
+                }}
               />
-              <View style={{ position: "absolute", top: "50%", left: "50%", width: 200, height: 80, marginTop: -40, marginLeft: -100, borderWidth: 2, borderColor: "#007AFF", borderRadius: 4, backgroundColor: "transparent" }} />
-              <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, alignItems: "center" }}>
-                <Text style={{ color: "white", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, fontSize: 12 }}>
+
+              {/* Recuadro de enfoque */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  width: 200,
+                  height: 80,
+                  marginTop: -40,
+                  marginLeft: -100,
+                  borderWidth: 2,
+                  borderColor: "#007AFF",
+                  borderRadius: 4,
+                  backgroundColor: "transparent",
+                }}
+              />
+
+              {/* Texto de instrucción */}
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 20,
+                  left: 0,
+                  right: 0,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "white",
+                    backgroundColor: "rgba(0,0,0,0.6)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 16,
+                    fontSize: 12,
+                  }}
+                >
                   Centrá el código de barras en el recuadro
                 </Text>
               </View>
@@ -354,79 +534,194 @@ export default function ScanAdd({ navigation, route }: any) {
             <Text>La cámara se pausa cuando salís de esta pantalla.</Text>
           )
         ) : (
-          <Text>Sin permiso de cámara. Habilitalo en Ajustes o usá entrada manual.</Text>
+          <Text>
+            Sin permiso de cámara. Habilitalo en Ajustes o usá entrada manual.
+          </Text>
         )
       ) : (
-        <View style={{ borderWidth: 1, borderRadius: 12, height: 200, alignItems: "center", justifyContent: "center" }}>
-          <Text>El escáner de códigos no está soportado en web — usá el campo manual.</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderRadius: 12,
+            height: 200,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text>
+            El escáner de códigos no está soportado en web — usá el campo
+            manual.
+          </Text>
         </View>
       )}
 
       {/* Entrada manual */}
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
         <TextInput
-          style={{ borderWidth: 1, borderColor: manualCode ? "#007AFF" : "#ddd", borderRadius: 8, padding: 8, flex: 1, backgroundColor: manualCode ? "#f8f9ff" : "white" }}
+          style={{
+            borderWidth: 1,
+            borderColor: manualCode ? "#007AFF" : "#ddd",
+            borderRadius: 8,
+            padding: 8,
+            flex: 1,
+            backgroundColor: manualCode ? "#f8f9ff" : "white",
+          }}
           placeholder="Código manual"
           value={manualCode}
           onChangeText={setManualCode}
-          onSubmitEditing={() => { const c = manualCode.trim(); if (c) onScan(c); }}
+          onSubmitEditing={() => {
+            const c = manualCode.trim();
+            if (c) onScan(c);
+          }}
         />
         <TouchableOpacity
-          style={{ backgroundColor: manualCode.trim() ? "#007AFF" : "#6c757d", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-          onPress={() => { const c = manualCode.trim(); if (c) onScan(c); }}
+          style={{
+            backgroundColor: manualCode.trim() ? "#007AFF" : "#6c757d",
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 8,
+          }}
+          onPress={() => {
+            const c = manualCode.trim();
+            if (c) onScan(c);
+          }}
           activeOpacity={0.8}
           disabled={!manualCode.trim()}
         >
-          <Text style={{ color: "white", fontWeight: "600", opacity: manualCode.trim() ? 1 : 0.7 }}>Agregar</Text>
+          <Text
+            style={{
+              color: "white",
+              fontWeight: "600",
+              opacity: manualCode.trim() ? 1 : 0.7,
+            }}
+          >
+            Agregar
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* BLOQUE Catálogo (sin texto “Modo Agregar a sucursal”) */}
-      <View style={{ padding: 10, borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 10, backgroundColor: "#f8fafc", gap: 10 }}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("BranchProducts")}
-            style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9", alignItems: "center" }}
-            activeOpacity={0.9}
-          >
-            <Text style={{ color: "white", fontWeight: "700" }}>Ver productos de la sucursal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setCatalogAdds([])}
-            style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, backgroundColor: "#e5e7eb" }}
-            activeOpacity={0.9}
-          >
-            <Text style={{ color: "#111827", fontWeight: "700" }}>Limpiar</Text>
-          </TouchableOpacity>
-        </View>
-
-        {catalogAdds.length > 0 ? (
-          <>
-            <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
-              Agregados en esta sesión ({catalogAdds.reduce((a, r) => a + r.count, 0)} items)
-            </Text>
-            <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} />
-            <TouchableOpacity
-              onPress={commitCatalogAdds}
-              style={{ marginTop: 8, paddingVertical: 12, borderRadius: 8, backgroundColor: "#007AFF", alignItems: "center", opacity: committing ? 0.85 : 1 }}
-              activeOpacity={0.9}
-              disabled={committing || catalogAdds.length === 0}
-            >
-              {committing ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
-                  Guardar y ver en la sucursal ({catalogAdds.reduce((a, r) => a + r.count, 0)})
-                </Text>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <Text style={{ color: "#64748b", fontSize: 12 }}>
-            Escaneá o ingresá un código para crear productos nuevos. Se listarán aquí.
+      {/* Vista según modo */}
+      {mode === "batch" ? (
+        <>
+          <Text style={{ fontWeight: "600" }}>
+            Lote actual: {totalQty()} items
           </Text>
-        )}
-      </View>
+          <FlatList
+            data={items}
+            keyExtractor={(i) => i.code}
+            renderItem={renderBatchRow}
+          />
+          <TouchableOpacity
+            style={{
+              backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d",
+              paddingVertical: 12,
+              borderRadius: 8,
+              alignItems: "center",
+              marginTop: 8,
+            }}
+            onPress={() => navigation.navigate("RemitoForm")}
+            activeOpacity={0.8}
+            disabled={items.length === 0}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "600",
+                fontSize: 16,
+                opacity: items.length > 0 ? 1 : 0.7,
+              }}
+            >
+              Volver al remito ({totalQty()} items)
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View
+          style={{
+            padding: 10,
+            borderWidth: 1,
+            borderColor: "#cbd5e1",
+            borderRadius: 10,
+            backgroundColor: "#f8fafc",
+            gap: 10,
+          }}
+        >
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("BranchProducts")}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 8,
+                backgroundColor: "#0ea5e9",
+                alignItems: "center",
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>
+                Ver productos de la sucursal
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setCatalogAdds([])}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 8,
+                backgroundColor: "#e5e7eb",
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={{ color: "#111827", fontWeight: "700" }}>
+                Limpiar
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {catalogAdds.length > 0 ? (
+            <>
+              <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
+                Agregados en esta sesión (
+                {catalogAdds.reduce((a, r) => a + r.count, 0)} items)
+              </Text>
+              <FlatList
+                data={catalogAdds}
+                keyExtractor={(x) => x.id}
+                renderItem={renderCatalogAdded}
+              />
+              <TouchableOpacity
+                onPress={commitCatalogAdds}
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#007AFF",
+                  alignItems: "center",
+                  opacity: committing ? 0.85 : 1,
+                }}
+                activeOpacity={0.9}
+                disabled={committing || catalogAdds.length === 0}
+              >
+                {committing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text
+                    style={{ color: "white", fontWeight: "700", fontSize: 16 }}
+                  >
+                    Guardar y ver en la sucursal (
+                    {catalogAdds.reduce((a, r) => a + r.count, 0)})
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={{ color: "#64748b", fontSize: 12 }}>
+              Escaneá o ingresá un código para crear productos nuevos. Se
+              listarán aquí.
+            </Text>
+          )}
+        </View>
+      )}
 
       <ProductEditModal
         visible={editVisible}
