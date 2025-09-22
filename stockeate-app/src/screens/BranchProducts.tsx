@@ -18,6 +18,7 @@ import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
 import { DB } from "../db.native";
 import { api } from "../api";
+import { pullBranchCatalog } from "../sync";   // 👈 IMPORTA EL PULL
 
 type Prod = {
   id: string;
@@ -45,10 +46,17 @@ export default function BranchProducts({ navigation }: any) {
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
   const [targetStr, setTargetStr] = useState<string>("0"); // fijar stock exacto
 
-  const load = () => {
+  const load = async () => {
     if (!branchId) return;
     setLoading(true);
     try {
+      // 👇 sincroniza SIEMPRE antes de leer SQLite
+      try {
+        const r = await pullBranchCatalog(branchId);
+        console.log("SYNC_OK", r);
+      } catch (e: any) {
+        console.log("SYNC_ERR", e?.message || e);
+      }
       const data = DB.listProductsByBranch(branchId, search, 500, 0);
       setRows(data);
     } finally {
@@ -296,7 +304,7 @@ export default function BranchProducts({ navigation }: any) {
         onSave={onSaveEdit}
       />
 
-      {/* Modal AJUSTAR (sin delta personalizado) */}
+      {/* Modal AJUSTAR */}
       <Modal visible={adjOpen} transparent animationType="slide" onRequestClose={() => setAdjOpen(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
