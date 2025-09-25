@@ -10,12 +10,35 @@ export class SyncService {
     const clock = Date.now();
     const full = !since;
 
-    // Productos (snapshot)
+    // Productos
     let products: any[] = [];
     if (full) {
+      // Snapshot completo
       const list = await this.prisma.product.findMany({
         where: { branchId, archived: false } as any,
         orderBy: { name: 'asc' },
+        take: 5000,
+      });
+      products = list.map((p: any) => ({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0,
+        branch_id: p.branchId ?? p.branch_id,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+      }));
+    } else {
+      // ⚠️ Incremental: productos creados/actualizados desde "since"
+      const list = await this.prisma.product.findMany({
+        where: {
+          branchId,
+          archived: false,
+          OR: [
+            { updatedAt: { gt: new Date(since!) } },
+            { createdAt: { gt: new Date(since!) } },
+          ],
+        } as any,
+        orderBy: { updatedAt: 'asc' } as any,
         take: 5000,
       });
       products = list.map((p: any) => ({
@@ -119,7 +142,7 @@ export class SyncService {
         const prod = await tx.product.findUnique({ where: { id: productId } });
         if (!prod) continue;
 
-        const type: 'IN' | 'OUT' = m.type ?? (m.delta >= 0 ? 'IN' : 'OUT'); // fallback si algún cliente viejo manda delta
+        const type: 'IN' | 'OUT' = m.type ?? (m.delta >= 0 ? 'IN' : 'OUT'); // fallback p/ clientes viejos
         const qty = m.qty ?? Math.abs(m.delta ?? 0);
 
         await tx.stockMove.create({
