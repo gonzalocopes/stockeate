@@ -18,6 +18,7 @@ import { useBatch } from "../stores/batch";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
 import { api } from "../api";
+import { pushMovesBatchByCodes } from "../sync/push";
 
 // Config de escaneo
 const COOLDOWN_MS = 1000;        // bloquea ~1s después de leer
@@ -133,19 +134,7 @@ export default function ScanAdd({ navigation, route }: any) {
     }
   }
 
-  async function syncMoveOnline(move: { productCode: string; branchId: string; delta: number; reason?: string }) {
-    try {
-      await api.post("/sync", {
-        branchId: move.branchId,
-        products: [],
-        stockMoves: [{ productCode: move.productCode, branchId: move.branchId, delta: move.delta, reason: move.reason ?? "Alta catálogo" }],
-        remitos: [],
-        remitoItems: [],
-      });
-    } catch (e) {
-      console.log("⚠️ Sync movimiento falló (local ok):", e?.toString?.());
-    }
-  }
+  
 
   // Helpers “agregados” (catálogo)
   const bumpCatalogAdded = (p: {id: string; code: string; name: string; price?: number; stock?: number}) => {
@@ -176,30 +165,36 @@ export default function ScanAdd({ navigation, route }: any) {
   };
 
   // Comitear a stock real lo agregado en la sesión (catálogo)
-  const commitCatalogAdds = async () => {
-    const branchId = getBranchId();
-    if (!branchId || committing || catalogAdds.length === 0) return;
-    setCommitting(true);
-    try {
-      for (const row of catalogAdds) {
-        if (row.count <= 0) continue;
-        const p = DB.getProductByCode(row.code) || { id: row.id };
-        DB.incrementStock(p.id, row.count);
-        DB.insertStockMove({
-          product_id: p.id,
-          branch_id: branchId,
-          qty: row.count,
-          type: "IN",
-          ref: "Alta catálogo",
-        });
-        await syncMoveOnline({ productCode: row.code, branchId, delta: row.count, reason: "Alta catálogo" });
-      }
-      setCatalogAdds([]);
-      navigation.navigate("BranchProducts");
-    } finally {
-      setCommitting(false);
+ const commitCatalogAdds = async () => {
+  const branchId = getBranchId();
+  if (!branchId || committing || catalogAdds.length === 0) return;
+  setCommitting(true);
+  try {
+    for (const row of catalogAdds) {
+      if (row.count <= 0) continue;
+      const p = DB.getProductByCode(row.code) || { id: row.id };
+      DB.incrementStock(p.id, row.count);
+      DB.insertStockMove({
+        product_id: p.id,
+        branch_id: branchId,
+        qty: row.count,
+        type: "IN",
+        ref: "Alta catálogo",
+      });
     }
-  };
+
+    // 👇 NUEVO: push al backend como IN
+    await pushMovesBatchByCodes(
+      branchId,
+      catalogAdds.filter(r => r.count > 0).map(r => ({ code: r.code, qty: r.count, reason: "Alta catálogo" })),
+      "IN"
+    );
+
+    setCatalogAdds([]);
+  } finally {
+    setCommitting(false);
+  }
+};
 
   const onScan = async (raw: string) => {
     const code = String(raw).trim();

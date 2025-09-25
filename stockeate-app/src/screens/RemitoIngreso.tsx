@@ -20,6 +20,7 @@ import { DB } from "../db.native";
 import ProductEditModal from "../components/ProductEditModal";
 import * as Print from "expo-print";
 import { api } from "../api";
+import { pushMovesBatchByCodes } from "../sync/push";
 
 type Row = {
   id: string;
@@ -269,36 +270,44 @@ export default function RemitoIngreso({ navigation }: any) {
 
       // 4) sync
       try {
-        await api.post("/sync", {
-          branchId,
-          products: [],
-          stockMoves: rows.map((r) => ({
-            productCode: r.code,
-            branchId,
-            delta: r.count,
-            reason: "Remito ingreso",
-          })),
-          remitos: [
-            {
-              id: remitoId,
-              tmp_number: tmpNum,
-              official_number: null,
-              branch_id: branchId,
-              customer: provider?.trim() || null,
-              notes: notes?.trim() || "Remito de ENTRADA",
-              created_at: new Date().toISOString(),
-            },
-          ],
-          remitoItems: rows.map((r) => ({
-            remito_id: remitoId,
-            productCode: r.code,
-            qty: r.count,
-            unit_price: r.unit_price ?? 0,
-          })),
-        });
-      } catch (e) {
-        console.log("Sync IN fallo:", e?.toString?.());
-      }
+  // a) movimientos IN
+  await pushMovesBatchByCodes(branchId, rows.map(r => ({
+    code: r.code,
+    qty: r.count,
+    reason: "Remito ingreso"
+  })), "IN");
+
+  // b) remito + items (con productId)
+  const remitoItems = rows.map((r) => {
+    const p = DB.getProductByCode(r.code);
+    return {
+      remito_id: remitoId,
+      productId: p?.id,   // 👈 usar productId
+      qty: r.count,
+      unit_price: r.unit_price ?? 0,
+    };
+  }).filter(Boolean);
+
+  await api.post("/sync", {
+    branchId,
+    products: [],
+    stockMoves: [],
+    remitos: [
+      {
+        id: remitoId,
+        tmp_number: tmpNum,
+        official_number: null,
+        branch_id: branchId,
+        customer: provider?.trim() || null,
+        notes: notes?.trim() || "Remito de ENTRADA",
+        created_at: new Date().toISOString(),
+      },
+    ],
+    remitoItems,
+  });
+} catch (e) {
+  console.log("Sync IN fallo:", e?.toString?.());
+}
 
       // 5) limpiar y navegar
       setRows([]);

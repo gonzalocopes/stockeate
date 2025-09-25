@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PullPayload } from "../api";
 import { DB } from "../db.native";
 
-// Guarda/lee IDs de movimientos ya aplicados para no duplicar
+// (dedupe de movimientos por ID)
 async function loadAppliedMoveIds(branchId: string): Promise<Set<string>> {
   const raw = await AsyncStorage.getItem(`applied_moves:${branchId}`);
   if (!raw) return new Set();
@@ -14,15 +14,11 @@ async function loadAppliedMoveIds(branchId: string): Promise<Set<string>> {
     return new Set();
   }
 }
-
 async function saveAppliedMoveIds(branchId: string, ids: Set<string>) {
   const MAX = 5000;
   const arr = Array.from(ids);
   const sliced = arr.slice(Math.max(0, arr.length - MAX));
-  await AsyncStorage.setItem(
-    `applied_moves:${branchId}`,
-    JSON.stringify(sliced)
-  );
+  await AsyncStorage.setItem(`applied_moves:${branchId}`, JSON.stringify(sliced));
 }
 
 function applyStockDelta(productId: string, delta: number, branchId: string, reason: string) {
@@ -33,13 +29,7 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
     } else {
       anyDB.setStock?.(productId, (anyDB.getStock?.(productId) ?? 0) + delta);
     }
-    DB.insertStockMove({
-      product_id: productId,
-      branch_id: branchId,
-      qty: delta,
-      type: "IN",
-      ref: reason,
-    });
+    DB.insertStockMove({ product_id: productId, branch_id: branchId, qty: delta, type: "IN", ref: reason });
   } else {
     const qty = Math.abs(delta);
     if (typeof anyDB.decrementStock === "function") {
@@ -49,38 +39,23 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
     } else {
       anyDB.setStock?.(productId, (anyDB.getStock?.(productId) ?? 0) - qty);
     }
-    DB.insertStockMove({
-      product_id: productId,
-      branch_id: branchId,
-      qty,
-      type: "OUT",
-      ref: reason,
-    });
+    DB.insertStockMove({ product_id: productId, branch_id: branchId, qty, type: "OUT", ref: reason });
   }
 }
 
 export async function applyPull(branchId: string, payload: PullPayload) {
-  // 1) Upsert de productos
+  // 1) upsert de productos (si viene snapshot, fijamos stock)
   for (const p of payload.products) {
-    const up = DB.upsertProduct({
+    DB.upsertProduct({
       code: p.code,
       name: p.name ?? p.code,
       price: p.price ?? 0,
       branch_id: branchId,
-      stock: p.stock, // si snapshot trae stock lo dejamos
+      ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
     });
-
-    // si snapshot vino con stock (y en local difiere), fijamos exacto
-    if (typeof p.stock === "number") {
-      const local = up.stock ?? 0;
-      if (local !== p.stock) {
-        const delta = p.stock - local;
-        applyStockDelta(up.id, delta, branchId, "Snapshot");
-      }
-    }
   }
 
-  // 2) Aplicar movimientos deduplicando por move.id
+  // 2) movimientos (dedupe por id)
   const applied = await loadAppliedMoveIds(branchId);
   let newApplied = false;
 

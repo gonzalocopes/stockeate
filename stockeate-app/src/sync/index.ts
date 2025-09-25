@@ -9,21 +9,12 @@ async function getLastClock(branchId: string): Promise<number | null> {
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
-
 async function setLastClock(branchId: string, clock: number) {
   await AsyncStorage.setItem(`sync_clock:${branchId}`, String(clock));
 }
 
-/**
- * Hace pull (delta si hay clock guardado, o snapshot si no).
- * - Despierta el server (Render).
- * - Aplica productos/movimientos en SQLite (sin duplicar).
- * - Guarda el nuevo clock.
- */
 export async function pullBranchCatalog(branchId: string) {
-  if (!branchId) {
-    return { appliedProducts: 0, appliedMoves: 0, full: false, clock: 0 };
-  }
+  if (!branchId) return { appliedProducts: 0, appliedMoves: 0, full: false, clock: 0 };
 
   await wakeServer();
 
@@ -33,7 +24,7 @@ export async function pullBranchCatalog(branchId: string) {
   try {
     payload = await pullFromServer(branchId, since ?? undefined);
   } catch (e: any) {
-    console.log("SYNC_BRANCH_CATALOG_FAIL", e);
+    console.log("SYNC_BRANCH_CATALOG_FAIL", e?.message || e);
     return { appliedProducts: 0, appliedMoves: 0, full: false, clock: since ?? 0 };
   }
 

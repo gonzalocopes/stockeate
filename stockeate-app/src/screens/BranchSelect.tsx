@@ -8,7 +8,8 @@ import {
 } from "react-native";
 import { api } from "../api";
 import { useBranch } from "../stores/branch";
-import { pullBranchCatalog } from "../sync"; // 👈 pull del catálogo
+import { pullBranchCatalog } from "../sync/index";
+
 
 type Branch = { id: string; name: string };
 

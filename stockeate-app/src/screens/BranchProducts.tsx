@@ -12,13 +12,15 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
 import { DB } from "../db.native";
 import { api } from "../api";
-import { pullBranchCatalog } from "../sync";   // 👈 IMPORTA EL PULL
+import { pullBranchCatalog } from "../sync/index";
+import { pushMoveByCode } from "../sync/push"; // 👈 NUEVO
 
 type Prod = {
   id: string;
@@ -46,31 +48,32 @@ export default function BranchProducts({ navigation }: any) {
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
   const [targetStr, setTargetStr] = useState<string>("0"); // fijar stock exacto
 
-  const load = async () => {
+  const loadLocal = () => {
+    if (!branchId) return;
+    const data = DB.listProductsByBranch(branchId, search, 500, 0);
+    setRows(data);
+  };
+
+  const pullThenLoad = async () => {
     if (!branchId) return;
     setLoading(true);
     try {
-      // 👇 sincroniza SIEMPRE antes de leer SQLite
-      try {
-        const r = await pullBranchCatalog(branchId);
-        console.log("SYNC_OK", r);
-      } catch (e: any) {
-        console.log("SYNC_ERR", e?.message || e);
-      }
-      const data = DB.listProductsByBranch(branchId, search, 500, 0);
-      setRows(data);
+      await pullBranchCatalog(branchId);
+    } catch (e: any) {
+      console.log("SYNC_ERR", e?.message || e);
     } finally {
+      loadLocal();
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isFocused) load();
+    if (isFocused) pullThenLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
   useEffect(() => {
-    const id = setTimeout(load, 200);
+    const id = setTimeout(loadLocal, 200);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, branchId]);
@@ -125,23 +128,23 @@ export default function BranchProducts({ navigation }: any) {
   };
 
   const applyQuickDelta = async (delta: number) => {
-    if (!adjusting || !branchId) return;
-    const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
-    setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
-    await syncMoveOnline({ productCode: adjusting.code, branchId, delta, reason: delta > 0 ? "+1" : "-1" });
-  };
+  if (!adjusting || !branchId) return;
+  const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
+  setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
+  await pushMoveByCode(branchId, adjusting.code, delta, delta > 0 ? "+1" : "-1"); // 👈 FIX
+};
 
-  const applySetExact = async () => {
-    if (!adjusting || !branchId) return;
-    let t = Number(targetStr.replace(",", "."));
-    if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
-    if (t < 0) t = 0; // estado final no negativo
-    const before = adjusting.stock ?? 0;
-    const updated = DB.setStockExact(adjusting.id, branchId, Math.floor(t), "Fijar stock");
-    setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
-    const delta = Math.floor(t) - before;
-    await syncMoveOnline({ productCode: adjusting.code, branchId, delta, reason: "Fijar stock" });
-  };
+const applySetExact = async () => {
+  if (!adjusting || !branchId) return;
+  let t = Number(targetStr.replace(",", "."));
+  if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
+  if (t < 0) t = 0;
+  const before = adjusting.stock ?? 0;
+  const updated = DB.setStockExact(adjusting.id, branchId, Math.floor(t), "Fijar stock");
+  setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
+  const delta = Math.floor(t) - before;
+  await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock"); // 👈 FIX
+};
 
   // ===== Archivar / Eliminar =====
   const archiveCurrent = () => {
@@ -198,14 +201,7 @@ export default function BranchProducts({ navigation }: any) {
   }
 
   const renderItem = ({ item }: { item: Prod }) => (
-    <View
-      style={{
-        borderBottomWidth: 1,
-        borderColor: "#eee",
-        paddingVertical: 8,
-        gap: 6,
-      }}
-    >
+    <View style={{ borderBottomWidth: 1, borderColor: "#eee", paddingVertical: 8, gap: 6 }}>
       <Text style={{ fontWeight: "600" }}>{item.name}</Text>
       <Text style={{ color: "#475569", fontSize: 12 }}>{item.code}</Text>
 
@@ -214,7 +210,6 @@ export default function BranchProducts({ navigation }: any) {
           Precio: ${item.price ?? 0} — Stock: {item.stock ?? 0}
         </Text>
 
-        {/* acciones: Ajustar / Editar / Eliminar */}
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <TouchableOpacity
             onPress={() => openAdjust(item)}
@@ -262,15 +257,20 @@ export default function BranchProducts({ navigation }: any) {
             backgroundColor: search ? "#f8f9ff" : "white",
           }}
         />
+
         <TouchableOpacity
-          onPress={load}
+          onPress={pullThenLoad}
           style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }}
           activeOpacity={0.9}
+          disabled={loading}
         >
-          <Text style={{ color: "white", fontWeight: "700" }}>{loading ? "..." : "Refrescar"}</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: "white", fontWeight: "700" }}>Refrescar</Text>
+          )}
         </TouchableOpacity>
 
-        {/* NUEVO: link a Archivados */}
         <TouchableOpacity
           onPress={() => navigation.navigate("BranchArchived")}
           style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9" }}
@@ -291,7 +291,7 @@ export default function BranchProducts({ navigation }: any) {
         keyboardShouldPersistTaps="handled"
       />
 
-      {/* Modal editar (nombre/precio) */}
+      {/* Modal editar */}
       <ProductEditModal
         visible={editOpen}
         code={editing?.code ?? null}
@@ -318,7 +318,6 @@ export default function BranchProducts({ navigation }: any) {
                   Ajustar stock — {adjusting?.name} ({adjusting?.code})
                 </Text>
 
-                {/* Quick -1 / +1 */}
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
                   <TouchableOpacity
                     onPress={() => applyQuickDelta(-1)}
@@ -336,7 +335,6 @@ export default function BranchProducts({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
 
-                {/* Fijar stock exacto */}
                 <View style={{ marginBottom: 12 }}>
                   <Text style={{ fontWeight: "600", marginBottom: 6 }}>Fijar stock</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
@@ -359,7 +357,6 @@ export default function BranchProducts({ navigation }: any) {
                   </View>
                 </View>
 
-                {/* Archivar */}
                 <TouchableOpacity
                   onPress={archiveCurrent}
                   style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }}
@@ -368,7 +365,6 @@ export default function BranchProducts({ navigation }: any) {
                   <Text style={{ color: "#0f172a", fontWeight: "700" }}>Archivar producto</Text>
                 </TouchableOpacity>
 
-                {/* Cerrar */}
                 <TouchableOpacity
                   onPress={() => { setAdjOpen(false); setAdjusting(null); }}
                   style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#e5e7eb", alignItems: "center" }}
