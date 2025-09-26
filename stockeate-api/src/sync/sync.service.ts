@@ -15,7 +15,7 @@ export class SyncService {
     if (full) {
       // Snapshot completo
       const list = await this.prisma.product.findMany({
-        where: { branchId } as any,       // ⬅️ hotfix: sin archived
+        where: { branchId } as any, // hotfix: sin archived
         orderBy: { name: 'asc' },
         take: 5000,
       });
@@ -36,7 +36,7 @@ export class SyncService {
             { updatedAt: { gt: new Date(since!) } },
             { createdAt: { gt: new Date(since!) } },
           ],
-        } as any,                          // ⬅️ hotfix: sin archived
+        } as any, // hotfix: sin archived
         orderBy: { updatedAt: 'asc' } as any,
         take: 5000,
       });
@@ -133,19 +133,38 @@ export class SyncService {
         });
       }
 
-      // 2) Movimientos de stock (espera { productId, type: 'IN'|'OUT', qty, ref? })
+      // 2) Movimientos de stock (acepta productId o productCode; acepta qty/type o delta)
       for (const m of stockMoves) {
-        const productId = m.productId ?? m.product_id; // por si viniera snake
+        // Resolver productId
+        let productId: string | null =
+          m.productId ??
+          m.product_id ??
+          null;
+
+        if (!productId && (m.productCode ?? m.product_code)) {
+          const byCode = await tx.product.findUnique({
+            where: { code: m.productCode ?? m.product_code },
+            select: { id: true },
+          });
+          productId = byCode?.id ?? null;
+        }
         if (!productId) continue;
+
+        // Normalizar qty/type usando delta si hace falta
+        let type: 'IN' | 'OUT' | null = m.type ?? null;
+        let qty: number | null = m.qty ?? null;
+
+        if (qty == null && typeof m.delta === 'number') {
+          type = m.delta >= 0 ? 'IN' : 'OUT';
+          qty = Math.abs(m.delta);
+        }
+        if (!type || !qty || qty <= 0) continue;
 
         const prod = await tx.product.findUnique({ where: { id: productId } });
         if (!prod) continue;
 
-        const type: 'IN' | 'OUT' = m.type ?? (m.delta >= 0 ? 'IN' : 'OUT'); // fallback p/ clientes viejos
-        const qty = m.qty ?? Math.abs(m.delta ?? 0);
-
         await tx.stockMove.create({
-          data: { productId, branchId, qty, type, ref: m.ref ?? null },
+          data: { productId, branchId, qty, type, ref: m.ref ?? m.reason ?? null },
         });
 
         const delta = type === 'IN' ? qty : -qty;
