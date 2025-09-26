@@ -8,61 +8,35 @@ export class SyncService {
   // ---------- PULL ----------
   async pull(branchId: string, since?: number) {
     const clock = Date.now();
-    const full = !since;
 
-    // Productos
-    let products: any[] = [];
-    if (full) {
-      // Snapshot completo (hotfix: sin archived)
-      const list = await this.prisma.product.findMany({
-        where: { branchId } as any,
-        orderBy: { name: 'asc' },
-        take: 5000,
-      });
-      products = list.map((p: any) => ({
-        code: p.code,
-        name: p.name,
-        price: p.price ?? 0,
-        stock: p.stock ?? 0,
-        branch_id: p.branchId ?? p.branch_id,
-        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
-      }));
-    } else {
-      // Incremental: productos creados/actualizados desde "since"
-      const list = await this.prisma.product.findMany({
-        where: {
-          branchId,
-          OR: [
-            { updatedAt: { gt: new Date(since!) } },
-            { createdAt: { gt: new Date(since!) } },
-          ],
-        } as any,
-        orderBy: { updatedAt: 'asc' } as any,
-        take: 5000,
-      });
-      products = list.map((p: any) => ({
-        code: p.code,
-        name: p.name,
-        price: p.price ?? 0,
-        stock: p.stock ?? 0,
-        branch_id: p.branchId ?? p.branch_id,
-        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
-      }));
-    }
+    // 🔒 SIEMPRE mando snapshot de productos (evitamos “no veo lo nuevo” por reloj/since)
+    const list = await this.prisma.product.findMany({
+      where: { branchId } as any, // hotfix: sin archived hasta que lo agreguemos al schema
+      orderBy: { name: 'asc' },
+      take: 5000,
+    });
 
-    // Movimientos desde “since”
+    const products = list.map((p: any) => ({
+      code: p.code,
+      name: p.name,
+      price: p.price ?? 0,
+      stock: p.stock ?? 0,
+      branch_id: p.branchId ?? p.branch_id,
+      updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+    }));
+
+    // Movimientos desde “since” (si no hay since, mando 0; el snapshot ya contiene stock)
     let moves: any[] = [];
-    try {
-      moves = await this.prisma.stockMove.findMany({
-        where: {
-          branchId,
-          ...(since ? { createdAt: { gt: new Date(since) } } : {}),
-        } as any,
-        orderBy: { createdAt: 'asc' } as any,
-        take: 5000,
-      });
-    } catch {
-      moves = [];
+    if (since) {
+      try {
+        moves = await this.prisma.stockMove.findMany({
+          where: { branchId, createdAt: { gt: new Date(since) } } as any,
+          orderBy: { createdAt: 'asc' } as any,
+          take: 5000,
+        });
+      } catch {
+        moves = [];
+      }
     }
 
     // Resolver productCode por productId (evitamos include)
@@ -84,7 +58,8 @@ export class SyncService {
       created_at: m.createdAt ? new Date(m.createdAt).getTime() : undefined,
     }));
 
-    return { clock, full, products, stockMoves };
+    // full = true para que el cliente sepa que puede pisar stock con el snapshot
+    return { clock, full: true, products, stockMoves };
   }
 
   // ---------- PUSH ----------
@@ -133,21 +108,20 @@ export class SyncService {
         });
       }
 
-      // 2) Movimientos de stock
+      // 2) Movimientos de stock (acepta productId o productCode; qty/type o delta)
       for (const m of stockMoves) {
         // Resolver productId
-        let productId: string | null =
-          m.productId ?? m.product_id ?? null;
+        let productId: string | null = m.productId ?? m.product_id ?? null;
 
         if (!productId && (m.productCode ?? m.product_code)) {
-          const byCode = await tx.product.findUnique({
+          let byCode = await tx.product.findUnique({
             where: { code: m.productCode ?? m.product_code },
             select: { id: true },
           });
 
           if (!byCode) {
-            // 👇 Si el producto no existe aún en el server, lo creamos “stub”
-            const created = await tx.product.create({
+            // Si el producto no existe aún, lo creamos “stub” para que el otro celu lo vea
+            byCode = await tx.product.create({
               data: {
                 branchId,
                 code: m.productCode ?? m.product_code,
@@ -158,14 +132,12 @@ export class SyncService {
               },
               select: { id: true },
             });
-            productId = created.id;
-          } else {
-            productId = byCode.id;
           }
+          productId = byCode.id;
         }
         if (!productId) continue;
 
-        // Normalizar qty/type usando delta si hace falta
+        // Normalizar qty/type a partir de delta si hace falta
         let type: 'IN' | 'OUT' | null = m.type ?? null;
         let qty: number | null = m.qty ?? null;
 
@@ -183,7 +155,7 @@ export class SyncService {
           data: { productId, branchId, qty, type, ref: m.ref ?? m.reason ?? null },
         });
 
-        // Actualizar stock
+        // Actualizar stock acumulado
         const delta = type === 'IN' ? qty : -qty;
         const updated = await tx.product.update({
           where: { id: productId },

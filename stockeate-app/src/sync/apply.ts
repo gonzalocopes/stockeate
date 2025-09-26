@@ -54,11 +54,10 @@ export async function applyPull(branchId: string, payload: PullPayload) {
       ...(typeof p.stock === "number" ? { stock: p.stock } : {}),
     });
 
-    // 👇 Si es un snapshot FULL, aseguramos que el stock local quede igual al del server
+    // En snapshot FULL, garantizamos que el stock local quede igual al del server
     if (payload.full && typeof p.stock === "number" && createdOrUpdated?.id != null) {
       const current = Number(createdOrUpdated.stock ?? 0);
       if (current !== p.stock) {
-        // setea exacto sin duplicar movimientos (registramos un move local para historial)
         DB.setStockExact(createdOrUpdated.id, branchId, p.stock, "Sync snapshot");
       }
     }
