@@ -13,9 +13,9 @@ export class SyncService {
     // Productos
     let products: any[] = [];
     if (full) {
-      // Snapshot completo
+      // Snapshot completo (hotfix: sin archived)
       const list = await this.prisma.product.findMany({
-        where: { branchId } as any, // hotfix: sin archived
+        where: { branchId } as any,
         orderBy: { name: 'asc' },
         take: 5000,
       });
@@ -36,7 +36,7 @@ export class SyncService {
             { updatedAt: { gt: new Date(since!) } },
             { createdAt: { gt: new Date(since!) } },
           ],
-        } as any, // hotfix: sin archived
+        } as any,
         orderBy: { updatedAt: 'asc' } as any,
         take: 5000,
       });
@@ -50,7 +50,7 @@ export class SyncService {
       }));
     }
 
-    // Movimientos desde “since” (sin include)
+    // Movimientos desde “since”
     let moves: any[] = [];
     try {
       moves = await this.prisma.stockMove.findMany({
@@ -133,20 +133,35 @@ export class SyncService {
         });
       }
 
-      // 2) Movimientos de stock (acepta productId o productCode; acepta qty/type o delta)
+      // 2) Movimientos de stock
       for (const m of stockMoves) {
         // Resolver productId
         let productId: string | null =
-          m.productId ??
-          m.product_id ??
-          null;
+          m.productId ?? m.product_id ?? null;
 
         if (!productId && (m.productCode ?? m.product_code)) {
           const byCode = await tx.product.findUnique({
             where: { code: m.productCode ?? m.product_code },
             select: { id: true },
           });
-          productId = byCode?.id ?? null;
+
+          if (!byCode) {
+            // 👇 Si el producto no existe aún en el server, lo creamos “stub”
+            const created = await tx.product.create({
+              data: {
+                branchId,
+                code: m.productCode ?? m.product_code,
+                name: m.productCode ?? m.product_code,
+                price: 0,
+                stock: 0,
+                version: 0,
+              },
+              select: { id: true },
+            });
+            productId = created.id;
+          } else {
+            productId = byCode.id;
+          }
         }
         if (!productId) continue;
 
@@ -163,10 +178,12 @@ export class SyncService {
         const prod = await tx.product.findUnique({ where: { id: productId } });
         if (!prod) continue;
 
+        // Registrar movimiento
         await tx.stockMove.create({
           data: { productId, branchId, qty, type, ref: m.ref ?? m.reason ?? null },
         });
 
+        // Actualizar stock
         const delta = type === 'IN' ? qty : -qty;
         const updated = await tx.product.update({
           where: { id: productId },
