@@ -46,7 +46,7 @@ export default function BranchProducts({ navigation }: any) {
   // modal ajustar
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
-  const [targetStr, setTargetStr] = useState<string>("0");
+  const [targetStr, setTargetStr] = useState<string>("0"); // fijar stock exacto
 
   const loadLocal = () => {
     if (!branchId) return;
@@ -78,11 +78,11 @@ export default function BranchProducts({ navigation }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, branchId]);
 
-  async function syncProductOnline(product: { code: string; name: string; price: number; branch_id: string }) {
+  async function syncProductOnline(product: { code: string; name: string; price: number; stock?: number; branch_id: string }) {
     try {
       await api.post("/sync", {
         branchId: product.branch_id,
-        products: [product],
+        products: [product], // ahora puede incluir stock en creaciones/ediciones si corresponde
         stockMoves: [],
         remitos: [],
         remitoItems: [],
@@ -97,13 +97,41 @@ export default function BranchProducts({ navigation }: any) {
     setEditOpen(true);
   };
 
-  const onSaveEdit = async (data: { name: string; price: number }) => {
-    if (!editing) return;
-    const updated = DB.updateProductNamePrice(editing.id, data.name, data.price);
+  // ✅ ahora soporta editar STOCK desde el modal
+  const onSaveEdit = async (data: { name: string; price: number; stock?: number }) => {
+    if (!editing || !branchId) return;
+
+    // 1) nombre y precio
+    const updatedBase = DB.updateProductNamePrice(editing.id, data.name, data.price);
+
+    // 2) stock (si se envió y cambió)
+    let updated = updatedBase;
+    if (typeof data.stock === "number") {
+      const before = Number(editing.stock ?? 0);
+      const target = Math.max(0, Math.floor(data.stock));
+      if (target !== before) {
+        updated = DB.setStockExact(editing.id, branchId, target, "Editar producto");
+        // push del delta al backend para que lo vean otros dispositivos
+        const delta = target - before;
+        if (delta !== 0) {
+          await pushMoveByCode(branchId, editing.code, delta, "Editar producto");
+        }
+      }
+    }
+
+    // 3) refrescar lista
     setRows((cur) => cur.map((r) => (r.id === editing.id ? updated : r)));
     setEditOpen(false);
     setEditing(null);
-    await syncProductOnline({ code: updated.code, name: updated.name, price: updated.price ?? 0, branch_id: updated.branch_id });
+
+    // 4) sync del producto (nombre, precio, y si querés, stock actual)
+    await syncProductOnline({
+      code: updated.code,
+      name: updated.name,
+      price: updated.price ?? 0,
+      stock: updated.stock ?? 0,
+      branch_id: updated.branch_id,
+    });
   };
 
   // ===== Ajustar =====
@@ -126,10 +154,11 @@ export default function BranchProducts({ navigation }: any) {
     if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
     if (t < 0) t = 0;
     const before = adjusting.stock ?? 0;
-    const updated = DB.setStockExact(adjusting.id, branchId, Math.floor(t), "Fijar stock");
+    const target = Math.floor(t);
+    const updated = DB.setStockExact(adjusting.id, branchId, target, "Fijar stock");
     setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
-    const delta = Math.floor(t) - before;
-    await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock");
+    const delta = target - before;
+    if (delta !== 0) await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock");
   };
 
   // ===== Archivar / Eliminar =====
@@ -283,6 +312,8 @@ export default function BranchProducts({ navigation }: any) {
         code={editing?.code ?? null}
         initialName={editing?.name ?? ""}
         initialPrice={editing?.price ?? 0}
+        // 👇 si tu ProductEditModal ya tiene campo de stock, también pasale initialStock
+        initialStock={editing?.stock ?? 0}
         onCancel={() => {
           setEditOpen(false);
           setEditing(null);

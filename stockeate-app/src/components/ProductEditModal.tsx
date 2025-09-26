@@ -18,6 +18,8 @@ type Props = {
   code: string | null;
   initialName?: string;
   initialPrice?: number;
+  /** NUEVO: stock inicial opcional para prefijar el campo cuando edites */
+  initialStock?: number;
   onCancel: () => void;
   onSave: (data: { name: string; price: number; stock?: number }) => void;
 };
@@ -27,12 +29,13 @@ export default function ProductEditModal({
   code,
   initialName = "",
   initialPrice = 0,
+  initialStock = 0,
   onCancel,
   onSave,
 }: Props) {
   const [name, setName] = useState(initialName);
   const [priceStr, setPriceStr] = useState(String(initialPrice ?? 0));
-  const [stockStr, setStockStr] = useState("0");
+  const [stockStr, setStockStr] = useState(String(initialStock ?? 0));
 
   const nameRef = useRef<TextInput>(null);
   const priceRef = useRef<TextInput>(null);
@@ -42,12 +45,12 @@ export default function ProductEditModal({
     if (visible) {
       setName(initialName || (code ?? ""));
       setPriceStr(String(initialPrice ?? 0));
-      setStockStr("0");
+      setStockStr(String(initialStock ?? 0));
       setTimeout(() => {
         nameRef.current?.focus();
       }, 200);
     }
-  }, [visible, code, initialName, initialPrice]);
+  }, [visible, code, initialName, initialPrice, initialStock]);
 
   const parsePrice = () => {
     const v = parseFloat(priceStr.replace(",", "."));
@@ -57,7 +60,6 @@ export default function ProductEditModal({
   const parseStock = () => {
     const n = parseInt(stockStr.replace(",", ".").split(".")[0] || "0", 10);
     return isNaN(n) ? 0 : n;
-    // Si querés permitir stock decimal, cambiamos a parseFloat.
   };
 
   const handleSave = () => {
@@ -96,12 +98,7 @@ export default function ProductEditModal({
                 maxHeight: "80%",
               }}
             >
-              <View
-                style={{
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
+              <View style={{ alignItems: "center", marginBottom: 8 }}>
                 <View
                   style={{
                     width: 40,
@@ -112,13 +109,7 @@ export default function ProductEditModal({
                 />
               </View>
 
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "700",
-                  marginBottom: 12,
-                }}
-              >
+              <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
                 Nuevo producto ({code ?? ""})
               </Text>
 

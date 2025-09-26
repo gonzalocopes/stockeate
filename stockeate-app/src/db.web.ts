@@ -5,7 +5,7 @@
   items: "stk_remito_items",
 } as const;
 
-type Prod = { id:string; code:string; name:string; price:number; stock:number; version:number; branch_id:string; updated_at?:string };
+type Prod = { id:string; code:string; name:string; price:number; stock:number; version:number; branch_id:string; updated_at?:string; archived?:number };
 type Move = { id:string; product_id:string; branch_id:string; qty:number; type:string; ref?:string; created_at:string; synced?:number };
 type Rem = { id:string; tmp_number?:string; official_number?:string|null; branch_id:string; customer?:string|null; notes?:string|null; created_at:string; synced?:number; pdf_path?:string|null };
 type RItem = { id:string; remito_id:string; product_id:string; qty:number; unit_price:number };
@@ -39,20 +39,42 @@ export const DB = {
   getProductByCode(code:string){
     return PRODUCTS.find(p => p.code === code) ?? null;
   },
+
+  // ✅ upsert que actualiza stock si viene definido
   upsertProduct(p:any){
     const i = PRODUCTS.findIndex(x => x.code === p.code);
     if (i >= 0){
-      PRODUCTS[i] = { ...PRODUCTS[i], name: p.name ?? p.code, price: p.price ?? 0, updated_at: now() };
+      const prev = PRODUCTS[i];
+      const next: Prod = {
+        ...prev,
+        name: p.name ?? prev.name,
+        price: p.price ?? prev.price,
+        updated_at: now(),
+        ...(typeof p.stock === "number" ? { stock: p.stock, version: (prev.version ?? 0) + 1 } : {}),
+      };
+      PRODUCTS[i] = next;
       flush();
       return PRODUCTS[i];
     }
-    const obj: Prod = { id: p.id ?? uid(), code: p.code, name: p.name ?? p.code, price: p.price ?? 0, stock: p.stock ?? 0, version: 0, branch_id: p.branch_id, updated_at: now() };
+    const obj: Prod = {
+      id: p.id ?? uid(),
+      code: p.code,
+      name: p.name ?? p.code,
+      price: p.price ?? 0,
+      stock: p.stock ?? 0,
+      version: p.version ?? 0,
+      branch_id: p.branch_id,
+      updated_at: now(),
+      archived: p.archived ?? 0,
+    };
     PRODUCTS.push(obj); flush(); return obj;
   },
+
   incrementStock(productId:string, qty:number){
     const p = PRODUCTS.find(x => x.id === productId); if (!p) return;
-    p.stock += qty; p.version += 1; p.updated_at = now(); flush();
+    p.stock += qty; p.version = (p.version ?? 0) + 1; p.updated_at = now(); flush();
   },
+
   insertRemito(data:any){
     const id = uid();
     const r: Rem = { id, tmp_number: data.tmp_number, official_number: data.official_number ?? null, branch_id: data.branch_id, customer: data.customer ?? null, notes: data.notes ?? null, created_at: now(), synced: 0, pdf_path: data.pdf_path ?? null };
@@ -66,7 +88,8 @@ export const DB = {
     const m: Move = { id: uid(), product_id: data.product_id, branch_id: data.branch_id, qty: data.qty, type: data.type, ref: data.ref ?? null, created_at: now(), synced: 0 };
     MOVES.push(m); flush();
   },
-  // NUEVO:
+
+  // PDF helpers
   setRemitoPdfPath(remitoId: string, path: string){
     const r = REMITOS.find(x => x.id === remitoId); if (!r) return;
     r.pdf_path = path; flush();

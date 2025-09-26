@@ -60,14 +60,37 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
+  // ✅ upsert que también ACTUALIZA stock si viene definido
   upsertProduct(p: any) {
+    const existing = db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
+    if (existing) {
+      // name + price siempre; stock sólo si viene explícito (number)
+      if (typeof p.stock === "number") {
+        db.runSync(
+          `UPDATE products
+           SET name=?, price=?, stock=?, version=version+1, updated_at=?
+           WHERE id=?`,
+          [p.name ?? existing.name, p.price ?? existing.price, p.stock, now(), existing.id]
+        );
+      } else {
+        db.runSync(
+          `UPDATE products
+           SET name=?, price=?, updated_at=?
+           WHERE id=?`,
+          [p.name ?? existing.name, p.price ?? existing.price, now(), existing.id]
+        );
+      }
+      return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [existing.id]);
+    }
+
+    // insert nuevo con stock inicial
+    const id = p.id ?? uid();
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
-       VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, updated_at=excluded.updated_at`,
-      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+       VALUES(?,?,?,?,?,?,?,?,?)`,
+      [id, p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [id]);
   },
 
   incrementStock(productId: string, qty: number) {

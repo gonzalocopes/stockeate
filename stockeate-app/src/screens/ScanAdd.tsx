@@ -20,9 +20,8 @@ import ProductEditModal from "../components/ProductEditModal";
 import { api } from "../api";
 import { pushMovesBatchByCodes } from "../sync/push";
 
-// Config de escaneo
-const COOLDOWN_MS = 1000;        // bloquea ~1s después de leer
-const SAME_CODE_BLOCK_MS = 900;  // evita mismo código por 0.9s
+const COOLDOWN_MS = 1000;
+const SAME_CODE_BLOCK_MS = 900;
 
 type Mode = "batch" | "catalog";
 
@@ -32,47 +31,34 @@ type CatalogAdded = {
   name: string;
   price: number;
   stock: number;
-  count: number; // cantidad en esta sesión
+  count: number;
 };
 
 export default function ScanAdd({ navigation, route }: any) {
-  // Modo inicial: si nos llaman con mode:"batch" desde Remitos, usamos batch; sino, catálogo
   const initialMode: Mode = route?.params?.mode === "batch" ? "batch" : "catalog";
   const [mode] = useState<Mode>(initialMode);
 
-  // Sucursal
   const getBranchId = () => useBranch.getState().id;
 
-  // Lote (para modo batch / remito)
   const { items, addOrInc, dec, remove, totalQty } = useBatch();
 
-  // Cámara
   const [hasPerm, setHasPerm] = useState<boolean | null>(null);
   const isFocused = useIsFocused();
 
-  // Habilitador del handler
   const [scanEnabled, setScanEnabled] = useState(true);
-
-  // Anti-repetidos
   const lastDataRef = useRef<string | null>(null);
   const lastAtRef = useRef<number>(0);
 
-  // Sonido
   const [beep, setBeep] = useState<Audio.Sound | null>(null);
-
-  // Manual
   const [manualCode, setManualCode] = useState("");
 
-  // Modal nuevo producto
   const [editVisible, setEditVisible] = useState(false);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [editNameInit, setEditNameInit] = useState<string>("");
   const [editPriceInit, setEditPriceInit] = useState<number>(0);
 
-  // Feedback visual
   const [lastScanned, setLastScanned] = useState<string>("");
 
-  // Lista “agregados en esta sesión” (solo catálogo)
   const [catalogAdds, setCatalogAdds] = useState<CatalogAdded[]>([]);
   const [committing, setCommitting] = useState(false);
 
@@ -87,7 +73,6 @@ export default function ScanAdd({ navigation, route }: any) {
     })();
   }, []);
 
-  // Cargar beep
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -120,33 +105,64 @@ export default function ScanAdd({ navigation, route }: any) {
     );
   };
 
-  async function syncProductOnline(product: any, branchId: string | null) {
+  // ⬇️ Arreglado: usar el parámetro product y mandar stock
+  async function syncProductOnline(product: {
+    code: string;
+    name: string;
+    price: number;
+    stock?: number;
+    branch_id: string;
+  }) {
     try {
       await api.post("/sync", {
-        branchId: branchId ?? null,
-        products: [product],
+        branchId: product.branch_id,
+        products: [
+          {
+            code: product.code,
+            name: product.name,
+            price: product.price ?? 0,
+            stock: product.stock ?? 0,
+            branch_id: product.branch_id,
+          },
+        ],
         stockMoves: [],
         remitos: [],
         remitoItems: [],
       });
-    } catch (e) {
+    } catch (e: any) {
       console.log("⚠️ No se pudo sincronizar producto online:", e?.toString?.());
     }
   }
 
-  
-
-  // Helpers “agregados” (catálogo)
-  const bumpCatalogAdded = (p: {id: string; code: string; name: string; price?: number; stock?: number}) => {
+  const bumpCatalogAdded = (p: {
+    id: string;
+    code: string;
+    name: string;
+    price?: number;
+    stock?: number;
+  }) => {
     setCatalogAdds((cur) => {
       const ix = cur.findIndex((r) => r.code === p.code);
       if (ix >= 0) {
         const copy = [...cur];
-        copy[ix] = { ...copy[ix], name: p.name, price: p.price ?? 0, stock: p.stock ?? 0, count: copy[ix].count + 1 };
+        copy[ix] = {
+          ...copy[ix],
+          name: p.name,
+          price: p.price ?? 0,
+          stock: p.stock ?? 0,
+          count: copy[ix].count + 1,
+        };
         return copy;
       }
       return [
-        { id: p.id, code: p.code, name: p.name, price: p.price ?? 0, stock: p.stock ?? 0, count: 1 },
+        {
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          price: p.price ?? 0,
+          stock: p.stock ?? 0,
+          count: 1,
+        },
         ...cur,
       ];
     });
@@ -164,37 +180,37 @@ export default function ScanAdd({ navigation, route }: any) {
     });
   };
 
-  // Comitear a stock real lo agregado en la sesión (catálogo)
- const commitCatalogAdds = async () => {
-  const branchId = getBranchId();
-  if (!branchId || committing || catalogAdds.length === 0) return;
-  setCommitting(true);
-  try {
-    for (const row of catalogAdds) {
-      if (row.count <= 0) continue;
-      const p = DB.getProductByCode(row.code) || { id: row.id };
-      DB.incrementStock(p.id, row.count);
-      DB.insertStockMove({
-        product_id: p.id,
-        branch_id: branchId,
-        qty: row.count,
-        type: "IN",
-        ref: "Alta catálogo",
-      });
+  const commitCatalogAdds = async () => {
+    const branchId = getBranchId();
+    if (!branchId || committing || catalogAdds.length === 0) return;
+    setCommitting(true);
+    try {
+      for (const row of catalogAdds) {
+        if (row.count <= 0) continue;
+        const p = DB.getProductByCode(row.code) || { id: row.id };
+        DB.incrementStock(p.id, row.count);
+        DB.insertStockMove({
+          product_id: p.id,
+          branch_id: branchId,
+          qty: row.count,
+          type: "IN",
+          ref: "Alta catálogo",
+        });
+      }
+
+      await pushMovesBatchByCodes(
+        branchId,
+        catalogAdds
+          .filter((r) => r.count > 0)
+          .map((r) => ({ code: r.code, qty: r.count, reason: "Alta catálogo" })),
+        "IN"
+      );
+
+      setCatalogAdds([]);
+    } finally {
+      setCommitting(false);
     }
-
-    // 👇 NUEVO: push al backend como IN
-    await pushMovesBatchByCodes(
-      branchId,
-      catalogAdds.filter(r => r.count > 0).map(r => ({ code: r.code, qty: r.count, reason: "Alta catálogo" })),
-      "IN"
-    );
-
-    setCatalogAdds([]);
-  } finally {
-    setCommitting(false);
-  }
-};
+  };
 
   const onScan = async (raw: string) => {
     const code = String(raw).trim();
@@ -222,7 +238,6 @@ export default function ScanAdd({ navigation, route }: any) {
     const p = DB.getProductByCode(code);
 
     if (mode === "batch") {
-      // ---- MODO REMITO / LOTE ----
       if (p) {
         addScannedToBatch(p);
       } else {
@@ -240,7 +255,13 @@ export default function ScanAdd({ navigation, route }: any) {
     if (p) {
       bumpCatalogAdded(p);
       setLastScanned(`${code} (ya estaba en la sucursal) — sumado a tu lista`);
-      await syncProductOnline({ code: p.code, name: p.name, price: p.price ?? 0, branch_id: branchId }, branchId);
+      await syncProductOnline({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0, // 👈 también mandamos stock actual
+        branch_id: branchId,
+      });
       setTimeout(() => setScanEnabled(true), COOLDOWN_MS);
       return;
     } else {
@@ -274,7 +295,13 @@ export default function ScanAdd({ navigation, route }: any) {
     } else {
       bumpCatalogAdded(created);
       setLastScanned(`${created.code} agregado a la sucursal ✅`);
-      await syncProductOnline({ code: created.code, name: created.name, price: created.price ?? 0, branch_id: branchId }, branchId);
+      await syncProductOnline({
+        code: created.code,
+        name: created.name,
+        price: created.price ?? 0,
+        stock: created.stock ?? 0, // 👈 mandamos stock inicial
+        branch_id: branchId,
+      });
     }
 
     setEditVisible(false);
@@ -297,7 +324,6 @@ export default function ScanAdd({ navigation, route }: any) {
     setEditVisible(true);
   };
 
-  // Render de item del lote (batch)
   const renderBatchRow = ({ item }: any) => (
     <View
       style={{
@@ -358,7 +384,6 @@ export default function ScanAdd({ navigation, route }: any) {
     </View>
   );
 
-  // Render de item agregado en sesión (catálogo)
   const renderCatalogAdded = ({ item }: { item: CatalogAdded }) => (
     <View
       style={{
@@ -430,7 +455,6 @@ export default function ScanAdd({ navigation, route }: any) {
         Escanear Código de Barras
       </Text>
 
-      {/* Último código escaneado */}
       {lastScanned ? (
         <View
           style={{
@@ -448,7 +472,6 @@ export default function ScanAdd({ navigation, route }: any) {
         </View>
       ) : null}
 
-      {/* Cámara (solo nativo) */}
       {Platform.OS !== "web" ? (
         hasPerm === null ? (
           <Text>Solicitando permiso de cámara…</Text>
@@ -483,8 +506,6 @@ export default function ScanAdd({ navigation, route }: any) {
                   ],
                 }}
               />
-
-              {/* Recuadro de enfoque */}
               <View
                 style={{
                   position: "absolute",
@@ -500,8 +521,6 @@ export default function ScanAdd({ navigation, route }: any) {
                   backgroundColor: "transparent",
                 }}
               />
-
-              {/* Texto de instrucción */}
               <View
                 style={{
                   position: "absolute",
@@ -550,7 +569,6 @@ export default function ScanAdd({ navigation, route }: any) {
         </View>
       )}
 
-      {/* Entrada manual */}
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
         <TextInput
           style={{
@@ -595,17 +613,12 @@ export default function ScanAdd({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Vista según modo */}
       {mode === "batch" ? (
         <>
           <Text style={{ fontWeight: "600" }}>
             Lote actual: {totalQty()} items
           </Text>
-          <FlatList
-            data={items}
-            keyExtractor={(i) => i.code}
-            renderItem={renderBatchRow}
-          />
+          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} />
           <TouchableOpacity
             style={{
               backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d",
@@ -676,14 +689,9 @@ export default function ScanAdd({ navigation, route }: any) {
           {catalogAdds.length > 0 ? (
             <>
               <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
-                Agregados en esta sesión (
-                {catalogAdds.reduce((a, r) => a + r.count, 0)} items)
+                Agregados en esta sesión ({totalAdds} items)
               </Text>
-              <FlatList
-                data={catalogAdds}
-                keyExtractor={(x) => x.id}
-                renderItem={renderCatalogAdded}
-              />
+              <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} />
               <TouchableOpacity
                 onPress={commitCatalogAdds}
                 style={{
@@ -700,19 +708,15 @@ export default function ScanAdd({ navigation, route }: any) {
                 {committing ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text
-                    style={{ color: "white", fontWeight: "700", fontSize: 16 }}
-                  >
-                    Guardar y ver en la sucursal (
-                    {catalogAdds.reduce((a, r) => a + r.count, 0)})
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
+                    Guardar y ver en la sucursal ({totalAdds})
                   </Text>
                 )}
               </TouchableOpacity>
             </>
           ) : (
             <Text style={{ color: "#64748b", fontSize: 12 }}>
-              Escaneá o ingresá un código para crear productos nuevos. Se
-              listarán aquí.
+              Escaneá o ingresá un código para crear productos nuevos. Se listarán aquí.
             </Text>
           )}
         </View>
