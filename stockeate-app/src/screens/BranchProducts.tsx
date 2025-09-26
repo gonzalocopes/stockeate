@@ -56,7 +56,7 @@ export default function BranchProducts({ navigation }: any) {
     if (!branchId) return;
     setLoading(true);
     try {
-      await pullBranchCatalog(branchId);
+      await pullBranchCatalog(branchId); // full snapshot
     } catch (e: any) {
       console.log("SYNC_ERR", e?.message || e);
     } finally {
@@ -98,10 +98,8 @@ export default function BranchProducts({ navigation }: any) {
   const onSaveEdit = async (data: { name: string; price: number; stock?: number }) => {
     if (!editing || !branchId) return;
 
-    // 1) nombre + precio
     const updatedNP = DB.updateProductNamePrice(editing.id, data.name, data.price);
 
-    // 2) stock (si vino y cambió) -> fija exacto y pushea delta
     let finalRow = updatedNP;
     if (typeof data.stock === "number") {
       const before = Number(editing.stock ?? 0);
@@ -154,27 +152,7 @@ export default function BranchProducts({ navigation }: any) {
     if (delta !== 0) await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock");
   };
 
-  const archiveCurrent = () => {
-    if (!adjusting) return;
-    Alert.alert(
-      "Archivar producto",
-      `¿Archivar “${adjusting.name}” (${adjusting.code})? No aparecerá más en listados.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Archivar",
-          style: "destructive",
-          onPress: () => {
-            DB.archiveProduct(adjusting.id);
-            setRows((cur) => cur.filter((r) => r.id !== adjusting.id));
-            setAdjOpen(false);
-            setAdjusting(null);
-          },
-        },
-      ]
-    );
-  };
-
+  // ===== Eliminar con sync backend =====
   const confirmDelete = (p: Prod) => {
     if (!DB.canDeleteProduct(p.id)) {
       return Alert.alert(
@@ -190,9 +168,27 @@ export default function BranchProducts({ navigation }: any) {
         {
           text: "Eliminar",
           style: "destructive",
-          onPress: () => {
+          onPress: async () => {
+            // 1) borrar local
             DB.deleteProduct(p.id);
             setRows((cur) => cur.filter((r) => r.id !== p.id));
+
+            // 2) sync backend (borra por código dentro de la sucursal)
+            try {
+              await api.post("/sync", {
+                branchId,
+                products: [],
+                stockMoves: [],
+                remitos: [],
+                remitoItems: [],
+                deletes: [p.code], // 👈 nuevo
+              });
+            } catch (e) {
+              console.log("⚠️ delete sync falló:", (e as any)?.toString?.());
+            }
+
+            // 3) refrescar snapshot (y en otros dispositivos al tocar Refrescar también desaparecerá)
+            await pullThenLoad();
           },
         },
       ]
@@ -314,8 +310,10 @@ export default function BranchProducts({ navigation }: any) {
                   </View>
                 </View>
 
-                <TouchableOpacity onPress={archiveCurrent} style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }} activeOpacity={0.9}>
-                  <Text style={{ color: "#0f172a", fontWeight: "700" }}>Archivar producto</Text>
+                <TouchableOpacity onPress={() => {
+                  if (adjusting) confirmDelete(adjusting);
+                }} style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }} activeOpacity={0.9}>
+                  <Text style={{ color: "#0f172a", fontWeight: "700" }}>Eliminar producto</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => { setAdjOpen(false); setAdjusting(null); }} style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#e5e7eb", alignItems: "center" }} activeOpacity={0.9}>
