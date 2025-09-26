@@ -44,18 +44,20 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
 }
 
 export async function applyPull(branchId: string, payload: PullPayload) {
-  // 1) upsert de productos (si viene snapshot, fijamos stock)
+  // 1) Upsert de productos
+  // FIX: si viene stock en el payload (full o incremental), lo pasamos.
+  // En DB.upsertProduct, el INSERT usa ese stock y el UPDATE solo cambia name/price.
   for (const p of payload.products) {
     DB.upsertProduct({
       code: p.code,
       name: p.name ?? p.code,
       price: p.price ?? 0,
       branch_id: branchId,
-      ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
+      ...(typeof p.stock === "number" ? { stock: p.stock } : {}), // 👈 usar stock también en incrementales
     });
   }
 
-  // 2) movimientos (dedupe por id)
+  // 2) Movimientos (dedupe por id)
   const applied = await loadAppliedMoveIds(branchId);
   let newApplied = false;
 

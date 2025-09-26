@@ -20,7 +20,7 @@ import ProductEditModal from "../components/ProductEditModal";
 import { DB } from "../db.native";
 import { api } from "../api";
 import { pullBranchCatalog } from "../sync/index";
-import { pushMoveByCode } from "../sync/push"; // 👈 NUEVO
+import { pushMoveByCode } from "../sync/push";
 
 type Prod = {
   id: string;
@@ -46,7 +46,7 @@ export default function BranchProducts({ navigation }: any) {
   // modal ajustar
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
-  const [targetStr, setTargetStr] = useState<string>("0"); // fijar stock exacto
+  const [targetStr, setTargetStr] = useState<string>("0");
 
   const loadLocal = () => {
     if (!branchId) return;
@@ -92,20 +92,6 @@ export default function BranchProducts({ navigation }: any) {
     }
   }
 
-  async function syncMoveOnline(move: { productCode: string; branchId: string; delta: number; reason?: string }) {
-    try {
-      await api.post("/sync", {
-        branchId: move.branchId,
-        products: [],
-        stockMoves: [{ productCode: move.productCode, branchId: move.branchId, delta: move.delta, reason: move.reason ?? "Ajuste" }],
-        remitos: [],
-        remitoItems: [],
-      });
-    } catch (e) {
-      console.log("⚠️ Sync movimiento falló (local ok):", e?.toString?.());
-    }
-  }
-
   const openEdit = (p: Prod) => {
     setEditing(p);
     setEditOpen(true);
@@ -128,23 +114,23 @@ export default function BranchProducts({ navigation }: any) {
   };
 
   const applyQuickDelta = async (delta: number) => {
-  if (!adjusting || !branchId) return;
-  const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
-  setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
-  await pushMoveByCode(branchId, adjusting.code, delta, delta > 0 ? "+1" : "-1"); // 👈 FIX
-};
+    if (!adjusting || !branchId) return;
+    const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
+    setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
+    await pushMoveByCode(branchId, adjusting.code, delta, delta > 0 ? "+1" : "-1");
+  };
 
-const applySetExact = async () => {
-  if (!adjusting || !branchId) return;
-  let t = Number(targetStr.replace(",", "."));
-  if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
-  if (t < 0) t = 0;
-  const before = adjusting.stock ?? 0;
-  const updated = DB.setStockExact(adjusting.id, branchId, Math.floor(t), "Fijar stock");
-  setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
-  const delta = Math.floor(t) - before;
-  await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock"); // 👈 FIX
-};
+  const applySetExact = async () => {
+    if (!adjusting || !branchId) return;
+    let t = Number(targetStr.replace(",", "."));
+    if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
+    if (t < 0) t = 0;
+    const before = adjusting.stock ?? 0;
+    const updated = DB.setStockExact(adjusting.id, branchId, Math.floor(t), "Fijar stock");
+    setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
+    const delta = Math.floor(t) - before;
+    await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock");
+  };
 
   // ===== Archivar / Eliminar =====
   const archiveCurrent = () => {

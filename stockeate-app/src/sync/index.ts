@@ -22,6 +22,7 @@ export async function pullBranchCatalog(branchId: string) {
   let payload: PullPayload | null = null;
 
   try {
+    // Primer pull: SIN since (undefined). Incrementales: con since.
     payload = await pullFromServer(branchId, since ?? undefined);
   } catch (e: any) {
     console.log("SYNC_BRANCH_CATALOG_FAIL", e?.message || e);
@@ -30,7 +31,9 @@ export async function pullBranchCatalog(branchId: string) {
 
   try {
     await applyPull(branchId, payload);
-    await setLastClock(branchId, payload.clock);
+    if (payload?.clock && Number.isFinite(payload.clock)) {
+      await setLastClock(branchId, payload.clock);
+    }
   } catch (e) {
     console.log("APPLY_PULL_FAIL", e);
   }
