@@ -15,7 +15,7 @@ export class SyncService {
     if (full) {
       // Snapshot completo
       const list = await this.prisma.product.findMany({
-        where: { branchId, archived: false } as any,
+        where: { branchId } as any,       // ⬅️ hotfix: sin archived
         orderBy: { name: 'asc' },
         take: 5000,
       });
@@ -28,16 +28,15 @@ export class SyncService {
         updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
       }));
     } else {
-      // ⚠️ Incremental: productos creados/actualizados desde "since"
+      // Incremental: productos creados/actualizados desde "since"
       const list = await this.prisma.product.findMany({
         where: {
           branchId,
-          archived: false,
           OR: [
             { updatedAt: { gt: new Date(since!) } },
             { createdAt: { gt: new Date(since!) } },
           ],
-        } as any,
+        } as any,                          // ⬅️ hotfix: sin archived
         orderBy: { updatedAt: 'asc' } as any,
         take: 5000,
       });
