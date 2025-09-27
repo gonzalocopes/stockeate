@@ -44,26 +44,18 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
 }
 
 export async function applyPull(branchId: string, payload: PullPayload) {
-  // 1) Upsert de productos
+  // 1) upsert de productos (si viene snapshot, fijamos stock)
   for (const p of payload.products) {
-    const createdOrUpdated = DB.upsertProduct({
+    DB.upsertProduct({
       code: p.code,
       name: p.name ?? p.code,
       price: p.price ?? 0,
       branch_id: branchId,
-      ...(typeof p.stock === "number" ? { stock: p.stock } : {}),
+      ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
     });
-
-    // En snapshot FULL, garantizamos que el stock local quede igual al del server
-    if (payload.full && typeof p.stock === "number" && createdOrUpdated?.id != null) {
-      const current = Number(createdOrUpdated.stock ?? 0);
-      if (current !== p.stock) {
-        DB.setStockExact(createdOrUpdated.id, branchId, p.stock, "Sync snapshot");
-      }
-    }
   }
 
-  // 2) Movimientos (dedupe por id)
+  // 2) movimientos (dedupe por id)
   const applied = await loadAppliedMoveIds(branchId);
   let newApplied = false;
 
@@ -89,5 +81,11 @@ export async function applyPull(branchId: string, payload: PullPayload) {
 
   if (newApplied) {
     await saveAppliedMoveIds(branchId, applied);
+  }
+
+  // 3) 👇 PODA local cuando el payload es snapshot completo
+  if (payload.full) {
+    const keepCodes = payload.products.map((p) => p.code);
+    DB.pruneProductsNotIn(branchId, keepCodes);
   }
 }

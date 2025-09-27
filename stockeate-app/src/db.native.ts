@@ -12,7 +12,8 @@ export function initDb() {
       stock INTEGER DEFAULT 0,
       version INTEGER DEFAULT 0,
       branch_id TEXT NOT NULL,
-      updated_at TEXT
+      updated_at TEXT,
+      archived INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS stock_moves(
       id TEXT PRIMARY KEY,
@@ -43,13 +44,6 @@ export function initDb() {
       unit_price REAL DEFAULT 0
     );
   `);
-
-  // columna "archived" si falta
-  const cols = db.getAllSync<any>("PRAGMA table_info(products)") as { name: string }[];
-  const hasArchived = cols?.some((c) => c.name === "archived");
-  if (!hasArchived) {
-    db.runSync("ALTER TABLE products ADD COLUMN archived INTEGER DEFAULT 0");
-  }
 }
 
 const now = () => new Date().toISOString();
@@ -60,37 +54,14 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
-  // ✅ upsert que también ACTUALIZA stock si viene definido
   upsertProduct(p: any) {
-    const existing = db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
-    if (existing) {
-      // name + price siempre; stock sólo si viene explícito (number)
-      if (typeof p.stock === "number") {
-        db.runSync(
-          `UPDATE products
-           SET name=?, price=?, stock=?, version=version+1, updated_at=?
-           WHERE id=?`,
-          [p.name ?? existing.name, p.price ?? existing.price, p.stock, now(), existing.id]
-        );
-      } else {
-        db.runSync(
-          `UPDATE products
-           SET name=?, price=?, updated_at=?
-           WHERE id=?`,
-          [p.name ?? existing.name, p.price ?? existing.price, now(), existing.id]
-        );
-      }
-      return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [existing.id]);
-    }
-
-    // insert nuevo con stock inicial
-    const id = p.id ?? uid();
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
-       VALUES(?,?,?,?,?,?,?,?,?)`,
-      [id, p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at`,
+      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [id]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
   },
 
   incrementStock(productId: string, qty: number) {
@@ -231,5 +202,34 @@ export const DB = {
   },
   unarchiveProduct(productId: string) {
     db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+  },
+
+  // ===== PRUNE: borrar todo lo que no venga del server para esa sucursal =====
+  pruneProductsNotIn(branchId: string, keepCodes: string[]) {
+    // buscamos IDs a borrar
+    let rows: any[] = [];
+    if (keepCodes.length > 0) {
+      const placeholders = keepCodes.map(() => "?").join(",");
+      rows = db.getAllSync<any>(
+        `SELECT id FROM products WHERE branch_id=? AND code NOT IN (${placeholders})`,
+        [branchId, ...keepCodes]
+      );
+    } else {
+      rows = db.getAllSync<any>(
+        `SELECT id FROM products WHERE branch_id=?`,
+        [branchId]
+      );
+    }
+    const ids = rows.map((r) => r.id);
+    if (ids.length === 0) return;
+
+    const ph = ids.map(() => "?").join(",");
+
+    // borrar dependencias locales para no dejar basura
+    try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
+    try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
+
+    // borrar productos
+    db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
 };
