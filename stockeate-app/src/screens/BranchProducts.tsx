@@ -20,7 +20,7 @@ import ProductEditModal from "../components/ProductEditModal";
 import { DB } from "../db.native";
 import { api } from "../api";
 import { pullBranchCatalog } from "../sync/index";
-import { pushMoveByCode } from "../sync/push";
+import { pushMoveByCode, pushDeleteProduct } from "../sync/push";
 
 type Prod = {
   id: string;
@@ -39,9 +39,14 @@ export default function BranchProducts({ navigation }: any) {
   const [rows, setRows] = useState<Prod[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // overlay optimista de stock para evitar flicker en "Refrescar"
+  const [pendingStock, setPendingStock] = useState<Record<string, number>>({});
+
+  // modal editar
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Prod | null>(null);
 
+  // modal ajustar
   const [adjOpen, setAdjOpen] = useState(false);
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
   const [targetStr, setTargetStr] = useState<string>("0");
@@ -56,11 +61,14 @@ export default function BranchProducts({ navigation }: any) {
     if (!branchId) return;
     setLoading(true);
     try {
-      await pullBranchCatalog(branchId); // full snapshot
+      // mientras está cargando, mantenemos pendingStock para evitar ver el valor viejo
+      await pullBranchCatalog(branchId);
     } catch (e: any) {
       console.log("SYNC_ERR", e?.message || e);
     } finally {
       loadLocal();
+      // ya sincronizado: limpiamos overlay para volver a leer del DB
+      setPendingStock({});
       setLoading(false);
     }
   };
@@ -86,7 +94,7 @@ export default function BranchProducts({ navigation }: any) {
         remitoItems: [],
       });
     } catch (e) {
-      console.log("⚠️ Sync producto falló (local ok):", (e as any)?.toString?.());
+      console.log("⚠️ Sync producto falló (local ok):", e?.toString?.());
     }
   }
 
@@ -95,37 +103,55 @@ export default function BranchProducts({ navigation }: any) {
     setEditOpen(true);
   };
 
+  // === EDITAR ===
   const onSaveEdit = async (data: { name: string; price: number; stock?: number }) => {
     if (!editing || !branchId) return;
 
-    const updatedNP = DB.updateProductNamePrice(editing.id, data.name, data.price);
+    // nombre y precio (DB)
+    const updatedBase = DB.updateProductNamePrice(editing.id, data.name, data.price);
+    setRows((cur) => cur.map((r) => (r.id === editing.id ? { ...updatedBase, stock: r.stock } : r)));
 
-    let finalRow = updatedNP;
-    if (typeof data.stock === "number") {
-      const before = Number(editing.stock ?? 0);
-      const target = Math.max(0, Math.floor(data.stock));
-      if (target !== before) {
-        finalRow = DB.setStockExact(editing.id, branchId, target, "Editar producto");
-        const delta = target - before;
-        if (delta !== 0) {
-          await pushMoveByCode(branchId, editing.code, delta, "Editar producto");
-        }
-      }
-    }
-
-    setRows((cur) => cur.map((r) => (r.id === editing.id ? finalRow : r)));
     setEditOpen(false);
     setEditing(null);
 
+    // sync nombre+precio
     await syncProductOnline({
-      code: finalRow.code,
-      name: finalRow.name,
-      price: finalRow.price ?? 0,
-      stock: finalRow.stock ?? 0,
-      branch_id: finalRow.branch_id,
+      code: updatedBase.code,
+      name: updatedBase.name,
+      price: updatedBase.price ?? 0,
+      branch_id: updatedBase.branch_id,
     });
+
+    // si viene stock, mostramos optimista y mandamos delta
+    if (typeof data.stock === "number") {
+      const before = Number(updatedBase.stock ?? 0);
+      const target = Math.max(0, Math.floor(data.stock));
+      const delta = target - before;
+
+      // overlay optimista (no toca DB): evita parpadeo en "Refrescar"
+      setPendingStock((m) => ({ ...m, [updatedBase.id]: target }));
+      setRows((cur) => cur.map((r) => (r.id === updatedBase.id ? { ...r, stock: target } : r)));
+
+      if (delta !== 0) {
+        try {
+          await pushMoveByCode(branchId, updatedBase.code, delta, "Editar producto");
+        } catch (e) {
+          console.log("pushMoveByCode fail", e);
+        }
+      }
+
+      // confirmamos con el servidor y actualizamos lista
+      await pullBranchCatalog(branchId);
+      loadLocal();
+      // y limpiamos el overlay de ese producto (ya quedó persistido)
+      setPendingStock((m) => {
+        const { [updatedBase.id]: _, ...rest } = m;
+        return rest;
+      });
+    }
   };
 
+  // ===== Ajustar =====
   const openAdjust = (p: Prod) => {
     setAdjusting(p);
     setTargetStr(String(p.stock ?? 0));
@@ -141,7 +167,7 @@ export default function BranchProducts({ navigation }: any) {
 
   const applySetExact = async () => {
     if (!adjusting || !branchId) return;
-    let t = Number((targetStr ?? "0").replace(",", "."));
+    let t = Number(targetStr.replace(",", "."));
     if (isNaN(t)) return Alert.alert("Fijar stock", "Ingresá un número válido.");
     if (t < 0) t = 0;
     const before = adjusting.stock ?? 0;
@@ -152,14 +178,29 @@ export default function BranchProducts({ navigation }: any) {
     if (delta !== 0) await pushMoveByCode(branchId, adjusting.code, delta, "Fijar stock");
   };
 
-  // ===== Eliminar con sync backend =====
+  // ===== Eliminar =====
+  const archiveCurrent = () => {
+    if (!adjusting) return;
+    Alert.alert(
+      "Archivar producto",
+      `¿Archivar “${adjusting.name}” (${adjusting.code})?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Archivar",
+          style: "destructive",
+          onPress: () => {
+            DB.archiveProduct(adjusting.id);
+            setRows((cur) => cur.filter((r) => r.id !== adjusting.id));
+            setAdjOpen(false);
+            setAdjusting(null);
+          },
+        },
+      ]
+    );
+  };
+
   const confirmDelete = (p: Prod) => {
-    if (!DB.canDeleteProduct(p.id)) {
-      return Alert.alert(
-        "No se puede eliminar",
-        "Este producto tiene remitos asociados. Para no perder historial, no se permite eliminar.\nSugerencia: fijá el stock en 0 o archivá el producto."
-      );
-    }
     Alert.alert(
       "Eliminar producto",
       `¿Eliminar “${p.name}” (${p.code}) de esta sucursal?\nEsta acción no se puede deshacer.`,
@@ -169,26 +210,11 @@ export default function BranchProducts({ navigation }: any) {
           text: "Eliminar",
           style: "destructive",
           onPress: async () => {
-            // 1) borrar local
             DB.deleteProduct(p.id);
             setRows((cur) => cur.filter((r) => r.id !== p.id));
-
-            // 2) sync backend (borra por código dentro de la sucursal)
-            try {
-              await api.post("/sync", {
-                branchId,
-                products: [],
-                stockMoves: [],
-                remitos: [],
-                remitoItems: [],
-                deletes: [p.code], // 👈 nuevo
-              });
-            } catch (e) {
-              console.log("⚠️ delete sync falló:", (e as any)?.toString?.());
+            if (branchId) {
+              try { await pushDeleteProduct(branchId, p.code); } catch {}
             }
-
-            // 3) refrescar snapshot (y en otros dispositivos al tocar Refrescar también desaparecerá)
-            await pullThenLoad();
           },
         },
       ]
@@ -203,30 +229,48 @@ export default function BranchProducts({ navigation }: any) {
     );
   }
 
-  const renderItem = ({ item }: { item: Prod }) => (
-    <View style={{ borderBottomWidth: 1, borderColor: "#eee", paddingVertical: 8, gap: 6 }}>
-      <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-      <Text style={{ color: "#475569", fontSize: 12 }}>{item.code}</Text>
+  const renderItem = ({ item }: { item: Prod }) => {
+    // usar overlay si existe
+    const displayStock = pendingStock[item.id] ?? item.stock;
+    return (
+      <View style={{ borderBottomWidth: 1, borderColor: "#eee", paddingVertical: 8, gap: 6 }}>
+        <Text style={{ fontWeight: "600" }}>{item.name}</Text>
+        <Text style={{ color: "#475569", fontSize: 12 }}>{item.code}</Text>
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={{ fontSize: 12, color: "#334155" }}>Precio: ${item.price ?? 0} — Stock: {item.stock ?? 0}</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ fontSize: 12, color: "#334155" }}>
+            Precio: ${item.price ?? 0} — Stock: {displayStock ?? 0}
+          </Text>
 
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          <TouchableOpacity onPress={() => openAdjust(item)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#1e293b" }} activeOpacity={0.8}>
-            <Text style={{ color: "white", fontWeight: "700" }}>Ajustar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <TouchableOpacity
+              onPress={() => openAdjust(item)}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#1e293b" }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>Ajustar</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => openEdit(item)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#007AFF" }} activeOpacity={0.8}>
-            <Text style={{ color: "white", fontWeight: "700" }}>Editar</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => openEdit(item)}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#007AFF" }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>Editar</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => confirmDelete(item)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#b91c1c" }} activeOpacity={0.8}>
-            <Text style={{ color: "white", fontWeight: "700" }}>Eliminar</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => confirmDelete(item)}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#b91c1c" }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: "white", fontWeight: "700" }}>Eliminar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
@@ -237,14 +281,34 @@ export default function BranchProducts({ navigation }: any) {
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar por nombre o código"
-          style={{ flex: 1, borderWidth: 1, borderColor: search ? "#007AFF" : "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: search ? "#f8f9ff" : "white" }}
+          style={{
+            flex: 1,
+            borderWidth: 1,
+            borderColor: search ? "#007AFF" : "#cbd5e1",
+            borderRadius: 8,
+            padding: 10,
+            backgroundColor: search ? "#f8f9ff" : "white",
+          }}
         />
 
-        <TouchableOpacity onPress={pullThenLoad} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }} activeOpacity={0.9} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "white", fontWeight: "700" }}>Refrescar</Text>}
+        <TouchableOpacity
+          onPress={pullThenLoad}
+          style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }}
+          activeOpacity={0.9}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: "white", fontWeight: "700" }}>Refrescar</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate("BranchArchived")} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9" }} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("BranchArchived")}
+          style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9" }}
+          activeOpacity={0.9}
+        >
           <Text style={{ color: "white", fontWeight: "700" }}>Archivados</Text>
         </TouchableOpacity>
       </View>
@@ -253,7 +317,12 @@ export default function BranchProducts({ navigation }: any) {
         {rows.length} producto{rows.length === 1 ? "" : "s"} en esta sucursal
       </Text>
 
-      <FlatList data={rows} keyExtractor={(x) => x.id} renderItem={renderItem} keyboardShouldPersistTaps="handled" />
+      <FlatList
+        data={rows}
+        keyExtractor={(x) => x.id}
+        renderItem={renderItem}
+        keyboardShouldPersistTaps="handled"
+      />
 
       {/* Modal editar */}
       <ProductEditModal
@@ -284,10 +353,18 @@ export default function BranchProducts({ navigation }: any) {
                 </Text>
 
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-                  <TouchableOpacity onPress={() => applyQuickDelta(-1)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#ef4444", alignItems: "center" }} activeOpacity={0.9}>
+                  <TouchableOpacity
+                    onPress={() => applyQuickDelta(-1)}
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#ef4444", alignItems: "center" }}
+                    activeOpacity={0.9}
+                  >
                     <Text style={{ color: "white", fontWeight: "700" }}>-1</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => applyQuickDelta(+1)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#22c55e", alignItems: "center" }} activeOpacity={0.9}>
+                  <TouchableOpacity
+                    onPress={() => applyQuickDelta(+1)}
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#22c55e", alignItems: "center" }}
+                    activeOpacity={0.9}
+                  >
                     <Text style={{ color: "white", fontWeight: "700" }}>+1</Text>
                   </TouchableOpacity>
                 </View>
@@ -304,19 +381,29 @@ export default function BranchProducts({ navigation }: any) {
                       returnKeyType="done"
                       onSubmitEditing={applySetExact}
                     />
-                    <TouchableOpacity onPress={applySetExact} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }} activeOpacity={0.9}>
+                    <TouchableOpacity
+                      onPress={applySetExact}
+                      style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }}
+                      activeOpacity={0.9}
+                    >
                       <Text style={{ color: "white", fontWeight: "700" }}>Fijar</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                <TouchableOpacity onPress={() => {
-                  if (adjusting) confirmDelete(adjusting);
-                }} style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }} activeOpacity={0.9}>
-                  <Text style={{ color: "#0f172a", fontWeight: "700" }}>Eliminar producto</Text>
+                <TouchableOpacity
+                  onPress={archiveCurrent}
+                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }}
+                  activeOpacity={0.9}
+                >
+                  <Text style={{ color: "#0f172a", fontWeight: "700" }}>Archivar producto</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => { setAdjOpen(false); setAdjusting(null); }} style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#e5e7eb", alignItems: "center" }} activeOpacity={0.9}>
+                <TouchableOpacity
+                  onPress={() => { setAdjOpen(false); setAdjusting(null); }}
+                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#e5e7eb", alignItems: "center" }}
+                  activeOpacity={0.9}
+                >
                   <Text style={{ color: "#111827", fontWeight: "700" }}>Cerrar</Text>
                 </TouchableOpacity>
               </View>
