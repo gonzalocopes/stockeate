@@ -5,32 +5,57 @@ import { PrismaService } from '../prisma.service';
 export class SyncService {
   constructor(private prisma: PrismaService) {}
 
-  // ---------- PULL (forzado full para propagar deletes) ----------
-  async pull(branchId: string, _since?: number) {
+  // ---------- PULL ----------
+  async pull(branchId: string, since?: number) {
     const clock = Date.now();
-    const full = true; // 👈 siempre full
+    const full = !since;
 
-    // Productos (snapshot completo de la sucursal)
-    const list = await this.prisma.product.findMany({
-      where: { branchId } as any,
-      orderBy: { name: 'asc' },
-      take: 5000,
-    });
+    // Productos (snapshot o incremental)
+    let products: any[] = [];
+    if (full) {
+      const list = await this.prisma.product.findMany({
+        where: { branchId } as any, // no uses 'archived' si no existe en tu schema
+        orderBy: { name: 'asc' },
+        take: 5000,
+      });
+      products = list.map((p: any) => ({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0,
+        branch_id: p.branchId ?? p.branch_id,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+      }));
+    } else {
+      const list = await this.prisma.product.findMany({
+        where: {
+          branchId,
+          OR: [
+            { updatedAt: { gt: new Date(since!) } },
+            { createdAt: { gt: new Date(since!) } },
+          ],
+        } as any,
+        orderBy: { updatedAt: 'asc' } as any,
+        take: 5000,
+      });
+      products = list.map((p: any) => ({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0,
+        branch_id: p.branchId ?? p.branch_id,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+      }));
+    }
 
-    const products = list.map((p: any) => ({
-      code: p.code,
-      name: p.name,
-      price: p.price ?? 0,
-      stock: p.stock ?? 0,
-      branch_id: p.branchId ?? p.branch_id,
-      updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
-    }));
-
-    // Movimientos (por si querés mantenerlos; no necesarios para el delete)
+    // Movimientos desde “since” (sin include)
     let moves: any[] = [];
     try {
       moves = await this.prisma.stockMove.findMany({
-        where: { branchId } as any,
+        where: {
+          branchId,
+          ...(since ? { createdAt: { gt: new Date(since) } } : {}),
+        } as any,
         orderBy: { createdAt: 'asc' } as any,
         take: 5000,
       });
@@ -38,6 +63,7 @@ export class SyncService {
       moves = [];
     }
 
+    // Resolver productCode por productId
     const productIds = Array.from(new Set(moves.map((m) => m.productId).filter(Boolean)));
     const prodList = productIds.length
       ? await this.prisma.product.findMany({
@@ -61,43 +87,25 @@ export class SyncService {
 
   // ---------- PUSH ----------
   async process(dto: any) {
+    // Aceptar camelCase y snake_case desde el cliente
     const branchId = dto.branchId ?? dto.branch_id;
     const products = dto.products ?? [];
     const stockMoves = dto.stockMoves ?? [];
     const remitos = dto.remitos ?? [];
     const remitoItems = dto.remitoItems ?? [];
-    const deletes: string[] = Array.isArray(dto.deletes) ? dto.deletes.filter(Boolean) : [];
 
     const mapping: Record<string, string> = {};
     const patched: any[] = [];
     const conflicts: any[] = [];
 
     await this.prisma.$transaction(async (tx) => {
-      // 0) Deletes por código (de esta sucursal)
-      if (deletes.length > 0) {
-        // buscamos ids primero para respetar branchId
-        const prods = await tx.product.findMany({
-          where: { code: { in: deletes }, branchId },
-          select: { id: true },
-        });
-        const ids = prods.map((p) => p.id);
-        if (ids.length > 0) {
-          // si tu schema tiene FKs, borrar dependencias primero
-          try {
-            await tx.remitoItem.deleteMany({ where: { productId: { in: ids } } as any });
-          } catch {}
-          try {
-            await tx.stockMove.deleteMany({ where: { productId: { in: ids } } as any });
-          } catch {}
-          await tx.product.deleteMany({ where: { id: { in: ids } } as any });
-        }
-      }
-
-      // 1) Upsert de productos (por code)
+      // 1) Upsert de productos (por code) — sin rechazar si el cliente no manda version
       for (const p of products) {
         const code = p.code;
         if (!code) continue;
+
         const existing = await tx.product.findUnique({ where: { code } });
+
         if (!existing) {
           await tx.product.create({
             data: {
@@ -105,50 +113,75 @@ export class SyncService {
               code,
               name: p.name ?? code,
               price: p.price ?? 0,
-              stock: p.stock ?? 0,
-              version: p.version ?? 0,
+              stock: p.stock ?? 0, // stock inicial solo al crear
+              version: typeof p.version === 'number' ? p.version : 0,
             },
           });
           continue;
         }
-        if ((p.version ?? 0) < (existing as any).version) {
+
+        // Si el cliente no manda version, usamos la actual para NO rechazar
+        const incomingVersion =
+          typeof p.version === 'number' ? p.version : existing.version;
+
+        if (incomingVersion < existing.version) {
           conflicts.push({ entity: 'product', code, server: existing });
           continue;
         }
+
+        // Solo actualizamos nombre/precio (el stock se maneja por movimientos)
         await tx.product.update({
-          where: { id: (existing as any).id },
+          where: { id: existing.id },
           data: {
-            name: p.name ?? (existing as any).name,
-            price: p.price ?? (existing as any).price,
-            // si viene stock en la edición, lo respetamos (fijado por cliente)
-            ...(typeof p.stock === 'number' ? { stock: p.stock } : {}),
-            version: ((existing as any).version ?? 0) + 1,
+            name: p.name ?? existing.name,
+            price: p.price ?? existing.price,
+            version: existing.version + 1,
           },
         });
       }
 
-      // 2) Movimientos de stock
+      // 2) Movimientos de stock (acepta delta o IN/OUT)
       for (const m of stockMoves) {
-        const productId = m.productId ?? m.product_id;
-        if (!productId) continue;
+        const productId = m.productId ?? m.product_id; // por si viniera snake
+        const productCode = m.productCode ?? m.product_code;
 
-        const prod = await tx.product.findUnique({ where: { id: productId } });
+        let pid = productId as string | undefined;
+
+        if (!pid && productCode) {
+          const found = await tx.product.findUnique({ where: { code: productCode } });
+          pid = found?.id;
+        }
+        if (!pid) continue;
+
+        const prod = await tx.product.findUnique({ where: { id: pid } });
         if (!prod) continue;
 
-        const type: 'IN' | 'OUT' = m.type ?? (m.delta >= 0 ? 'IN' : 'OUT');
-        const qty = m.qty ?? Math.abs(m.delta ?? 0);
+        let type: 'IN' | 'OUT' = m.type;
+        let qty: number | undefined = m.qty;
+
+        if (!type || qty == null) {
+          const delta = Number(m.delta ?? 0);
+          if (delta === 0) continue;
+          type = delta >= 0 ? 'IN' : 'OUT';
+          qty = Math.abs(delta);
+        }
 
         await tx.stockMove.create({
-          data: { productId, branchId, qty, type, ref: m.ref ?? null },
+          data: { productId: pid, branchId, qty, type, ref: m.ref ?? m.reason ?? null },
         });
 
         const delta = type === 'IN' ? qty : -qty;
         const updated = await tx.product.update({
-          where: { id: productId },
-          data: { stock: ((prod as any).stock ?? 0) + delta, version: ((prod as any).version ?? 0) + 1 },
+          where: { id: pid },
+          data: { stock: (prod.stock ?? 0) + delta, version: (prod.version ?? 0) + 1 },
         });
 
-        patched.push({ entity: 'product', id: (updated as any).id, stock: (updated as any).stock, version: (updated as any).version });
+        patched.push({
+          entity: 'product',
+          id: updated.id,
+          stock: updated.stock,
+          version: updated.version,
+        });
       }
 
       // 3) Remitos + items
@@ -161,19 +194,32 @@ export class SyncService {
         const official = `A-${String(count + 1).padStart(6, '0')}`;
 
         const rem = await tx.remito.create({
-          data: { branchId, tmpNumber, officialNumber: official, customer, notes },
+          data: {
+            branchId,
+            tmpNumber,
+            officialNumber: official,
+            customer,
+            notes,
+          },
         });
 
         if (tmpNumber) mapping[tmpNumber] = official;
 
         const rId = r.id ?? r.remito_id;
-        const items = remitoItems.filter((ri: any) => (ri.remitoId ?? ri.remito_id) === rId);
+        const items = remitoItems.filter(
+          (ri: any) => (ri.remitoId ?? ri.remito_id) === rId,
+        );
 
         for (const it of items) {
           const productId = it.productId ?? it.product_id;
           if (!productId) continue;
           await tx.remitoItem.create({
-            data: { remitoId: (rem as any).id, productId, qty: it.qty, unitPrice: it.unitPrice ?? it.unit_price ?? 0 },
+            data: {
+              remitoId: rem.id,
+              productId,
+              qty: it.qty,
+              unitPrice: it.unitPrice ?? it.unit_price ?? 0,
+            },
           });
         }
       }
