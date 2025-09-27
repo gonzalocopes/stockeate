@@ -14,7 +14,7 @@ export class SyncService {
     let products: any[] = [];
     if (full) {
       const list = await this.prisma.product.findMany({
-        where: { branchId } as any, // no uses 'archived' si no existe en tu schema
+        where: { branchId } as any,
         orderBy: { name: 'asc' },
         take: 5000,
       });
@@ -48,7 +48,7 @@ export class SyncService {
       }));
     }
 
-    // Movimientos desde “since” (sin include)
+    // Movimientos desde “since”
     let moves: any[] = [];
     try {
       moves = await this.prisma.stockMove.findMany({
@@ -87,19 +87,30 @@ export class SyncService {
 
   // ---------- PUSH ----------
   async process(dto: any) {
-    // Aceptar camelCase y snake_case desde el cliente
     const branchId = dto.branchId ?? dto.branch_id;
     const products = dto.products ?? [];
     const stockMoves = dto.stockMoves ?? [];
     const remitos = dto.remitos ?? [];
     const remitoItems = dto.remitoItems ?? [];
+    const deletes: string[] = dto.deletes ?? dto.deletedCodes ?? []; // <- NUEVO
 
     const mapping: Record<string, string> = {};
     const patched: any[] = [];
     const conflicts: any[] = [];
 
     await this.prisma.$transaction(async (tx) => {
-      // 1) Upsert de productos (por code) — sin rechazar si el cliente no manda version
+      // 0) Deletes por code (y branch)
+      for (const code of deletes) {
+        if (!code) continue;
+        // borrar hijos primero por seguridad
+        const prod = await tx.product.findFirst({ where: { code, branchId } });
+        if (!prod) continue;
+        await tx.remitoItem.deleteMany({ where: { productId: prod.id } }).catch(() => {});
+        await tx.stockMove.deleteMany({ where: { productId: prod.id } }).catch(() => {});
+        await tx.product.deleteMany({ where: { id: prod.id } });
+      }
+
+      // 1) Upsert de productos por code (sin pisar stock en updates)
       for (const p of products) {
         const code = p.code;
         if (!code) continue;
@@ -120,16 +131,13 @@ export class SyncService {
           continue;
         }
 
-        // Si el cliente no manda version, usamos la actual para NO rechazar
         const incomingVersion =
           typeof p.version === 'number' ? p.version : existing.version;
-
         if (incomingVersion < existing.version) {
           conflicts.push({ entity: 'product', code, server: existing });
           continue;
         }
 
-        // Solo actualizamos nombre/precio (el stock se maneja por movimientos)
         await tx.product.update({
           where: { id: existing.id },
           data: {
@@ -140,13 +148,12 @@ export class SyncService {
         });
       }
 
-      // 2) Movimientos de stock (acepta delta o IN/OUT)
+      // 2) Movimientos de stock (acepta productCode o productId, delta o type+qty)
       for (const m of stockMoves) {
-        const productId = m.productId ?? m.product_id; // por si viniera snake
+        const productId = m.productId ?? m.product_id;
         const productCode = m.productCode ?? m.product_code;
 
         let pid = productId as string | undefined;
-
         if (!pid && productCode) {
           const found = await tx.product.findUnique({ where: { code: productCode } });
           pid = found?.id;
@@ -176,15 +183,10 @@ export class SyncService {
           data: { stock: (prod.stock ?? 0) + delta, version: (prod.version ?? 0) + 1 },
         });
 
-        patched.push({
-          entity: 'product',
-          id: updated.id,
-          stock: updated.stock,
-          version: updated.version,
-        });
+        patched.push({ entity: 'product', id: updated.id, stock: updated.stock, version: updated.version });
       }
 
-      // 3) Remitos + items
+      // 3) Remitos + items (igual que antes)
       for (const r of remitos) {
         const tmpNumber = r.tmpNumber ?? r.tmp_number ?? null;
         const customer = r.customer ?? null;
@@ -194,32 +196,19 @@ export class SyncService {
         const official = `A-${String(count + 1).padStart(6, '0')}`;
 
         const rem = await tx.remito.create({
-          data: {
-            branchId,
-            tmpNumber,
-            officialNumber: official,
-            customer,
-            notes,
-          },
+          data: { branchId, tmpNumber, officialNumber: official, customer, notes },
         });
 
         if (tmpNumber) mapping[tmpNumber] = official;
 
         const rId = r.id ?? r.remito_id;
-        const items = remitoItems.filter(
-          (ri: any) => (ri.remitoId ?? ri.remito_id) === rId,
-        );
+        const items = remitoItems.filter((ri: any) => (ri.remitoId ?? ri.remito_id) === rId);
 
         for (const it of items) {
           const productId = it.productId ?? it.product_id;
           if (!productId) continue;
           await tx.remitoItem.create({
-            data: {
-              remitoId: rem.id,
-              productId,
-              qty: it.qty,
-              unitPrice: it.unitPrice ?? it.unit_price ?? 0,
-            },
+            data: { remitoId: rem.id, productId, qty: it.qty, unitPrice: it.unitPrice ?? it.unit_price ?? 0 },
           });
         }
       }

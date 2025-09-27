@@ -1,29 +1,48 @@
 // src/sync/push.ts
 import { api } from "../api";
-import { DB } from "../db.native";
 
-export async function pushMoveByCode(branchId: string, productCode: string, delta: number, reason?: string) {
-  const p = DB.getProductByCode(productCode);
-  if (!p) throw new Error(`Producto no encontrado por code=${productCode}`);
-  const type = delta >= 0 ? "IN" : "OUT";
-  const qty  = Math.abs(delta);
-
+/** Un único movimiento por CODE (delta puede ser + o -) */
+export async function pushMoveByCode(
+  branchId: string,
+  productCode: string,
+  delta: number,
+  reason?: string
+) {
   await api.post("/sync", {
     branchId,
     products: [],
-    stockMoves: [{ productId: p.id, type, qty, ref: reason ?? null }],
+    stockMoves: [
+      { productCode, delta, reason: reason ?? "Ajuste" } // <- el backend resuelve code -> id
+    ],
     remitos: [],
     remitoItems: [],
   });
 }
 
-export async function pushMovesBatchByCodes(branchId: string, items: Array<{ code: string; qty: number; reason?: string }>, type: "IN"|"OUT") {
-  const stockMoves: any[] = [];
-  for (const it of items) {
-    const p = DB.getProductByCode(it.code);
-    if (!p) continue;
-    stockMoves.push({ productId: p.id, type, qty: Math.abs(it.qty), ref: it.reason ?? null });
-  }
-  if (stockMoves.length === 0) return;
-  await api.post("/sync", { branchId, products: [], stockMoves, remitos: [], remitoItems: [] });
+/** Varios movimientos IN/OUT a la vez por code */
+export async function pushMovesBatchByCodes(
+  branchId: string,
+  rows: { code: string; qty: number; reason?: string }[],
+  type: "IN" | "OUT"
+) {
+  await api.post("/sync", {
+    branchId,
+    products: [],
+    stockMoves: rows.map(r => ({
+      productCode: r.code,
+      type,
+      qty: r.qty,
+      reason: r.reason ?? null,
+    })),
+    remitos: [],
+    remitoItems: [],
+  });
+}
+
+/** Eliminar un producto de la sucursal por code */
+export async function pushDeleteProduct(branchId: string, code: string) {
+  await api.post("/sync", {
+    branchId,
+    deletes: [code],  // <- el backend borra y no volverá en pull
+  });
 }
