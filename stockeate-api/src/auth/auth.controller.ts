@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
 import { ApiTags } from '@nestjs/swagger';
 
 class RegisterDto {
@@ -17,7 +17,7 @@ class ForgotDto {
 }
 
 class ResetDto {
-  @IsString() token: string; // acá va el código de 6 dígitos
+  @IsString() @IsNotEmpty() token: string; // acá va el código de 6 dígitos
   @IsString() @MinLength(6) newPassword: string;
 }
 
