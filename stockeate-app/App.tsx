@@ -6,6 +6,7 @@ import { useAuth } from "./src/stores/auth";
 import { useBranch } from "./src/stores/branch"; // 👈 NUEVO
 
 import LoginScreen from "./src/screens/LoginScreen";
+import RegisterScreen from "./src/screens/RegisterScreen";
 import BranchSelect from "./src/screens/BranchSelect";
 import Home from "./src/screens/Home";
 import ScanAdd from "./src/screens/ScanAdd";
@@ -49,6 +50,11 @@ export default function App() {
             name="Login"
             component={LoginScreen}
             options={{ title: "Stockeate - Acceso" }}
+          />
+          <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{ title: "Crear cuenta" }}
           />
         </Stack.Navigator>
       ) : (
