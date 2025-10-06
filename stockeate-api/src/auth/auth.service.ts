@@ -1,13 +1,14 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { addMinutes, isBefore } from 'date-fns';
 import { EmailService } from '../email/email.service';
-
-function gen6() {
-  return Math.floor(100000 + Math.random() * 900000).toString(); // 6 dígitos
-}
 
 @Injectable()
 export class AuthService {
@@ -42,35 +43,42 @@ export class AuthService {
   async forgot(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     // Siempre respondemos OK para no filtrar existencia
-    if (!user) return;
+    if (!user) throw new NotFoundException('El correo no está registrado');
 
     // invalidar tokens viejos
     await this.prisma.passwordReset.deleteMany({ where: { userId: user.id } });
 
-    const code = gen6();
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = addMinutes(new Date(), 30);
 
     await this.prisma.passwordReset.create({
-      data: { userId: user.id, token: code, expiresAt }, // token = código
+      data: { userId: user.id, token: token, expiresAt },
     });
 
-    await this.email.sendPasswordResetCode(user.email, code);
+    await this.email.sendPasswordResetToken(user.email, token);
   }
 
-  async reset(tokenOrCode: string, newPassword: string): Promise<void> {
-    const pr = await this.prisma.passwordReset.findUnique({ where: { token: tokenOrCode } });
+  async reset(token: string, newPassword: string): Promise<void> {
+    const pr = await this.prisma.passwordReset.findFirst({
+      where: { token: token },
+    });
     if (!pr) throw new BadRequestException('Código inválido');
 
     if (isBefore(pr.expiresAt, new Date()))
       throw new BadRequestException('Código expirado');
 
-    const user = await this.prisma.user.findUnique({ where: { id: pr.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: pr.userId },
+    });
     if (!user) throw new BadRequestException('Usuario no encontrado');
 
     const hash = await bcrypt.hash(newPassword, 10);
 
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: user.id }, data: { password: hash } }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: hash },
+      }),
       this.prisma.passwordReset.deleteMany({ where: { userId: user.id } }),
     ]);
   }

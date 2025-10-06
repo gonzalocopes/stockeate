@@ -3,13 +3,14 @@ import { View, TextInput, Text, TouchableOpacity, Modal, ActivityIndicator } fro
 import { useAuth } from "../stores/auth";
 import { api } from "../api";
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }: any){
   const { login, register, logout, token } = useAuth();
 
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [navigating, setNavigating] = useState(false);
 
   // Forgot & Reset
   const [showForgot, setShowForgot] = useState(false);
@@ -25,7 +26,7 @@ export default function LoginScreen() {
 
   const run = async (fn: () => Promise<void>) => {
     setErr(null);
-    setLoading(true);
+    setLoginLoading(true);
     try {
       await fn();
     } catch (e: any) {
@@ -33,7 +34,7 @@ export default function LoginScreen() {
       const msg = Array.isArray(d?.message) ? d.message.join(", ") : (d?.message || e?.message || "Error");
       setErr(msg);
     } finally {
-      setLoading(false);
+      setLoginLoading(false);
     }
   };
 
@@ -101,20 +102,19 @@ export default function LoginScreen() {
       <TouchableOpacity
         onPress={() => run(() => login(email.trim(), pass))}
         style={{ backgroundColor: "#2b68ff", padding: 12, borderRadius: 8, alignItems: "center" }}
-        disabled={loading}
+        disabled={loginLoading}
       >
         <Text style={{ color: "white", fontWeight: "700" }}>
-          {loading ? "Ingresando..." : "Ingresar"}
+          {loginLoading ? "Ingresando..." : "Ingresar"}
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        onPress={() => run(() => register(email.trim(), pass))}
+        onPress={() => navigation.navigate('Register')}
         style={{ backgroundColor: "#1e293b", padding: 12, borderRadius: 8, alignItems: "center" }}
-        disabled={loading}
       >
         <Text style={{ color: "white", fontWeight: "700" }}>
-          {loading ? "Creando..." : "Crear cuenta"}
+          Crear cuenta
         </Text>
       </TouchableOpacity>
 

@@ -1,13 +1,24 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { SyncService } from './sync.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('sync')
 export class SyncController {
-  constructor(private sync: SyncService) {}
+  constructor(private readonly sync: SyncService) {}
 
+  /** Pull para clientes móviles */
+  @Get('pull')
+  async pull(
+    @Query('branchId') branchId: string,
+    @Query('since') since?: string,
+  ) {
+    if (!branchId) throw new BadRequestException('branchId is required');
+    const nSince = since ? Number(since) : undefined;
+    return this.sync.pull(branchId, nSince);
+  }
+
+  /** Mantengo tu ruta existente para “push” (productos, movimientos, remitos) */
   @Post()
   process(@Body() dto: any) {
-    return this.sync.process(dto); // { branchId, products, stockMoves, remitos, remitoItems }
+    return this.sync.process(dto);
   }
 }

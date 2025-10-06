@@ -39,15 +39,18 @@ export const useAuth = create<AuthState>((set) => ({
     }
   },
 
-  register: async (email, password) => {
-    try {
-      const { data } = await api.post('/auth/register', { email, password });
-      await AsyncStorage.setItem('token', data.access_token);
-      set({ token: data.access_token });
-    } catch (e: any) {
-      throw new Error(getMsg(e));
-    }
-  },
+register: async (email, password) => {
+  try {
+    // VERSIÓN SIMPLIFICADA - Solo email y password (como espera Lisandro)
+    const { data } = await api.post('/auth/register', { email, password });
+    
+    // NO auto-login, para que vuelva al login
+    // await AsyncStorage.setItem('token', data.access_token);
+    // set({ token: data.access_token });
+  } catch (e: any) {
+    throw new Error(getMsg(e));
+  }
+},
 
   logout: async () => {
     try {
