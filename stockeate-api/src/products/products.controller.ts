@@ -1,14 +1,37 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import { ProductsService } from './products.service';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly productsService: ProductsService) {}
 
+  /**
+   * GET /products?branchId=central&search=cola&includeArchived=0|1
+   * Devuelve el catálogo de la sucursal.
+   */
+  @Get()
+  async list(
+    @Query('branchId') branchId: string,
+    @Query('search') search?: string,
+    @Query('includeArchived') includeArchived?: string,
+  ) {
+    if (!branchId) {
+      throw new BadRequestException('branchId is required');
+    }
+    const include = includeArchived === '1' || includeArchived === 'true';
+    const rows = await this.productsService.findMany(branchId, search ?? '', include);
+    return rows;
+  }
+
+  /**
+   * GET /products/by-code/:code?branchId=central
+   * (ruta que ya usabas; la mantengo)
+   */
   @Get('by-code/:code')
-  async byCode(@Param('code') code: string) {
-    const p = await this.prisma.product.findUnique({ where: { code } });
-    if (!p) throw new NotFoundException();
-    return p;
+  async byCode(
+    @Param('code') code: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.productsService.findByCode(code, branchId ?? null);
   }
 }

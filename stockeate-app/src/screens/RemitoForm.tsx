@@ -16,6 +16,7 @@ import { DB } from "../db.native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { api } from "../api";
+import { pushMovesBatchByCodes } from "../sync/push";
 
 type LoteItem = {
   product_id: string;
@@ -178,36 +179,41 @@ export default function RemitoForm({ navigation }: any) {
 
       // 4) Sync online “/sync”: OUT moves + remito + items
       try {
-        await api.post("/sync", {
-          branchId,
-          products: [],
-          stockMoves: items.map((r) => ({
-            productCode: r.code,
-            branchId,
-            delta: -r.qty,
-            reason: "Remito egreso",
-          })),
-          remitos: [
-            {
-              id: remitoId,
-              tmp_number: tmpNum,
-              official_number: null,
-              branch_id: branchId,
-              customer: customer?.trim() || null,
-              notes: notes?.trim() || null,
-              created_at: new Date().toISOString(),
-            },
-          ],
-          remitoItems: items.map((r) => ({
-            remito_id: remitoId,
-            productCode: r.code,
-            qty: r.qty,
-            unit_price: r.unit_price ?? 0,
-          })),
-        });
-      } catch (e) {
-        console.log("⚠️ Sync remito OUT falló (local ok):", e?.toString?.());
-      }
+  // a) movimientos OUT
+  await pushMovesBatchByCodes(branchId, items.map(r => ({
+    code: r.code,
+    qty: r.qty,
+    reason: "Remito egreso"
+  })), "OUT");
+
+  // b) remito + items (con productId)
+  const remitoItems = items.map((r) => ({
+  remito_id: remitoId,
+  productId: r.product_id,         // 👈 usar el id del lote
+  qty: r.qty,
+  unit_price: r.unit_price ?? 0,
+}));
+
+  await api.post("/sync", {
+    branchId,
+    products: [],
+    stockMoves: [],
+    remitos: [
+      {
+        id: remitoId,
+        tmp_number: tmpNum,
+        official_number: null,
+        branch_id: branchId,
+        customer: customer?.trim() || null,
+        notes: notes?.trim() || "Remito de EGRESO",
+        created_at: new Date().toISOString(),
+      },
+    ],
+    remitoItems,
+  });
+} catch (e) {
+  console.log("⚠️ Sync remito OUT falló (local ok):", e?.toString?.());
+}
 
       // 5) Vaciar lote
       // Si tu store no tiene "clear()", borramos item por item:
