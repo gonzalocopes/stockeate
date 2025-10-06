@@ -1,12 +1,12 @@
 ﻿import React, { useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useAuth } from "./src/stores/auth";
 import { useBranch } from "./src/stores/branch"; // 👈 NUEVO
 
 import LoginScreen from "./src/screens/LoginScreen";
+import RegisterScreen from "./src/screens/RegisterScreen";
 import BranchSelect from "./src/screens/BranchSelect";
 import Home from "./src/screens/Home";
 import ScanAdd from "./src/screens/ScanAdd";
@@ -43,52 +43,53 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }}>
-        <NavigationContainer>
-          {!token ? (
-            <Stack.Navigator>
-              <Stack.Screen
-                name="Login"
-                component={LoginScreen}
-                options={{ title: "Stockeate - Acceso" }}
-              />
-            </Stack.Navigator>
-          ) : (
-            <Stack.Navigator>
-              <Stack.Screen
-                name="BranchSelect"
-                component={BranchSelect}
-                options={{ title: "Elegir sucursal" }}
-              />
-              <Stack.Screen name="Home" component={Home} options={{ title: "Menú" }} />
-              {/* 👇 NUEVO: hub de remitos */}
-              <Stack.Screen name="RemitosHub" component={RemitosHub} options={{ title: "Remitos" }} />
-              <Stack.Screen name="ScanAdd" component={ScanAdd} options={{ title: "Escanear / Agregar" }} />
-              <Stack.Screen name="RemitoForm" component={RemitoForm} options={{ title: "Formar remito" }} />
-              {/* 👇 NUEVO: remito de ENTRADA */}
-              <Stack.Screen name="RemitoIngreso" component={RemitoIngreso} options={{ title: "Remito de entrada" }} />
-              {/* 👇 NUEVO: historial + detalle */}
-              <Stack.Screen name="RemitosHistory" component={RemitosHistory} options={{ title: "Historial de remitos" }} />
-              <Stack.Screen name="RemitoDetail" component={RemitoDetail} options={{ title: "Remito" }} />
+    <NavigationContainer>
+      {!token ? (
+        <Stack.Navigator>
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ title: "Stockeate - Acceso" }}
+          />
+          <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{ title: "Crear cuenta" }}
+          />
+        </Stack.Navigator>
+      ) : (
+        <Stack.Navigator>
+          <Stack.Screen
+            name="BranchSelect"
+            component={BranchSelect}
+            options={{ title: "Elegir sucursal" }}
+          />
+          <Stack.Screen name="Home" component={Home} options={{ title: "Menú" }} />
+          {/* 👇 NUEVO: hub de remitos */}
+          <Stack.Screen name="RemitosHub" component={RemitosHub} options={{ title: "Remitos" }} />
+          <Stack.Screen name="ScanAdd" component={ScanAdd} options={{ title: "Escanear / Agregar" }} />
+          <Stack.Screen name="RemitoForm" component={RemitoForm} options={{ title: "Formar remito" }} />
+          {/* 👇 NUEVO: remito de ENTRADA */}
+          <Stack.Screen name="RemitoIngreso" component={RemitoIngreso} options={{ title: "Remito de entrada" }} />
+          {/* 👇 NUEVO: historial + detalle */}
+          <Stack.Screen name="RemitosHistory" component={RemitosHistory} options={{ title: "Historial de remitos" }} />
+          <Stack.Screen name="RemitoDetail" component={RemitoDetail} options={{ title: "Remito" }} />
 
-              <Stack.Screen name="RemitoResult" component={RemitoResult} options={{ title: "Remito generado" }} />
-              {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
-              <Stack.Screen
-                name="BranchProducts"
-                component={BranchProducts}
-                options={{ title: "Productos de la sucursal" }}
-              />
-              {/* 👇 NUEVO: pantalla para ver/desarchivar/elim. productos archivados */}
-              <Stack.Screen
-                name="BranchArchived"
-                component={BranchArchived}
-                options={{ title: "Archivados" }}
-              />
-            </Stack.Navigator>
-          )}
-        </NavigationContainer>
-      </SafeAreaView>
-    </SafeAreaProvider>
+          <Stack.Screen name="RemitoResult" component={RemitoResult} options={{ title: "Remito generado" }} />
+          {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
+          <Stack.Screen
+            name="BranchProducts"
+            component={BranchProducts}
+            options={{ title: "Productos de la sucursal" }}
+          />
+          {/* 👇 NUEVO: pantalla para ver/desarchivar/elim. productos archivados */}
+          <Stack.Screen
+            name="BranchArchived"
+            component={BranchArchived}
+            options={{ title: "Archivados" }}
+          />
+        </Stack.Navigator>
+      )}
+    </NavigationContainer>
   );
 }
