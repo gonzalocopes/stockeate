@@ -1,16 +1,19 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private resend: Resend;
+  private transporter: nodemailer.Transporter;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY not configured');
-    }
-    this.resend = new Resend(apiKey);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS,
+      },
+    });
   }
 
   async sendPasswordResetToken(email: string, token: string) {
@@ -30,8 +33,9 @@ export class EmailService {
     `;
 
     try {
-      await this.resend.emails.send({
-        from: 'onboarding@resend.dev',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      await this.transporter.sendMail({
+        from: `"Stockeate" <${process.env.MAIL_USER}>`,
         to: email,
         subject,
         html,
