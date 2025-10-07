@@ -1,8 +1,5 @@
-﻿// src/api.ts
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import axios from "axios";
 
-// Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
   "https://stockeate.onrender.com";
@@ -14,20 +11,14 @@ export const api = axios.create({
   timeout: 30000,
 });
 
-api.interceptors.request.use(async (config) => {
-  try {
-    const token = await AsyncStorage.getItem("token");
-    if (token) {
-      config.headers = {
-        ...(config.headers ?? {}),
-        Authorization: `Bearer ${token}`,
-      };
-    }
-  } catch {}
-  return config;
-});
+export function setAuthToken(token: string | null) {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+}
 
-// -------- Pull (para sync) --------
 export async function wakeServer() {
   try {
     await api.get("/health", { timeout: 5000 });
@@ -42,7 +33,7 @@ export type PullProduct = {
   code: string;
   name: string;
   price?: number;
-  stock?: number;      // <<--- agregado
+  stock?: number;      
   branch_id: string;
   updated_at?: number;
 };
