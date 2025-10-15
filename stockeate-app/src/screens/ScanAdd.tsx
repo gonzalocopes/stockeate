@@ -331,7 +331,7 @@ export default function ScanAdd({ navigation, route }: any) {
           <Text>Solicitando permiso de cámara…</Text>
         ) : hasPerm ? (
           isFocused ? (
-            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 260, position: "relative" }}>
+            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 200, position: "relative" }}>
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
