@@ -22,7 +22,7 @@ type Props = {
   /** stock inicial opcional para prefijar el campo cuando edites/crees */
   initialStock?: number;
   onCancel: () => void;
-  onSave: (data: { name: string; price: number; stock?: number }) => void | Promise<void>;
+  onSave: (data: { code: string; name: string; price: number; stock?: number }) => void | Promise<void>;
 };
 
 export default function ProductEditModal({
@@ -34,21 +34,24 @@ export default function ProductEditModal({
   onCancel,
   onSave,
 }: Props) {
+  const [codeStr, setCodeStr] = useState(code || "");
   const [name, setName] = useState(initialName);
   const [priceStr, setPriceStr] = useState(String(initialPrice ?? 0));
   const [stockStr, setStockStr] = useState(String(initialStock ?? 0));
   const [saving, setSaving] = useState(false);
 
+  const codeRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
   const priceRef = useRef<TextInput>(null);
   const stockRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
+      setCodeStr(code || "");
       setName(initialName || "");
       setPriceStr(String(initialPrice ?? 0));
       setStockStr(String(initialStock ?? 0));
-      setTimeout(() => nameRef.current?.focus(), 200);
+      setTimeout(() => codeRef.current?.focus(), 200);
     }
   }, [visible, code, initialName, initialPrice, initialStock]);
 
@@ -66,11 +69,12 @@ export default function ProductEditModal({
     const price = parsePrice();
     const stock = parseStock();
     const nm = name.trim();
-    if (!nm || saving) return;
+    const cd = codeStr.trim();
+    if (!nm || !cd || saving) return;
     
     setSaving(true);
     try {
-      await onSave({ name: nm, price, stock });
+      await onSave({ code: cd, name: nm, price, stock });
     } finally {
       setSaving(false);
     }
@@ -100,7 +104,7 @@ export default function ProductEditModal({
                 </View>
 
                 <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
-                  {isEdit ? "Editar producto" : `Nuevo producto (${code ?? ""})`}
+                  {isEdit ? "Editar producto" : "Nuevo producto"}
                 </Text>
               </View>
 
@@ -114,9 +118,13 @@ export default function ProductEditModal({
                   <View style={{ gap: 6 }}>
                     <Text style={{ fontWeight: "600" }}>Código</Text>
                     <TextInput
-                      value={code || ""}
-                      editable={false}
-                      style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, padding: 10, backgroundColor: "#f8fafc", color: "#64748b" }}
+                      ref={codeRef}
+                      value={codeStr}
+                      onChangeText={setCodeStr}
+                      placeholder="Código del producto"
+                      style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: "#ffffff" }}
+                      returnKeyType="next"
+                      onSubmitEditing={() => nameRef.current?.focus()}
                     />
                   </View>
 
@@ -135,16 +143,19 @@ export default function ProductEditModal({
 
                   <View style={{ gap: 6 }}>
                     <Text style={{ fontWeight: "600" }}>Precio</Text>
-                    <TextInput
-                      ref={priceRef}
-                      value={priceStr}
-                      onChangeText={setPriceStr}
-                      placeholder="0"
-                      keyboardType="decimal-pad"
-                      style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: "#ffffff" }}
-                      returnKeyType="next"
-                      onSubmitEditing={() => stockRef.current?.focus()}
-                    />
+                    <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff" }}>
+                      <Text style={{ paddingLeft: 10, color: "#64748b", fontSize: 16 }}>$</Text>
+                      <TextInput
+                        ref={priceRef}
+                        value={priceStr}
+                        onChangeText={setPriceStr}
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                        style={{ flex: 1, padding: 10, paddingLeft: 4 }}
+                        returnKeyType="next"
+                        onSubmitEditing={() => stockRef.current?.focus()}
+                      />
+                    </View>
                   </View>
 
                   <View style={{ gap: 6 }}>
