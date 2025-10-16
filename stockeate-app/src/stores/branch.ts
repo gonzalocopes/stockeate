@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type BranchState = {
   id: string | null;
   name: string | null;
+  isHydrated: boolean; // <-- 1. AÑADIMOS ESTA LÍNEA
   hydrate: () => Promise<void>;
   set: (id: string, name?: string | null) => Promise<void>;
   clear: () => Promise<void>;
@@ -12,6 +13,7 @@ type BranchState = {
 export const useBranch = create<BranchState>((set) => ({
   id: null,
   name: null,
+  isHydrated: false, // <-- 2. AÑADIMOS ESTA LÍNEA (VALOR INICIAL)
 
   hydrate: async () => {
     try {
@@ -22,6 +24,10 @@ export const useBranch = create<BranchState>((set) => ({
       set({ id, name });
     } catch {
       set({ id: null, name: null });
+    } finally {
+      // <-- 3. AÑADIMOS ESTE BLOQUE 'finally'
+      // Pase lo que pase, marcamos la hidratación como completa.
+      set({ isHydrated: true });
     }
   },
 

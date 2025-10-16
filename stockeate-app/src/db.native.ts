@@ -84,7 +84,11 @@ export const DB = {
       [uid(), data.product_id, data.branch_id, data.qty, data.type, data.ref ?? null, now()]
     );
   },
+<<<<<<< Updated upstream
   // NUEVO:
+=======
+
+>>>>>>> Stashed changes
   setRemitoPdfPath(remitoId: string, path: string) {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
@@ -99,4 +103,147 @@ export const DB = {
       [remitoId]
     );
   },
+<<<<<<< Updated upstream
 };
+=======
+
+  listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+    const q = `%${search.trim()}%`;
+    if (search.trim()) {
+      return db.getAllSync<any>(
+        `SELECT * FROM products
+         WHERE branch_id=? AND archived=0 AND (code LIKE ? OR name LIKE ?)
+         ORDER BY name ASC
+         LIMIT ? OFFSET ?`,
+        [branchId, q, q, limit, offset]
+      );
+    }
+    return db.getAllSync<any>(
+      `SELECT * FROM products
+       WHERE branch_id=? AND archived=0
+       ORDER BY name ASC
+       LIMIT ? OFFSET ?`,
+      [branchId, limit, offset]
+    );
+  },
+
+  listArchivedByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+    const q = `%${search.trim()}%`;
+    if (search.trim()) {
+      return db.getAllSync<any>(
+        `SELECT * FROM products
+         WHERE branch_id=? AND archived=1 AND (code LIKE ? OR name LIKE ?)
+         ORDER BY updated_at DESC
+         LIMIT ? OFFSET ?`,
+        [branchId, q, q, limit, offset]
+      );
+    }
+    return db.getAllSync<any>(
+      `SELECT * FROM products
+       WHERE branch_id=? AND archived=1
+       ORDER BY updated_at DESC
+       LIMIT ? OFFSET ?`,
+      [branchId, limit, offset]
+    );
+  },
+
+  updateProductNamePrice(productId: string, name: string, price: number) {
+    db.runSync(
+      `UPDATE products SET name=?, price=?, version=version+1, updated_at=? WHERE id=?`,
+      [name, price, now(), productId]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  adjustStock(productId: string, branchId: string, delta: number, reason: string = "Ajuste inventario") {
+    db.runSync(
+      "UPDATE products SET stock = stock + ?, version = version + 1, updated_at=? WHERE id=?",
+      [delta, now(), productId]
+    );
+    db.runSync(
+      `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
+      [uid(), productId, branchId, delta, "adjust", reason, now()]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  setStockExact(productId: string, branchId: string, target: number, reason = "Fijar stock") {
+    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
+    const current = Number(cur?.stock ?? 0);
+    const delta = target - current;
+    db.runSync(
+      "UPDATE products SET stock = ?, version = version + 1, updated_at=? WHERE id=?",
+      [target, now(), productId]
+    );
+    db.runSync(
+      `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
+      [uid(), productId, branchId, delta, "set", reason, now()]
+    );
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+  },
+
+  canDeleteProduct(productId: string): boolean {
+    const r = db.getFirstSync<any>(`SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`, [productId]);
+    return Number(r?.cnt ?? 0) === 0;
+  },
+
+  deleteProduct(productId: string) {
+    db.runSync(`DELETE FROM stock_moves WHERE product_id=?`, [productId]);
+    db.runSync(`DELETE FROM products WHERE id=?`, [productId]);
+  },
+
+  archiveProduct(productId: string) {
+    db.runSync(`UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+  },
+  unarchiveProduct(productId: string) {
+    db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+  },
+
+  pruneProductsNotIn(branchId: string, keepCodes: string[]) {
+    let rows: any[] = [];
+    if (keepCodes.length > 0) {
+      const placeholders = keepCodes.map(() => "?").join(",");
+      rows = db.getAllSync<any>(
+        `SELECT id FROM products WHERE branch_id=? AND code NOT IN (${placeholders})`,
+        [branchId, ...keepCodes]
+      );
+    } else {
+      rows = db.getAllSync<any>(
+        `SELECT id FROM products WHERE branch_id=?`,
+        [branchId]
+      );
+    }
+    const ids = rows.map((r) => r.id);
+    if (ids.length === 0) return;
+    const ph = ids.map(() => "?").join(",");
+    try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
+    try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
+    db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
+  },
+
+  // --- 👇 LAS 2 FUNCIONES NUEVAS QUE COMPLETAN LA SINCRONIZACIÓN ---
+
+  upsertRemito(r: any) {
+    db.runSync(
+      `INSERT INTO remitos(id, tmp_number, customer, notes, created_at, branch_id)
+       VALUES(?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         tmp_number=excluded.tmp_number,
+         customer=excluded.customer,
+         notes=excluded.notes`,
+      [r.id, r.tmp_number, r.customer, r.notes, r.created_at, r.branch_id]
+    );
+  },
+
+  upsertRemitoItem(item: any) {
+    db.runSync(
+      `INSERT INTO remito_items(id, remito_id, product_id, qty, unit_price)
+       VALUES(?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         qty=excluded.qty,
+         unit_price=excluded.unit_price`,
+      [item.id, item.remito_id, item.product_id, item.qty, item.unit_price]
+    );
+  },
+};
+>>>>>>> Stashed changes

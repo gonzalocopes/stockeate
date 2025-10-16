@@ -13,6 +13,24 @@ import RemitoForm from "./src/screens/RemitoForm";
 import RemitoResult from "./src/screens/RemitoResult";
 import { initDb } from "./src/db";
 
+<<<<<<< Updated upstream
+=======
+// 👇 NUEVO: importar la pantalla de productos de la sucursal
+import BranchProducts from "./src/screens/BranchProducts";
+// 👇 NUEVO: importar archivados
+import BranchArchived from "./src/screens/BranchArchived";
+// 👇 NUEVO: hub de remitos
+import RemitosHub from "./src/screens/RemitoHub";
+// 👇 NUEVO: remito de ENTRADA (ingreso)
+import RemitoIngreso from "./src/screens/RemitoIngreso";
+// 👇 NUEVO: historial + detalle
+import RemitosHistory from "./src/screens/RemitosHistory";
+import RemitoDetail from "./src/screens/RemitoDetail";
+
+import { UploadRemitoScreen } from './src/screens/UploadRemitoScreen';
+import { PendingRemitosScreen } from './src/screens/PendingRemitosScreen';
+import { ValidationScreen } from './src/screens/ValidationScreen';
+>>>>>>> Stashed changes
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -50,6 +68,32 @@ export default function App() {
           <Stack.Screen name="ScanAdd" component={ScanAdd} options={{ title: "Escanear / Agregar" }} />
           <Stack.Screen name="RemitoForm" component={RemitoForm} options={{ title: "Formar remito" }} />
           <Stack.Screen name="RemitoResult" component={RemitoResult} options={{ title: "Remito generado" }} />
+<<<<<<< Updated upstream
+=======
+          {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
+          <Stack.Screen
+            name="BranchProducts"
+            component={BranchProducts}
+            options={{ title: "Productos de la sucursal" }}
+          />
+          {/* 👇 NUEVO: pantalla para ver/desarchivar/elim. productos archivados */}
+          <Stack.Screen
+            name="BranchArchived"
+            component={BranchArchived}
+            options={{ title: "Archivados" }}
+          />
+          <Stack.Screen name="UploadRemito" component={UploadRemitoScreen} />
+          <Stack.Screen
+              name="PendingRemitos"
+              component={PendingRemitosScreen}
+              options={{ title: "Remitos por Validar" }}
+          />
+        <Stack.Screen
+              name="Validation"
+              component={ValidationScreen}
+              options={{ title: "Validar Remito" }}
+          />
+>>>>>>> Stashed changes
         </Stack.Navigator>
       )}
     </NavigationContainer>

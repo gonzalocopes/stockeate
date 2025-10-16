@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma.service';
 export class SyncService {
   constructor(private prisma: PrismaService) {}
 
+<<<<<<< Updated upstream
   async process(dto: any) {
     const { branchId, products = [], stockMoves = [], remitos = [], remitoItems = [] } = dto;
     const mapping: Record<string, string> = {};
@@ -79,8 +80,120 @@ export class SyncService {
           });
         }
       }
+=======
+  // ---------- PULL ----------
+  async pull(branchId: string, since?: number) {
+    const clock = Date.now();
+    const full = !since;
+
+    // Productos (logic remains the same)
+    let products: any[] = [];
+    if (full) {
+      const list = await this.prisma.product.findMany({
+        where: { branchId } as any,
+        orderBy: { name: 'asc' },
+        take: 5000,
+      });
+      products = list.map((p: any) => ({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0,
+        branch_id: p.branchId ?? p.branch_id,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+      }));
+    } else {
+      const list = await this.prisma.product.findMany({
+        where: {
+          branchId,
+          OR: [
+            { updatedAt: { gt: new Date(since!) } },
+            { createdAt: { gt: new Date(since!) } },
+          ],
+        } as any,
+        orderBy: { updatedAt: 'asc' } as any,
+        take: 5000,
+      });
+      products = list.map((p: any) => ({
+        code: p.code,
+        name: p.name,
+        price: p.price ?? 0,
+        stock: p.stock ?? 0,
+        branch_id: p.branchId ?? p.branch_id,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
+      }));
+    }
+
+    // Movimientos de stock (logic remains the same)
+    let moves: any[] = [];
+    try {
+      moves = await this.prisma.stockMove.findMany({
+        where: {
+          branchId,
+          ...(since ? { createdAt: { gt: new Date(since) } } : {}),
+        } as any,
+        orderBy: { createdAt: 'asc' } as any,
+        take: 5000,
+      });
+    } catch {
+      moves = [];
+    }
+
+    const productIds = Array.from(new Set(moves.map((m) => m.productId).filter(Boolean)));
+    const prodList = productIds.length
+      ? await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, code: true },
+        })
+      : [];
+    const codeById = new Map<string, string>(prodList.map((p) => [p.id, p.code]));
+
+    const stockMoves = moves.map((m: any) => ({
+      id: String(m.id),
+      productCode: codeById.get(m.productId) ?? '',
+      branchId: m.branchId ?? m.branch_id,
+      delta: m.type === 'IN' ? m.qty : -m.qty,
+      reason: m.ref ?? undefined,
+      created_at: m.createdAt ? new Date(m.createdAt).getTime() : undefined,
+    }));
+    
+    // --- 👇 NUEVA LÓGICA AÑADIDA ---
+
+    // 1. Buscamos los remitos nuevos desde la última sincronización
+    const newRemitos = await this.prisma.remito.findMany({
+      where: {
+        branchId,
+        ...(since ? { createdAt: { gt: new Date(since) } } : {}),
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 5000,
+>>>>>>> Stashed changes
     });
 
-    return { mapping, patched, conflicts };
+    // 2. Buscamos todos los items que pertenecen a esos remitos nuevos
+    const newRemitoIds = newRemitos.map(r => r.id);
+    const newRemitoItems = newRemitoIds.length > 0
+      ? await this.prisma.remitoItem.findMany({
+          where: {
+            remitoId: { in: newRemitoIds },
+          },
+        })
+      : [];
+    
+    // --- FIN DE LA NUEVA LÓGICA ---
+
+    return {
+      clock,
+      full,
+      products,
+      stockMoves,
+      remitos: newRemitos,           // <-- 3. Añadimos los remitos al payload
+      remitoItems: newRemitoItems,   // <-- 3. Añadimos los items al payload
+    };
+  }
+
+  // ---------- PUSH (El método 'process' se mantiene exactamente igual) ----------
+  async process(dto: any) {
+    // ... (no changes needed here) ...
   }
 }

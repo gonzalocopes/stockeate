@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,26 +5,33 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// Enum para manejar los estados del proceso de digitalización
+enum DigitalizationStatus {
+  PROCESSING
+  PENDING_VALIDATION
+  COMPLETED
+  FAILED
 }
 
 model User {
-  id        String       @id @default(uuid())
-  email     String       @unique
-  password  String
-  createdAt DateTime     @default(now())
-  branches  BranchUser[]
-
-  // ← back-relation requerido para PasswordReset
-  passwordResets PasswordReset[]
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  createdAt          DateTime            @default(now())
+  branches           BranchUser[]
+  passwordResets     PasswordReset[]
+  digitalizedRemitos DigitalizedRemito[]
 }
 
 model Branch {
-  id       String       @id @default(uuid())
-  name     String
-  users    BranchUser[]
-  products Product[]
-  remitos  Remito[]
+  id                 String              @id @default(uuid())
+  name               String
+  users              BranchUser[]
+  products           Product[]
+  remitos            Remito[]
+  digitalizedRemitos DigitalizedRemito[]
 }
 
 model BranchUser {
@@ -41,7 +46,7 @@ model BranchUser {
 model Product {
   id         String       @id @default(uuid())
   branchId   String
-  code       String       @unique // único global para el MVP
+  code       String       @unique
   name       String
   price      Decimal      @default(0)
   stock      Int          @default(0)
@@ -52,15 +57,17 @@ model Product {
 }
 
 model Remito {
-  id             String       @id @default(uuid())
-  branchId       String
-  tmpNumber      String       @unique
-  officialNumber String?      @unique
-  customer       String?
-  notes          String?
-  createdAt      DateTime     @default(now())
-  items          RemitoItem[]
-  branch         Branch       @relation(fields: [branchId], references: [id])
+  id                  String             @id @default(uuid())
+  branchId            String
+  tmpNumber           String             @unique
+  officialNumber      String?            @unique
+  customer            String?
+  notes               String?
+  createdAt           DateTime           @default(now())
+  items               RemitoItem[]
+  branch              Branch             @relation(fields: [branchId], references: [id])
+  digitalizedOrigin   DigitalizedRemito? @relation(fields: [digitalizedOriginId], references: [id])
+  digitalizedOriginId String?            @unique
 }
 
 model RemitoItem {
@@ -69,8 +76,24 @@ model RemitoItem {
   productId String
   qty       Int
   unitPrice Decimal @default(0)
-  remito    Remito  @relation(fields: [remitoId], references: [id])
+  remito    Remito  @relation(fields: [remitoId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
+}
+
+// Modelo completo para el proceso de digitalización
+model DigitalizedRemito {
+  id              String               @id @default(uuid())
+  status          DigitalizationStatus @default(PROCESSING)
+  originalFileUrl String
+  extractedData   Json?
+  errorMessage    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id])
+  branchId        String
+  branch          Branch               @relation(fields: [branchId], references: [id])
+  finalRemito     Remito?
 }
 
 model StockMove {
@@ -88,8 +111,7 @@ model PasswordReset {
   userId    String
   token     String   @unique
   expiresAt DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
