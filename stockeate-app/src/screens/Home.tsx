@@ -96,7 +96,7 @@ export default function Home({ navigation }: any) {
       </TouchableOpacity>
 
       {/* Historial (placeholder) */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={{
           backgroundColor: "#6c757d",
           paddingVertical: 16,
@@ -112,7 +112,7 @@ export default function Home({ navigation }: any) {
         <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
           📊 Historial de remitos (próximo)
         </Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 }

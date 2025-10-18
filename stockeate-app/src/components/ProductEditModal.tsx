@@ -111,7 +111,7 @@ export default function ProductEditModal({
               <ScrollView 
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-                showsVerticalScrollIndicator={true}
+                showsVerticalScrollIndicator={false}
                 style={{ maxHeight: 240 }}
               >
                 <View style={{ gap: 12 }}>

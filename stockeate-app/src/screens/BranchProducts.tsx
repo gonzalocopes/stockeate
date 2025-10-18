@@ -347,6 +347,7 @@ export default function BranchProducts({ navigation }: any) {
         keyExtractor={(x) => x.id}
         renderItem={renderItem}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Modal editar */}

@@ -378,7 +378,7 @@ export default function ScanAdd({ navigation, route }: any) {
       {mode === "batch" ? (
         <>
           <Text style={{ fontWeight: "600" }}>Lote actual: {totalQty()} items</Text>
-          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} />
+          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} showsVerticalScrollIndicator={false} />
           <TouchableOpacity
             style={{ backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d", paddingVertical: 12, borderRadius: 8, alignItems: "center", marginTop: 8 }}
             onPress={() => navigation.navigate("RemitoForm")}
@@ -406,7 +406,7 @@ export default function ScanAdd({ navigation, route }: any) {
               <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
                 Agregados en esta sesión ({totalAdds} items)
               </Text>
-              <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} />
+              <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} showsVerticalScrollIndicator={false} />
               <TouchableOpacity
                 onPress={commitCatalogAdds}
                 style={{ marginTop: 8, paddingVertical: 12, borderRadius: 8, backgroundColor: "#007AFF", alignItems: "center", opacity: committing ? 0.85 : 1 }}
