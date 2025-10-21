@@ -1,7 +1,7 @@
 // src/sync/apply.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PullPayload } from "../api";
-import { DB } from "../db.native";
+import { DB } from "../db";
 
 // (dedupe de movimientos por ID)
 async function loadAppliedMoveIds(branchId: string): Promise<Set<string>> {

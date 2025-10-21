@@ -13,7 +13,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { CameraView, Camera } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
-import { DB } from "../db.native";
+import { DB } from "../db";
 import { useBatch } from "../stores/batch";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";

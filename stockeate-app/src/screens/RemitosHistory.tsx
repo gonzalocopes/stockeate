@@ -10,7 +10,6 @@ import {
   Platform,
 } from "react-native";
 import { useBranch } from "../stores/branch";
-import * as SQLite from "expo-sqlite";
 
 type Row = {
   id: string;
@@ -26,7 +25,79 @@ type Row = {
   total_amount: number;
 };
 
-const db = SQLite.openDatabaseSync("stockeate.db");
+// Función helper para obtener remitos (mock para web)
+const getRemitosHistory = (branchId: string, q: string, dir: string): any[] => {
+  if (Platform.OS === 'web') {
+    // Mock data para web
+    return [];
+  }
+  // En móvil, usar SQLite nativo
+  const SQLite = require('expo-sqlite');
+  const db = SQLite.openDatabaseSync("stockeate.db");
+  
+  const qLike = `%${q.trim()}%`;
+  const limit = 200;
+  const off = 0;
+
+  return (db as any).getAllSync(
+    `
+    SELECT
+      r.*,
+      (
+        SELECT sm.type
+        FROM stock_moves sm
+        WHERE sm.ref = r.tmp_number
+        LIMIT 1
+      ) AS dir,
+      (
+        SELECT IFNULL(SUM(ri.qty),0)
+        FROM remito_items ri
+        WHERE ri.remito_id = r.id
+      ) AS total_qty,
+      (
+        SELECT IFNULL(SUM(ri.qty * ri.unit_price),0)
+        FROM remito_items ri
+        WHERE ri.remito_id = r.id
+      ) AS total_amount
+    FROM remitos r
+    WHERE r.branch_id = ?
+      AND (
+        ? = '' OR
+        r.tmp_number LIKE ? OR
+        IFNULL(r.customer,'') LIKE ? OR
+        EXISTS (
+          SELECT 1
+          FROM remito_items ri
+          JOIN products p ON p.id = ri.product_id
+          WHERE ri.remito_id = r.id
+            AND (p.code LIKE ? OR p.name LIKE ?)
+        )
+      )
+      AND (
+        ? = 'ALL' OR EXISTS (
+          SELECT 1
+          FROM stock_moves sm
+          WHERE sm.ref = r.tmp_number
+            AND sm.type = ?
+        )
+      )
+    ORDER BY datetime(r.created_at) DESC
+    LIMIT ? OFFSET ?;
+    `,
+    [
+      branchId,
+      q.trim(),
+      qLike,
+      qLike,
+      qLike,
+      qLike,
+      dir,
+      dir === "ALL" ? null : dir,
+      limit,
+      off,
+    ]
+  );
+};
 
 export default function RemitosHistory({ navigation }: any) {
   const branchId = useBranch((s) => s.id);
@@ -52,73 +123,12 @@ export default function RemitosHistory({ navigation }: any) {
     if (!branchId) return;
     setLoading(true);
     try {
-      const qLike = `%${q.trim()}%`;
-      const limit = 200;
-      const off = 0;
-
       // Obtenemos remitos de la sucursal con: dirección (IN/OUT), total de ítems y total $
-      const data = db.getAllSync<Row>(
-        `
-        SELECT
-          r.*,
-          (
-            SELECT sm.type
-            FROM stock_moves sm
-            WHERE sm.ref = r.tmp_number
-            LIMIT 1
-          ) AS dir,
-          (
-            SELECT IFNULL(SUM(ri.qty),0)
-            FROM remito_items ri
-            WHERE ri.remito_id = r.id
-          ) AS total_qty,
-          (
-            SELECT IFNULL(SUM(ri.qty * ri.unit_price),0)
-            FROM remito_items ri
-            WHERE ri.remito_id = r.id
-          ) AS total_amount
-        FROM remitos r
-        WHERE r.branch_id = ?
-          AND (
-            ? = '' OR
-            r.tmp_number LIKE ? OR
-            IFNULL(r.customer,'') LIKE ? OR
-            EXISTS (
-              SELECT 1
-              FROM remito_items ri
-              JOIN products p ON p.id = ri.product_id
-              WHERE ri.remito_id = r.id
-                AND (p.code LIKE ? OR p.name LIKE ?)
-            )
-          )
-          AND (
-            ? = 'ALL' OR EXISTS (
-              SELECT 1
-              FROM stock_moves sm
-              WHERE sm.ref = r.tmp_number
-                AND sm.type = ?
-            )
-          )
-        ORDER BY datetime(r.created_at) DESC
-        LIMIT ? OFFSET ?;
-        `,
-        [
-          branchId,
-          q.trim(),
-          qLike,
-            qLike,
-          qLike,
-            qLike,
-          dir,
-          dir === "ALL" ? null : dir,
-          limit,
-          off,
-        ]
-      );
+      const data = getRemitosHistory(branchId, q, dir);
 
       // Normalizamos dir por si viene null
       setRows(
-        data.map((r) => ({
+        data.map((r: any) => ({
           ...r,
           dir: (r.dir === "IN" || r.dir === "OUT") ? r.dir : null,
         }))
@@ -258,6 +268,7 @@ export default function RemitosHistory({ navigation }: any) {
           keyExtractor={(x) => x.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
