@@ -1,14 +1,30 @@
 ﻿// src/screens/Home.tsx
 import React, { useEffect } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import { useAuth } from "../stores/auth";
 
 export default function Home({ navigation }: any) {
   const logout = useAuth((s) => s.logout);
 
-  // Botón "Cerrar sesión" en el header
+  // Botones en el header
   useEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate("BranchSelect")}
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            marginLeft: 4,
+          }}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={require('../../node_modules/@react-navigation/elements/lib/module/assets/back-icon.png')}
+            style={{ width: 24, height: 24, tintColor: '#1c1c1e' }}
+          />
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity
           onPress={async () => {

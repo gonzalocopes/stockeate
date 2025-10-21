@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useBranch } from "../stores/branch";
-import { DB } from "../db.native";
+import { DB } from "../db";
 
 type Prod = {
   id: string;
