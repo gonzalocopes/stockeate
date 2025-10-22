@@ -59,12 +59,17 @@ export default function App() {
               <Stack.Screen
                 name="BranchSelect"
                 component={BranchSelect}
-                options={{ title: "Elegir sucursal" }}
+                options={{ 
+                  title: "Elegir sucursal",
+                  headerBackVisible: false,
+                }}
               />
               <Stack.Screen
                 name="Home"
                 component={Home}
-                options={{ title: "Menú", headerBackVisible: true }}
+                options={{ 
+                  title: "Menú"
+                }}
               />
               {/* 👇 NUEVO: hub de remitos */}
               <Stack.Screen

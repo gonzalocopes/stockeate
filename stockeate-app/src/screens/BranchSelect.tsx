@@ -1,4 +1,4 @@
-﻿// src/screens/BranchSelect.tsx
+﻿// src/screens\BranchSelect.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -24,6 +24,10 @@ export default function BranchSelect({ navigation }: any) {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
+    navigation.setOptions({
+      headerRight: null,
+    });
+
     (async () => {
       try {
         setErr(null);
@@ -42,33 +46,33 @@ export default function BranchSelect({ navigation }: any) {
         setLoading(false);
       }
     })();
-  }, []);
-  
-  // Botón "Cerrar sesión" en el header
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={async () => {
-            await logout();
-            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-          }}
-          style={{
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            backgroundColor: "#dc3545",
-            borderRadius: 16,
-            marginRight: 8,
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
-            Cerrar sesión
-          </Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, logout]);
+  }, [navigation]);
+
+  // // Botón "Cerrar sesión" en el header
+  // useEffect(() => {
+  //   navigation.setOptions({
+  //     headerRight: () => (
+  //       <TouchableOpacity
+  //         onPress={async () => {
+  //           await logout();
+  //           navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+  //         }}
+  //         style={{
+  //           paddingHorizontal: 12,
+  //           paddingVertical: 6,
+  //           backgroundColor: "#dc3545",
+  //           borderRadius: 16,
+  //           marginRight: 8,
+  //         }}
+  //         activeOpacity={0.8}
+  //       >
+  //         <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
+  //           Cerrar sesión
+  //         </Text>
+  //       </TouchableOpacity>
+  //     ),
+  //   });
+  // }, [navigation, logout]);
 
   const renderItem = ({ item }: { item: Branch }) => (
     <TouchableOpacity
