@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useBranch } from "../stores/branch";
 import { useBatch } from "../stores/batch";
-import { DB } from "../db.native";
+import { DB } from "../db";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { api } from "../api";
