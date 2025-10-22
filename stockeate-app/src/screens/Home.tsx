@@ -1,38 +1,8 @@
 ﻿// src/screens/Home.tsx
-import React, { useEffect } from "react";
+import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { useAuth } from "../stores/auth";
 
 export default function Home({ navigation }: any) {
-  const logout = useAuth((s) => s.logout);
-
-  // Botón "Cerrar sesión" en el header
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={async () => {
-            await logout();
-            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-          }}
-          style={{
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            backgroundColor: "#dc3545",
-            borderRadius: 16,
-            marginRight: 8,
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
-            Cerrar sesión
-          </Text>
-        </TouchableOpacity>
-      ),
-      title: "Menú",
-    });
-  }, [navigation, logout]);
-
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
       <Text style={{ fontSize: 18, fontWeight: "600", marginBottom: 8 }}>

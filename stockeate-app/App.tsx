@@ -30,7 +30,7 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   // auth
-  const hydrateAuth = useAuth((s) => s.hydrate);   // 👈 cambio de nombre para claridad
+  const hydrateAuth = useAuth((s) => s.hydrate); // 👈 cambio de nombre para claridad
   const token = useAuth((s) => s.token);
 
   // branch
@@ -38,8 +38,8 @@ export default function App() {
 
   useEffect(() => {
     initDb();
-    hydrateAuth();    // hidrata token guardado
-    hydrateBranch();  // 👈 hidrata sucursal guardada
+    hydrateAuth(); // hidrata token guardado
+    hydrateBranch(); // 👈 hidrata sucursal guardada
   }, []);
 
   return (
@@ -61,18 +61,50 @@ export default function App() {
                 component={BranchSelect}
                 options={{ title: "Elegir sucursal" }}
               />
-              <Stack.Screen name="Home" component={Home} options={{ title: "Menú" }} />
+              <Stack.Screen
+                name="Home"
+                component={Home}
+                options={{ title: "Menú", headerBackVisible: true }}
+              />
               {/* 👇 NUEVO: hub de remitos */}
-              <Stack.Screen name="RemitosHub" component={RemitosHub} options={{ title: "Remitos" }} />
-              <Stack.Screen name="ScanAdd" component={ScanAdd} options={{ title: "Escanear / Agregar" }} />
-              <Stack.Screen name="RemitoForm" component={RemitoForm} options={{ title: "Formar remito" }} />
+              <Stack.Screen
+                name="RemitosHub"
+                component={RemitosHub}
+                options={{ title: "Remitos" }}
+              />
+              <Stack.Screen
+                name="ScanAdd"
+                component={ScanAdd}
+                options={{ title: "Escanear / Agregar" }}
+              />
+              <Stack.Screen
+                name="RemitoForm"
+                component={RemitoForm}
+                options={{ title: "Formar remito" }}
+              />
               {/* 👇 NUEVO: remito de ENTRADA */}
-              <Stack.Screen name="RemitoIngreso" component={RemitoIngreso} options={{ title: "Remito de entrada" }} />
+              <Stack.Screen
+                name="RemitoIngreso"
+                component={RemitoIngreso}
+                options={{ title: "Remito de entrada" }}
+              />
               {/* 👇 NUEVO: historial + detalle */}
-              <Stack.Screen name="RemitosHistory" component={RemitosHistory} options={{ title: "Historial de remitos" }} />
-              <Stack.Screen name="RemitoDetail" component={RemitoDetail} options={{ title: "Remito" }} />
+              <Stack.Screen
+                name="RemitosHistory"
+                component={RemitosHistory}
+                options={{ title: "Historial de remitos" }}
+              />
+              <Stack.Screen
+                name="RemitoDetail"
+                component={RemitoDetail}
+                options={{ title: "Remito" }}
+              />
 
-              <Stack.Screen name="RemitoResult" component={RemitoResult} options={{ title: "Remito generado" }} />
+              <Stack.Screen
+                name="RemitoResult"
+                component={RemitoResult}
+                options={{ title: "Remito generado" }}
+              />
               {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
               <Stack.Screen
                 name="BranchProducts"
@@ -92,4 +124,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
