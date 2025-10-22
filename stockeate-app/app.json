@@ -15,7 +15,9 @@
       "bundleIdentifier": "com.gonzalocopes.stockeate"
     },
     "android": {
-      "permissions": ["CAMERA"],
+      "permissions": [
+        "CAMERA"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#E6F4FE"
@@ -37,13 +39,20 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#000000" }
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
-    "experiments": { "reactCompiler": true },
+    "experiments": {
+      "reactCompiler": true
+    },
     "extra": {
-      "eas": { "projectId": "2c07a257-3170-4fc5-a4a6-2768912ba87d" }
+      "eas": {
+        "projectId": "2c07a257-3170-4fc5-a4a6-2768912ba87d"
+      }
     }
   }
 }
