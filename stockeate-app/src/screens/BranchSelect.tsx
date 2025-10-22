@@ -9,12 +9,14 @@ import {
 } from "react-native";
 import { api } from "../api";
 import { useBranch } from "../stores/branch";
+import { useAuth } from "../stores/auth";
 import { pullBranchCatalog } from "../sync/index";
 
 type Branch = { id: string; name: string };
 
 export default function BranchSelect({ navigation }: any) {
   const setBranch = useBranch((s) => s.set);
+  const logout = useAuth((s) => s.logout);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [sel, setSel] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,32 @@ export default function BranchSelect({ navigation }: any) {
       }
     })();
   }, []);
+  
+  // Botón "Cerrar sesión" en el header
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={async () => {
+            await logout();
+            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+          }}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: "#dc3545",
+            borderRadius: 16,
+            marginRight: 8,
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
+            Cerrar sesión
+          </Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, logout]);
 
   const renderItem = ({ item }: { item: Branch }) => (
     <TouchableOpacity
