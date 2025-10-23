@@ -71,13 +71,11 @@ export default function BranchSelect({ navigation }: any) {
       try {
         setErr(null);
         setLoading(true);
-        // Simular respuesta de la API con depósitos adicionales
-        const mockBranches: Branch[] = [
-          {
-            id: "central",
-            name: "Depósito Central",
-            address: "Av. Corrientes 1234, CABA",
-          },
+        // Llamada real a la API para depósito central
+        const { data } = await api.get<Branch[]>("/branches");
+        
+        // Agregar depósitos adicionales (vacíos)
+        const additionalBranches: Branch[] = [
           {
             id: "norte",
             name: "Depósito Norte",
@@ -89,12 +87,15 @@ export default function BranchSelect({ navigation }: any) {
             address: "Av. Hipólito Yrigoyen 13205, Adrogué, Buenos Aires",
           },
         ];
-        setBranches(mockBranches);
+        
+        const allBranches = [...data, ...additionalBranches];
+        setBranches(allBranches);
 
-        // Inicializar estados aleatorios
+        // Inicializar estados basados en horario de operación
         const initialStatus: Record<string, boolean> = {};
-        mockBranches.forEach((branch) => {
-          initialStatus[branch.id] = Math.random() > 0.2; // 80% probabilidad de estar online
+        const isOpen = isWithinOperatingHours();
+        allBranches.forEach((branch) => {
+          initialStatus[branch.id] = isOpen;
         });
         setBranchStatus(initialStatus);
 
