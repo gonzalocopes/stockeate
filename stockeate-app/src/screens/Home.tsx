@@ -103,15 +103,22 @@ export default function Home({ navigation }: any) {
                 shadowRadius: 8,
                 shadowOffset: { width: 0, height: 4 },
                 elevation: 4,
+                transform: [{ scale: 1 }],
               }}
               onPress={() => navigation.navigate("ScanAdd")}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
+              pressRetentionOffset={{
+                top: 10,
+                left: 10,
+                right: 10,
+                bottom: 10,
+              }}
             >
               <View
                 style={{
-                  // backgroundColor: "rgba(255,255,255,0.2)",
-                  // borderRadius: 12,
-                  // padding: 12,
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 12,
+                  padding: 12,
                   marginBottom: 8,
                 }}
               >
@@ -138,15 +145,22 @@ export default function Home({ navigation }: any) {
                 shadowRadius: 8,
                 shadowOffset: { width: 0, height: 4 },
                 elevation: 4,
+                transform: [{ scale: 1 }],
               }}
               onPress={() => navigation.navigate("RemitosHub")}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
+              pressRetentionOffset={{
+                top: 10,
+                left: 10,
+                right: 10,
+                bottom: 10,
+              }}
             >
               <View
                 style={{
-                  // backgroundColor: "rgba(255,255,255,0.2)",
-                  // borderRadius: 12,
-                  // padding: 12,
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 12,
+                  padding: 12,
                   marginBottom: 8,
                 }}
               >
@@ -174,15 +188,17 @@ export default function Home({ navigation }: any) {
               shadowRadius: 8,
               shadowOffset: { width: 0, height: 4 },
               elevation: 4,
+              transform: [{ scale: 1 }],
             }}
             onPress={() => navigation.navigate("BranchProducts")}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            pressRetentionOffset={{ top: 10, left: 10, right: 10, bottom: 10 }}
           >
             <View
               style={{
-                // backgroundColor: "rgba(255,255,255,0.2)",
-                // borderRadius: 12,
-                // padding: 12,
+                backgroundColor: "rgba(255,255,255,0.15)",
+                borderRadius: 12,
+                padding: 12,
                 marginBottom: 8,
               }}
             >
@@ -248,7 +264,11 @@ export default function Home({ navigation }: any) {
           elevation: 8,
         }}
       >
-        <View style={{ alignItems: "center", gap: 4 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Home")}
+          style={{ alignItems: "center", gap: 4 }}
+          activeOpacity={0.6}
+        >
           <View
             style={{
               backgroundColor: "#f3f4f6",
@@ -261,7 +281,7 @@ export default function Home({ navigation }: any) {
           <Text style={{ color: "#6b7280", fontWeight: "600", fontSize: 12 }}>
             Menú
           </Text>
-        </View>
+        </TouchableOpacity>
         <View style={{ alignItems: "center", gap: 4 }}>
           <View
             style={{

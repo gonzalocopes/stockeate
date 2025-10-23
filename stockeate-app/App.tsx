@@ -59,7 +59,7 @@ export default function App() {
               <Stack.Screen
                 name="BranchSelect"
                 component={BranchSelect}
-                options={{ 
+                options={{
                   title: "Elegir sucursal",
                   headerBackVisible: false,
                 }}
@@ -67,8 +67,8 @@ export default function App() {
               <Stack.Screen
                 name="Home"
                 component={Home}
-                options={{ 
-                  title: "Menú"
+                options={{
+                  title: "Menú",
                 }}
               />
               {/* 👇 NUEVO: hub de remitos */}
