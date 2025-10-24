@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { ProductDto } from './products.controller';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class ProductsService {
@@ -15,7 +17,8 @@ export class ProductsService {
       stock: p.stock ?? 0,
       branch_id: p.branchId ?? p.branch_id,
       updated_at: p.updatedAt ?? p.updated_at ?? null,
-      archived: typeof p.archived === 'boolean' ? p.archived : (p.archived ?? false),
+      archived:
+        typeof p.archived === 'boolean' ? p.archived : (p.archived ?? false),
     };
   }
 
@@ -44,5 +47,41 @@ export class ProductsService {
     });
 
     return list.map((p: any) => this.toApi(p));
+  }
+
+  async createProduct(branchId: string, product: ProductDto) {
+    return this.prisma.product.create({
+      data: {
+        branch: { connect: { id: branchId } },
+        code: product.code,
+        name: product.name,
+        price: new Decimal(product.price),
+        stock: product.stock,
+      },
+    });
+  }
+
+  async deleteProduct(code: string, branchId: string) {
+    return await this.prisma.product.delete({
+      where: { code, branchId },
+    });
+  }
+
+  async updateProduct(code: string, branchId: string, product: ProductDto) {
+    return await this.prisma.product.update({
+      where: { code, branchId },
+      data: {
+        name: product.name,
+        price: new Decimal(product.price),
+        stock: product.stock,
+      },
+    });
+  }
+
+  async markProductAsInactive(code: string, branchId: string) {
+    return await this.prisma.product.update({
+      where: { code, branchId },
+      data: { isActive: false },
+    });
   }
 }

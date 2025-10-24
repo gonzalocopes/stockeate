@@ -7,7 +7,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DATABASE_URL_UNPOOLED")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
@@ -47,6 +47,7 @@ model Product {
   stock      Int          @default(0)
   version    Int          @default(0)
   updatedAt  DateTime     @updatedAt
+  isActive   Boolean      @default(true)
   branch     Branch       @relation(fields: [branchId], references: [id])
   RemitoItem RemitoItem[]
 }
