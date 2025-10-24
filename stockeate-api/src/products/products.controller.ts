@@ -7,6 +7,7 @@ import {
   Post,
   Body,
   Delete,
+  Patch,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import {
@@ -15,8 +16,10 @@ import {
   IsNotEmpty,
   IsNumber,
   IsBoolean,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiQuery } from '@nestjs/swagger';
 
 export class ProductDto {
   @IsString()
@@ -45,6 +48,32 @@ export class ProductDto {
   isActive: boolean;
 }
 
+export class UpdateProductDto {
+  @IsString()
+  @MinLength(1)
+  @IsOptional()
+  code?: string;
+
+  @IsString()
+  @MinLength(1)
+  @IsOptional()
+  name?: string;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  stock?: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  price?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}
+
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -62,6 +91,13 @@ export class ProductsController {
     return this.productsService.deleteProduct(code, branchId);
   }
 
+  @Patch('toggle-active/:code')
+  async toggleActive(
+    @Param('code') code: string,
+    @Param('branchId') branchId: string,
+  ) {
+    return this.productsService.toggleActive(code, branchId);
+  }
   /**
    * GET /products?branchId=central&search=cola&includeArchived=0|1
    * Devuelve el catálogo de la sucursal.
@@ -82,6 +118,24 @@ export class ProductsController {
       include,
     );
     return rows;
+  }
+
+  @Patch(':code')
+  @ApiQuery({
+    name: 'branchId',
+    required: true,
+    type: String,
+    description: 'ID de la sucursal del producto',
+  })
+  async updateProduct(
+    @Param('code') code: string,
+    @Query('branchId') branchId: string,
+    @Body() updateProductDto: UpdateProductDto,
+  ) {
+    if (!branchId) {
+      throw new BadRequestException('El parámetro branchId es obligatorio');
+    }
+    return this.productsService.updateProduct(code, branchId, updateProductDto);
   }
 
   /**
