@@ -163,6 +163,18 @@ export default function BranchProducts({ navigation }: any) {
 
   const applyQuickDelta = async (delta: number) => {
     if (!adjusting || !branchId) return;
+    // Buscar el producto actualizado en rows
+    const prodActual = rows.find(r => r.id === adjusting.id);
+    const currentStock = prodActual?.stock ?? 0;
+    // Solo permitir ajuste si el resultado es >= 0
+    if (delta < 0 && currentStock <= 0) {
+      Alert.alert("El stock no puede ser negativo");
+      return;
+    }
+    if (currentStock + delta < 0) {
+      Alert.alert("El stock no puede ser negativo");
+      return;
+    }
     const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
     setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
     await pushMoveByCode(branchId, adjusting.code, delta, delta > 0 ? "+1" : "-1");
@@ -374,14 +386,25 @@ export default function BranchProducts({ navigation }: any) {
                   <View style={{ width: 40, height: 4, backgroundColor: "#e2e8f0", borderRadius: 2 }} />
                 </View>
 
-                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
+
+                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 4 }}>
                   Ajustar stock — {adjusting?.name} ({adjusting?.code})
+                </Text>
+                <Text style={{ fontWeight: "600", fontSize: 16, marginBottom: 12 }}>
+                  Stock actual: {adjusting?.stock ?? 0}
                 </Text>
 
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
                   <TouchableOpacity
                     onPress={() => applyQuickDelta(-1)}
-                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#ef4444", alignItems: "center" }}
+                    disabled={adjusting?.stock === 0}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      backgroundColor: adjusting?.stock === 0 ? "#d1d5db" : "#ef4444",
+                      alignItems: "center"
+                    }}
                     activeOpacity={0.9}
                   >
                     <Text style={{ color: "white", fontWeight: "700" }}>-1</Text>
