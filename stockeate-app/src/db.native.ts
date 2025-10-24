@@ -161,9 +161,17 @@ export const DB = {
   },
 
   adjustStock(productId: string, branchId: string, delta: number, reason: string = "Ajuste inventario") {
+    // Obtener stock actual
+    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
+    const current = Number(cur?.stock ?? 0);
+    const newStock = current + delta;
+    if (newStock < 0) {
+      // No permitir stock negativo
+      return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    }
     db.runSync(
-      "UPDATE products SET stock = stock + ?, version = version + 1, updated_at=? WHERE id=?",
-      [delta, now(), productId]
+      "UPDATE products SET stock = ?, version = version + 1, updated_at=? WHERE id=?",
+      [newStock, now(), productId]
     );
     db.runSync(
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
@@ -175,10 +183,12 @@ export const DB = {
   setStockExact(productId: string, branchId: string, target: number, reason = "Fijar stock") {
     const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
     const current = Number(cur?.stock ?? 0);
-    const delta = target - current;
+    // Nunca permitir stock negativo
+    const safeTarget = Math.max(0, Math.floor(target));
+    const delta = safeTarget - current;
     db.runSync(
       "UPDATE products SET stock = ?, version = version + 1, updated_at=? WHERE id=?",
-      [target, now(), productId]
+      [safeTarget, now(), productId]
     );
     db.runSync(
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,

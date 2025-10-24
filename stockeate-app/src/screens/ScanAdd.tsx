@@ -13,7 +13,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { CameraView, Camera } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
-import { DB } from "../db.native";
+import { DB } from "../db";
 import { useBatch } from "../stores/batch";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
@@ -200,7 +200,7 @@ export default function ScanAdd({ navigation, route }: any) {
         addScannedToBatch(p);
       } else {
         setPendingCode(code);
-        setEditNameInit(code);
+        setEditNameInit("");
         setEditPriceInit(0);
         setEditVisible(true);
         return;
@@ -218,14 +218,14 @@ export default function ScanAdd({ navigation, route }: any) {
       return;
     } else {
       setPendingCode(code);
-      setEditNameInit(code);
+      setEditNameInit("");
       setEditPriceInit(0);
       setEditVisible(true);
       return;
     }
   };
 
-  const handleSaveNewProduct = async (data: { name: string; price: number; stock?: number }) => {
+  const handleSaveNewProduct = async (data: { code: string; name: string; price: number; stock?: number }) => {
     const branchId = getBranchId();
     if (!branchId || !pendingCode) {
       setEditVisible(false);
@@ -237,7 +237,7 @@ export default function ScanAdd({ navigation, route }: any) {
     const initialStock = Math.max(0, Math.floor(data.stock ?? 0));
 
     const created = DB.upsertProduct({
-      code: pendingCode,
+      code: data.code,
       name: data.name,
       price: data.price,
       stock: initialStock,
@@ -331,7 +331,7 @@ export default function ScanAdd({ navigation, route }: any) {
           <Text>Solicitando permiso de cámara…</Text>
         ) : hasPerm ? (
           isFocused ? (
-            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 260, position: "relative" }}>
+            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 200, position: "relative" }}>
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
@@ -378,7 +378,7 @@ export default function ScanAdd({ navigation, route }: any) {
       {mode === "batch" ? (
         <>
           <Text style={{ fontWeight: "600" }}>Lote actual: {totalQty()} items</Text>
-          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} />
+          <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} showsVerticalScrollIndicator={false} />
           <TouchableOpacity
             style={{ backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d", paddingVertical: 12, borderRadius: 8, alignItems: "center", marginTop: 8 }}
             onPress={() => navigation.navigate("RemitoForm")}
@@ -406,7 +406,7 @@ export default function ScanAdd({ navigation, route }: any) {
               <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
                 Agregados en esta sesión ({totalAdds} items)
               </Text>
-              <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} />
+              <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} showsVerticalScrollIndicator={false} />
               <TouchableOpacity
                 onPress={commitCatalogAdds}
                 style={{ marginTop: 8, paddingVertical: 12, borderRadius: 8, backgroundColor: "#007AFF", alignItems: "center", opacity: committing ? 0.85 : 1 }}
