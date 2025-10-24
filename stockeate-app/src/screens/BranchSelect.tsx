@@ -73,7 +73,7 @@ export default function BranchSelect({ navigation }: any) {
         setLoading(true);
         // Llamada real a la API para depósito central
         const { data } = await api.get<Branch[]>("/branches");
-        
+
         // Agregar depósitos adicionales (vacíos)
         const additionalBranches: Branch[] = [
           {
@@ -87,7 +87,7 @@ export default function BranchSelect({ navigation }: any) {
             address: "Av. Hipólito Yrigoyen 13205, Adrogué, Buenos Aires",
           },
         ];
-        
+
         const allBranches = [...data, ...additionalBranches];
         setBranches(allBranches);
 
@@ -149,7 +149,7 @@ export default function BranchSelect({ navigation }: any) {
         borderWidth: 1,
         borderColor: sel && sel.id === item.id ? "#007AFF" : "#E5E7EB",
         borderRadius: 16,
-        padding: 16,
+        padding: 14,
         marginBottom: 12,
         marginHorizontal: 4,
         backgroundColor: "#fff",
@@ -170,7 +170,7 @@ export default function BranchSelect({ navigation }: any) {
           flexDirection: "row",
           alignItems: "center",
           flex: 1,
-          minHeight: 64,
+          minHeight: 50, // Reducido de 64 a 50
         }}
       >
         {/* Círculo de selección */}
@@ -266,17 +266,6 @@ export default function BranchSelect({ navigation }: any) {
     <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       {/* Contenedor principal con padding seguro */}
       <View style={{ flex: 1, padding: 16, paddingTop: 32 }}>
-        {/* <Text
-          style={{
-            fontSize: 24,
-            fontWeight: "600",
-            marginBottom: 24,
-            color: "#111827",
-          }}
-        >
-          Elegí sucursal
-        </Text> */}
-
         {loading && (
           <ActivityIndicator
             size="large"
@@ -299,7 +288,7 @@ export default function BranchSelect({ navigation }: any) {
             renderItem={renderItem}
             contentContainerStyle={{
               paddingHorizontal: 8,
-              paddingTop: "6%", // Margen superior del 10%
+              paddingTop: "6%", // Margen superior del 6%
               paddingBottom: 100, // Espacio extra para evitar que el último ítem quede detrás del botón
             }}
             showsVerticalScrollIndicator={false}
