@@ -22,7 +22,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  // Escuchar en todas las interfaces para que el teléfono pueda acceder
+  // Escuchar en todas las interfaces para que el teléfono pueda acceder asd
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port, '0.0.0.0');
 
