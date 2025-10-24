@@ -116,7 +116,6 @@ export default function Home({ navigation }: any) {
             >
               <View
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.15)",
                   borderRadius: 12,
                   padding: 12,
                   marginBottom: 8,
@@ -158,7 +157,6 @@ export default function Home({ navigation }: any) {
             >
               <View
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.15)",
                   borderRadius: 12,
                   padding: 12,
                   marginBottom: 8,
@@ -196,7 +194,6 @@ export default function Home({ navigation }: any) {
           >
             <View
               style={{
-                backgroundColor: "rgba(255,255,255,0.15)",
                 borderRadius: 12,
                 padding: 12,
                 marginBottom: 8,
@@ -229,7 +226,7 @@ export default function Home({ navigation }: any) {
           >
             <View
               style={{
-                backgroundColor: "rgba(255,255,255,0.2)",
+                
                 borderRadius: 12,
                 padding: 12,
                 marginBottom: 8,
