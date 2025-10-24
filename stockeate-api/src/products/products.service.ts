@@ -13,6 +13,7 @@ export class ProductsService {
       id: p.id,
       code: p.code,
       name: p.name,
+      isActive: p.isActive ?? true,
       price: p.price ?? 0,
       stock: p.stock ?? 0,
       branch_id: p.branchId ?? p.branch_id,
