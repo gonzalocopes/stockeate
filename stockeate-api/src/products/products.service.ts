@@ -56,26 +56,26 @@ export class ProductsService {
   }
 
   async createProduct(branchId: string, product: ProductDto) {
-    try {
-      return await this.prisma.product.create({
-        data: {
-          branch: { connect: { id: branchId } },
-          code: product.code,
-          name: product.name,
-          price: new Decimal(product.price),
-          stock: product.stock,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new BadRequestException(
-            `El código de producto ${product.code} ya existe.`,
-          );
-        }
-      }
-      throw error;
+    const existingProduct = await this.prisma.product.findFirst({
+      where: {
+        code: product.code,
+        branchId,
+      },
+    });
+    if (existingProduct) {
+      throw new BadRequestException(
+        `Ya existe un producto con el código ${product.code} en esta sucursal.`,
+      );
     }
+    return this.prisma.product.create({
+      data: {
+        branch: { connect: { id: branchId } },
+        code: product.code,
+        name: product.name,
+        price: new Decimal(product.price),
+        stock: product.stock,
+      },
+    });
   }
 
   async deleteProduct(code: string, branchId: string) {
