@@ -43,9 +43,6 @@ export class ProductDto {
   @IsNumber()
   @Type(() => Number)
   price: number;
-
-  @IsBoolean()
-  isActive: boolean;
 }
 
 export class UpdateProductDto {
