@@ -335,39 +335,50 @@ export class RemitosService {
     return this.enrichRemitosWithType(remitos);
   }
 
-  // Obtener estadísticas de remitos
   async getStats(branchId?: string): Promise<RemitosStatsResponseDto> {
     const where: Prisma.RemitoWhereInput = branchId ? { branchId } : {};
 
-    const branch = await this.prisma.branch.findUnique({
-      where: { id: branchId },
-    });
-    if (!branch) {
-      throw new NotFoundException(`Branch con id ${branchId} no encontrada`);
-    }
-
     const remitos = await this.prisma.remito.findMany({
       where,
-      select: { id: true },
+      select: { id: true, tmpNumber: true },
     });
 
-    let inCount = 0;
-    let outCount = 0;
+    if (remitos.length === 0) {
+      return { total: 0, inCount: 0, outCount: 0 };
+    }
 
-    for (const remito of remitos) {
-      const type = await this.getRemitoType(remito.id);
-      if (type === RemitoType.IN) {
-        inCount++;
-      } else {
-        outCount++;
+    // Buscar movimientos relacionados a estos remitos
+    const tmpNumbers = remitos.map((r) => `REMITO-${r.tmpNumber}`);
+    const stockMoves = await this.prisma.stockMove.findMany({
+      where: {
+        ref: { in: tmpNumbers },
+      },
+      select: { ref: true, qty: true },
+    });
+
+    // Mapear tmpNumber -> tipo ('IN'|'OUT')
+    const remitoTypes = new Map<string, 'IN' | 'OUT'>();
+
+    for (const move of stockMoves) {
+      const ref = move.ref;
+      if (!ref) continue; // protección contra null
+      // si ref no empieza con REMITO- lo ignoramos
+      if (!ref.startsWith('REMITO-')) continue;
+      const tmpNumber = ref.substring('REMITO-'.length);
+      if (!remitoTypes.has(tmpNumber)) {
+        remitoTypes.set(tmpNumber, move.qty > 0 ? 'IN' : 'OUT');
       }
     }
 
-    return {
-      total: remitos.length,
-      inCount,
-      outCount,
-    };
+    let inCount = 0;
+    let outCount = 0;
+    for (const remito of remitos) {
+      const type = remitoTypes.get(remito.tmpNumber);
+      if (type === 'IN') inCount++;
+      else outCount++;
+    }
+
+    return { total: remitos.length, inCount, outCount };
   }
 
   // Obtener remitos por tipo
@@ -414,56 +425,69 @@ export class RemitosService {
     return this.enrichRemitosWithType(filteredRemitos);
   }
 
-  // Obtener estadísticas mensuales de remitos
   async getMonthlyStats(
     query: GetMonthlyStatsQueryDto,
   ): Promise<MonthlyStatsResponseDto> {
-    // Determinar el año y mes a usar
     const now = new Date();
-    const year = query.year || getYear(now);
-    const month = query.month || getMonth(now) + 1; // getMonth() retorna 0-11
+    const year = query.year ?? getYear(now);
+    const month = query.month ?? getMonth(now) + 1;
 
-    // Calcular fecha de inicio y fin del mes
     const startDate = startOfMonth(new Date(year, month - 1, 1));
     const endDate = endOfMonth(new Date(year, month - 1, 1));
 
     const where: Prisma.RemitoWhereInput = {
-      createdAt: {
-        gte: startDate,
-        lte: endDate,
-      },
+      createdAt: { gte: startDate, lte: endDate },
     };
+    if (query.branchId) where.branchId = query.branchId;
 
-    if (query.branchId) {
-      where.branchId = query.branchId;
-    }
-
-    // Obtener todos los remitos del mes
     const remitos = await this.prisma.remito.findMany({
       where,
-      include: {
-        items: true,
-      },
+      include: { items: true },
     });
 
-    // Contar por tipo y calcular cantidades
+    if (remitos.length === 0) {
+      return {
+        year,
+        month,
+        total: 0,
+        inCount: 0,
+        outCount: 0,
+        totalInQty: 0,
+        totalOutQty: 0,
+      };
+    }
+
+    const tmpNumbers = remitos.map((r) => `REMITO-${r.tmpNumber}`);
+    const stockMoves = await this.prisma.stockMove.findMany({
+      where: { ref: { in: tmpNumbers } },
+      select: { ref: true, qty: true },
+    });
+
+    const remitoTypes = new Map<string, 'IN' | 'OUT'>();
+    for (const move of stockMoves) {
+      const ref = move.ref;
+      if (!ref) continue;
+      if (!ref.startsWith('REMITO-')) continue;
+      const tmpNumber = ref.substring('REMITO-'.length);
+      if (!remitoTypes.has(tmpNumber)) {
+        remitoTypes.set(tmpNumber, move.qty > 0 ? 'IN' : 'OUT');
+      }
+    }
+
     let inCount = 0;
     let outCount = 0;
     let totalInQty = 0;
     let totalOutQty = 0;
 
     for (const remito of remitos) {
-      // Para cada remito, determinar su tipo
-      const type = await this.getRemitoType(remito.id);
-
-      if (type === RemitoType.IN) {
+      const type = remitoTypes.get(remito.tmpNumber);
+      const totalQty = remito.items.reduce((s, it) => s + it.qty, 0);
+      if (type === 'IN') {
         inCount++;
-        // Sumar la cantidad total de items para remitos de entrada
-        totalInQty += remito.items.reduce((sum, item) => sum + item.qty, 0);
+        totalInQty += totalQty;
       } else {
         outCount++;
-        // Sumar la cantidad total de items para remitos de salida
-        totalOutQty += remito.items.reduce((sum, item) => sum + item.qty, 0);
+        totalOutQty += totalQty;
       }
     }
 
