@@ -16,6 +16,7 @@ import {
   UpdateRemitoDto,
   GetRemitosQueryDto,
   RemitoType,
+  GetMonthlyStatsQueryDto,
 } from './remitos.dto';
 import { ApiOperation } from '@nestjs/swagger';
 
@@ -61,6 +62,12 @@ export class RemitosController {
   @ApiOperation({ summary: 'Obtener remito por ID' })
   findOne(@Param('id') id: string) {
     return this.remitosService.findOne(id);
+  }
+
+  @Get('stats/monthly')
+  @ApiOperation({ summary: 'Obtener estadísticas mensuales de remitos' })
+  getMonthlyStats(@Query() query: GetMonthlyStatsQueryDto) {
+    return this.remitosService.getMonthlyStats(query);
   }
 
   @Patch(':id')

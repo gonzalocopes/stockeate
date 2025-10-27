@@ -7,6 +7,7 @@ import {
   IsNumber,
   Min,
   IsEnum,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -160,4 +161,34 @@ export class RemitoWithTypeDto {
   type: RemitoType;
   items: RemitoItemWithProductDto[];
   branch?: BranchDto;
+}
+
+// DTO para estadísticas mensuales
+export class MonthlyStatsResponseDto {
+  year: number;
+  month: number;
+  total: number;
+  inCount: number;
+  outCount: number;
+  totalInQty: number;
+  totalOutQty: number;
+}
+
+// DTO para query params de estadísticas mensuales
+export class GetMonthlyStatsQueryDto {
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  year?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  @Type(() => Number)
+  month?: number;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }
