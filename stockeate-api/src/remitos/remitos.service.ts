@@ -15,9 +15,12 @@ import {
   RemitoType,
   RemitosStatsResponseDto,
   RemitoWithTypeDto,
+  GetMonthlyStatsQueryDto,
+  MonthlyStatsResponseDto,
 } from './remitos.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma } from '@prisma/client';
+import { startOfMonth, endOfMonth, getYear, getMonth } from 'date-fns';
 
 @Injectable()
 export class RemitosService {
@@ -409,5 +412,69 @@ export class RemitosService {
     }
 
     return this.enrichRemitosWithType(filteredRemitos);
+  }
+
+  // Obtener estadísticas mensuales de remitos
+  async getMonthlyStats(
+    query: GetMonthlyStatsQueryDto,
+  ): Promise<MonthlyStatsResponseDto> {
+    // Determinar el año y mes a usar
+    const now = new Date();
+    const year = query.year || getYear(now);
+    const month = query.month || getMonth(now) + 1; // getMonth() retorna 0-11
+
+    // Calcular fecha de inicio y fin del mes
+    const startDate = startOfMonth(new Date(year, month - 1, 1));
+    const endDate = endOfMonth(new Date(year, month - 1, 1));
+
+    const where: Prisma.RemitoWhereInput = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    if (query.branchId) {
+      where.branchId = query.branchId;
+    }
+
+    // Obtener todos los remitos del mes
+    const remitos = await this.prisma.remito.findMany({
+      where,
+      include: {
+        items: true,
+      },
+    });
+
+    // Contar por tipo y calcular cantidades
+    let inCount = 0;
+    let outCount = 0;
+    let totalInQty = 0;
+    let totalOutQty = 0;
+
+    for (const remito of remitos) {
+      // Para cada remito, determinar su tipo
+      const type = await this.getRemitoType(remito.id);
+
+      if (type === RemitoType.IN) {
+        inCount++;
+        // Sumar la cantidad total de items para remitos de entrada
+        totalInQty += remito.items.reduce((sum, item) => sum + item.qty, 0);
+      } else {
+        outCount++;
+        // Sumar la cantidad total de items para remitos de salida
+        totalOutQty += remito.items.reduce((sum, item) => sum + item.qty, 0);
+      }
+    }
+
+    return {
+      year,
+      month,
+      total: remitos.length,
+      inCount,
+      outCount,
+      totalInQty,
+      totalOutQty,
+    };
   }
 }
