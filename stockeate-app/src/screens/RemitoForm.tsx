@@ -18,6 +18,8 @@ import * as Sharing from "expo-sharing";
 import { api } from "../api";
 import { pushMovesBatchByCodes } from "../sync/push";
 
+import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+
 type LoteItem = {
   product_id: string;
   code: string;
@@ -27,6 +29,7 @@ type LoteItem = {
 };
 
 export default function RemitoForm({ navigation }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const branchId = useBranch((s) => s.id);
   const branchName = useBranch((s) => s.name);
 
@@ -43,8 +46,8 @@ export default function RemitoForm({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center" }}>
-        <Text>Primero elegí una sucursal.</Text>
+      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.background }}>
+        <Text style={{ color: theme.colors.text }}>Primero elegí una sucursal.</Text>
       </View>
     );
   }
@@ -67,17 +70,18 @@ export default function RemitoForm({ navigation }: any) {
         gap: 8,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderColor: "#eee",
+        borderColor: theme.colors.border, // 👈 Color del borde
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#475569", fontSize: 12 }}>{item.code}</Text>
-        <Text style={{ color: "#334155", fontSize: 12 }}>
+        <Text style={{ fontWeight: "600", color: theme.colors.text }}>{item.name}</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{item.code}</Text>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
           ${item.unit_price ?? 0} c/u
         </Text>
       </View>
 
+      {/* Botón '-' */}
       <TouchableOpacity
         onPress={() =>
           dec(item.code) /* baja 1 en el lote (no mueve stock aún) */
@@ -86,23 +90,25 @@ export default function RemitoForm({ navigation }: any) {
           paddingHorizontal: 12,
           paddingVertical: 4,
           borderWidth: 1,
-          borderColor: "#007AFF",
-          backgroundColor: "#f8f9fa",
+          borderColor: theme.colors.primary, // 👈 Borde primario
+          backgroundColor: theme.colors.card, // 👈 Fondo de botón de contraste
           borderRadius: 6,
         }}
         activeOpacity={0.8}
       >
-        <Text style={{ color: "#007AFF", fontWeight: "700" }}>-</Text>
+        <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>-</Text>
       </TouchableOpacity>
-      <Text style={{ width: 28, textAlign: "center", fontWeight: "700" }}>{item.qty}</Text>
+      <Text style={{ width: 28, textAlign: "center", fontWeight: "700", color: theme.colors.text }}>{item.qty}</Text>
+      
+      {/* Botón '+' */}
       <TouchableOpacity
         onPress={() => addOrInc(item, 1)}
         style={{
           paddingHorizontal: 12,
           paddingVertical: 4,
           borderWidth: 1,
-          borderColor: "#007AFF",
-          backgroundColor: "#007AFF",
+          borderColor: theme.colors.primary, // 👈 Borde primario
+          backgroundColor: theme.colors.primary, // 👈 Fondo primario
           borderRadius: 6,
         }}
         activeOpacity={0.8}
@@ -110,12 +116,13 @@ export default function RemitoForm({ navigation }: any) {
         <Text style={{ color: "white", fontWeight: "700" }}>+</Text>
       </TouchableOpacity>
 
+      {/* Botón '🗑️' */}
       <TouchableOpacity
         onPress={() => remove(item.code)}
         style={{
           paddingHorizontal: 10,
           paddingVertical: 4,
-          backgroundColor: "#dc3545",
+          backgroundColor: theme.colors.danger, // 👈 Fondo danger
           borderRadius: 6,
           marginLeft: 6,
         }}
@@ -164,9 +171,10 @@ export default function RemitoForm({ navigation }: any) {
         });
       }
 
-      // 3) Intentar PDF (si falla, seguimos igual)
+      // 3) Intentar PDF (si falla, seguimos igual) - El HTML no usa variables de tema directamente
       let pdfPath: string | null = null;
       try {
+        // Se llama a la función buildHtml que no tiene acceso directo a theme, pero sus estilos son simples.
         const html = buildHtml(remitoId, tmpNum, branchName || branchId, customer, items, notes, totalImporte);
         const { uri } = await Print.printToFileAsync({ html });
         pdfPath = uri || null;
@@ -179,41 +187,41 @@ export default function RemitoForm({ navigation }: any) {
 
       // 4) Sync online “/sync”: OUT moves + remito + items
       try {
-  // a) movimientos OUT
-  await pushMovesBatchByCodes(branchId, items.map(r => ({
-    code: r.code,
-    qty: r.qty,
-    reason: "Remito egreso"
-  })), "OUT");
+        // a) movimientos OUT
+        await pushMovesBatchByCodes(branchId, items.map(r => ({
+          code: r.code,
+          qty: r.qty,
+          reason: "Remito egreso"
+        })), "OUT");
 
-  // b) remito + items (con productId)
-  const remitoItems = items.map((r) => ({
-  remito_id: remitoId,
-  productId: r.product_id,         // 👈 usar el id del lote
-  qty: r.qty,
-  unit_price: r.unit_price ?? 0,
-}));
+        // b) remito + items (con productId)
+        const remitoItems = items.map((r) => ({
+          remito_id: remitoId,
+          productId: r.product_id,          // 👈 usar el id del lote
+          qty: r.qty,
+          unit_price: r.unit_price ?? 0,
+        }));
 
-  await api.post("/sync", {
-    branchId,
-    products: [],
-    stockMoves: [],
-    remitos: [
-      {
-        id: remitoId,
-        tmp_number: tmpNum,
-        official_number: null,
-        branch_id: branchId,
-        customer: customer?.trim() || null,
-        notes: notes?.trim() || "Remito de EGRESO",
-        created_at: new Date().toISOString(),
-      },
-    ],
-    remitoItems,
-  });
-} catch (e) {
-  console.log("⚠️ Sync remito OUT falló (local ok):", e?.toString?.());
-}
+        await api.post("/sync", {
+          branchId,
+          products: [],
+          stockMoves: [],
+          remitos: [
+            {
+              id: remitoId,
+              tmp_number: tmpNum,
+              official_number: null,
+              branch_id: branchId,
+              customer: customer?.trim() || null,
+              notes: notes?.trim() || "Remito de EGRESO",
+              created_at: new Date().toISOString(),
+            },
+          ],
+          remitoItems,
+        });
+      } catch (e) {
+        console.log("⚠️ Sync remito OUT falló (local ok):", e?.toString?.());
+      }
 
       // 5) Vaciar lote
       // Si tu store no tiene "clear()", borramos item por item:
@@ -239,67 +247,87 @@ export default function RemitoForm({ navigation }: any) {
   };
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "700" }}>Remito de salida (egreso)</Text>
+    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
+      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Remito de salida (egreso)</Text>
 
-      <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, padding: 10 }}>
-        <Text style={{ fontWeight: "600", marginBottom: 6 }}>Datos</Text>
-        <Text style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>
-          Sucursal: <Text style={{ fontWeight: "700", color: "#0f172a" }}>{branchName || branchId}</Text>
+      {/* Panel de datos del remito */}
+      <View style={{ 
+        borderWidth: 1, 
+        borderColor: theme.colors.border, // 👈 Borde del panel
+        borderRadius: 10, 
+        padding: 10,
+        backgroundColor: theme.colors.card // 👈 Fondo del panel
+      }}>
+        <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Datos</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+          Sucursal: <Text style={{ fontWeight: "700", color: theme.colors.text }}>{branchName || branchId}</Text>
         </Text>
 
-        <Text style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>Cliente / destino</Text>
+        {/* Input Cliente / destino */}
+        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Cliente / destino</Text>
         <TextInput
           placeholder="Ej: Juan Pérez"
+          placeholderTextColor={theme.colors.textMuted}
           value={customer}
           onChangeText={setCustomer}
           style={{
             borderWidth: 1,
-            borderColor: "#cbd5e1",
+            borderColor: theme.colors.inputBorder, // 👈 Borde del input
             borderRadius: 8,
             padding: 10,
             marginBottom: 8,
-            backgroundColor: "white",
+            backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
+            color: theme.colors.text, // 👈 Color del texto
           }}
         />
 
-        <Text style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>Notas</Text>
+        {/* Input Notas */}
+        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Notas</Text>
         <TextInput
           placeholder="Observaciones"
+          placeholderTextColor={theme.colors.textMuted}
           value={notes}
           onChangeText={setNotes}
           style={{
             borderWidth: 1,
-            borderColor: "#cbd5e1",
+            borderColor: theme.colors.inputBorder, // 👈 Borde del input
             borderRadius: 8,
             padding: 10,
-            backgroundColor: "white",
+            backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
+            color: theme.colors.text, // 👈 Color del texto
           }}
           multiline
         />
       </View>
 
-      <Text style={{ fontWeight: "700", marginTop: 8 }}>Items ({totalQty} u.)</Text>
-      <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderItem} />
+      <Text style={{ fontWeight: "700", marginTop: 8, color: theme.colors.text }}>Items ({totalQty} u.)</Text>
+      <FlatList 
+        data={items} 
+        keyExtractor={(i) => i.code} 
+        renderItem={renderItem} 
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
 
       <View
         style={{
           borderTopWidth: 1,
-          borderColor: "#e5e7eb",
+          borderColor: theme.colors.border, // 👈 Borde superior
           paddingTop: 10,
           gap: 6,
         }}
       >
-        <Text style={{ fontWeight: "700" }}>
+        <Text style={{ fontWeight: "700", color: theme.colors.text }}>
           Total estimado: ${totalImporte.toFixed(2)}
         </Text>
 
+        {/* Botón Agregar más con el escáner */}
         <TouchableOpacity
           onPress={() => navigation.navigate("ScanAdd", { mode: "batch" })}
           style={{
             paddingVertical: 12,
             borderRadius: 8,
-            backgroundColor: "#0ea5e9",
+            backgroundColor: theme.colors.primary, // 👈 Color primario
             alignItems: "center",
           }}
           activeOpacity={0.9}
@@ -307,12 +335,13 @@ export default function RemitoForm({ navigation }: any) {
           <Text style={{ color: "white", fontWeight: "700" }}>Agregar más con el escáner</Text>
         </TouchableOpacity>
 
+        {/* Botón Guardar remito (egreso) */}
         <TouchableOpacity
           onPress={confirmAndSave}
           style={{
             paddingVertical: 14,
             borderRadius: 8,
-            backgroundColor: items.length > 0 ? "#22c55e" : "#94a3b8",
+            backgroundColor: items.length > 0 ? theme.colors.success : theme.colors.neutral, // 👈 Success / Neutral
             alignItems: "center",
             opacity: saving ? 0.85 : 1,
           }}
@@ -341,6 +370,8 @@ function buildHtml(
   notes: string,
   totalImporte: number
 ) {
+  // Nota: Los estilos en HTML para PDF se mantienen con colores básicos
+  // para asegurar la compatibilidad y legibilidad en el documento impreso/PDF.
   const rows = items
     .map(
       (r) => `

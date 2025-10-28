@@ -10,6 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { useBranch } from "../stores/branch";
+import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
 
 type Row = {
   id: string;
@@ -100,6 +101,7 @@ const getRemitosHistory = (branchId: string, q: string, dir: string): any[] => {
 };
 
 export default function RemitosHistory({ navigation }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const branchId = useBranch((s) => s.id);
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"ALL" | "IN" | "OUT">("ALL");
@@ -141,39 +143,49 @@ export default function RemitosHistory({ navigation }: any) {
   const renderItem = ({ item }: { item: Row }) => {
     const created = new Date(item.created_at).toLocaleString();
     const isIN = item.dir === "IN";
-    const badgeBg = isIN ? "#DCFCE7" : "#FEE2E2";
-    const badgeTx = isIN ? "#166534" : "#991B1B";
+    
+    // Colores del Badge: usamos los colores semánticos para el fondo
+    const badgeBg = isIN ? theme.colors.success : theme.colors.danger;
+    
     return (
       <View
         style={{
           borderBottomWidth: 1,
-          borderColor: "#e5e7eb",
+          borderColor: theme.colors.border, // 👈 Borde del item
           paddingVertical: 10,
           gap: 6,
         }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontWeight: "700" }}>
+          <Text style={{ fontWeight: "700", color: theme.colors.text }}> {/* 👈 Color de texto principal */}
             {item.tmp_number || "(sin nro.)"}
           </Text>
+          
+          {/* Badge IN/OUT */}
           <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: badgeBg }}>
-            <Text style={{ color: badgeTx, fontWeight: "700", fontSize: 12 }}>
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}> {/* 👈 Texto blanco para contraste */}
               {item.dir || "?"}
             </Text>
           </View>
         </View>
-        <Text style={{ color: "#475569", fontSize: 12 }}>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}> {/* 👈 Color de texto secundario/mutado */}
           {created}
           {item.customer ? ` — ${item.dir === "IN" ? "Proveedor" : "Cliente"}: ${item.customer}` : ""}
         </Text>
-        <Text style={{ color: "#334155", fontSize: 12 }}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}> {/* 👈 Color de texto secundario */}
           Items: {item.total_qty} — Total: ${item.total_amount.toFixed(2)}
         </Text>
 
         <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+          {/* Botón Ver detalle */}
           <TouchableOpacity
             onPress={() => navigation.navigate("RemitoDetail", { remitoId: item.id })}
-            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: "#0ea5e9" }}
+            style={{ 
+              paddingHorizontal: 12, 
+              paddingVertical: 8, 
+              borderRadius: 8, 
+              backgroundColor: theme.colors.primary // 👈 Color Primario
+            }}
             activeOpacity={0.9}
           >
             <Text style={{ color: "white", fontWeight: "700" }}>Ver detalle</Text>
@@ -185,31 +197,36 @@ export default function RemitosHistory({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center" }}>
-        <Text>Primero seleccioná una sucursal.</Text>
+      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.background }}>
+        <Text style={{ color: theme.colors.text }}>Primero seleccioná una sucursal.</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "700" }}>Historial de remitos</Text>
+    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
+      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Historial de remitos</Text>
 
       {/* Filtros */}
       <View style={{ gap: 8 }}>
+        {/* Input de Búsqueda */}
         <TextInput
           value={q}
           onChangeText={setQ}
           placeholder="Buscar por nro., cliente/proveedor, código o nombre"
+          placeholderTextColor={theme.colors.textMuted}
           style={{
             borderWidth: 1,
-            borderColor: q ? "#007AFF" : "#cbd5e1",
+            borderColor: q ? theme.colors.primary : theme.colors.inputBorder,
             borderRadius: 8,
             padding: 10,
-            backgroundColor: q ? "#f8f9ff" : "white",
+            backgroundColor: theme.colors.inputBackground, 
+            color: theme.colors.text, 
           }}
         />
         <View style={{ flexDirection: "row", gap: 8 }}>
+          
+          {/* Botón Todos */}
           <TouchableOpacity
             onPress={() => setDir("ALL")}
             style={{
@@ -217,14 +234,21 @@ export default function RemitosHistory({ navigation }: any) {
               paddingVertical: 10,
               borderRadius: 10,
               borderWidth: 1,
-              borderColor: dir === "ALL" ? "#007AFF" : "#cbd5e1",
-              backgroundColor: dir === "ALL" ? "#e6f0ff" : "white",
+              borderColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBorder,
+              backgroundColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBackground, // Primary cuando activo
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ fontWeight: "700" }}>Todos</Text>
+            <Text style={{ 
+              fontWeight: "700", 
+              color: dir === "ALL" ? 'white' : theme.colors.text // Texto blanco cuando activo, sino texto normal
+            }}>
+              Todos
+            </Text>
           </TouchableOpacity>
+          
+          {/* Botón Entrada (IN) */}
           <TouchableOpacity
             onPress={() => setDir("IN")}
             style={{
@@ -232,14 +256,21 @@ export default function RemitosHistory({ navigation }: any) {
               paddingVertical: 10,
               borderRadius: 10,
               borderWidth: 1,
-              borderColor: dir === "IN" ? "#16a34a" : "#cbd5e1",
-              backgroundColor: dir === "IN" ? "#ecfdf5" : "white",
+              borderColor: dir === "IN" ? theme.colors.success : theme.colors.inputBorder,
+              backgroundColor: dir === "IN" ? theme.colors.success : theme.colors.inputBackground, // Success cuando activo
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ fontWeight: "700", color: "#065f46" }}>Entrada</Text>
+            <Text style={{ 
+              fontWeight: "700", 
+              color: dir === "IN" ? 'white' : theme.colors.text
+            }}>
+              Entrada
+            </Text>
           </TouchableOpacity>
+          
+          {/* Botón Salida (OUT) */}
           <TouchableOpacity
             onPress={() => setDir("OUT")}
             style={{
@@ -247,21 +278,26 @@ export default function RemitosHistory({ navigation }: any) {
               paddingVertical: 10,
               borderRadius: 10,
               borderWidth: 1,
-              borderColor: dir === "OUT" ? "#ef4444" : "#cbd5e1",
-              backgroundColor: dir === "OUT" ? "#fef2f2" : "white",
+              borderColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBorder,
+              backgroundColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBackground, // Danger cuando activo
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ fontWeight: "700", color: "#7f1d1d" }}>Salida</Text>
+            <Text style={{ 
+              fontWeight: "700", 
+              color: dir === "OUT" ? 'white' : theme.colors.text
+            }}>
+              Salida
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <Text style={{ color: "#64748b", fontSize: 12 }}>{subtitle}</Text>
+      <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{subtitle}</Text>
 
       {loading ? (
-        <ActivityIndicator />
+        <ActivityIndicator color={theme.colors.primary} />
       ) : (
         <FlatList
           data={rows}

@@ -20,6 +20,9 @@ import ProductEditModal from "../components/ProductEditModal";
 import { api } from "../api";
 import { pushMovesBatchByCodes, pushMoveByCode } from "../sync/push";
 
+import { useThemeStore } from "../stores/themeProviders";
+
+
 const COOLDOWN_MS = 1000;
 const SAME_CODE_BLOCK_MS = 900;
 
@@ -35,6 +38,7 @@ type CatalogAdded = {
 };
 
 export default function ScanAdd({ navigation, route }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const initialMode: Mode = route?.params?.mode === "batch" ? "batch" : "catalog";
   const [mode] = useState<Mode>(initialMode);
 
@@ -279,36 +283,101 @@ export default function ScanAdd({ navigation, route }: any) {
   };
 
   const renderBatchRow = ({ item }: any) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderColor: "#eee" }}>
-      <Text style={{ flex: 1 }}>{item.code} — {item.name}</Text>
-      <TouchableOpacity onPress={() => dec(item.code)} style={{ paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: "#007AFF", backgroundColor: "#f8f9fa", borderRadius: 6 }} activeOpacity={0.7}>
-        <Text style={{ color: "#007AFF", fontWeight: "600" }}>-</Text>
+    <View style={{ 
+      flexDirection: "row", 
+      alignItems: "center", 
+      gap: 8, 
+      paddingVertical: 6, 
+      borderBottomWidth: 1, 
+      borderColor: theme.colors.border // 👈 Color del borde
+    }}>
+      <Text style={{ flex: 1, color: theme.colors.text }}>{item.code} — {item.name}</Text>
+      
+      {/* Botón '-' */}
+      <TouchableOpacity onPress={() => dec(item.code)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 4, 
+        borderWidth: 1, 
+        borderColor: theme.colors.primary, // 👈 Borde primario
+        backgroundColor: theme.colors.card, // 👈 Fondo para contraste
+        borderRadius: 6 
+      }} activeOpacity={0.7}>
+        <Text style={{ color: theme.colors.primary, fontWeight: "600" }}>-</Text>
       </TouchableOpacity>
-      <Text style={{ width: 30, textAlign: "center", fontWeight: "600" }}>{item.qty}</Text>
-      <TouchableOpacity onPress={() => addOrInc(item, 1)} style={{ paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: "#007AFF", backgroundColor: "#007AFF", borderRadius: 6 }} activeOpacity={0.8}>
+      
+      <Text style={{ width: 30, textAlign: "center", fontWeight: "600", color: theme.colors.text }}>{item.qty}</Text>
+      
+      {/* Botón '+' */}
+      <TouchableOpacity onPress={() => addOrInc(item, 1)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 4, 
+        borderWidth: 1, 
+        borderColor: theme.colors.primary, // 👈 Borde primario
+        backgroundColor: theme.colors.primary, // 👈 Fondo primario
+        borderRadius: 6 
+      }} activeOpacity={0.8}>
         <Text style={{ color: "white", fontWeight: "600" }}>+</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => remove(item.code)} style={{ paddingHorizontal: 12, paddingVertical: 4, backgroundColor: "#dc3545", borderRadius: 6 }} activeOpacity={0.8}>
+      
+      {/* Botón '🗑️' */}
+      <TouchableOpacity onPress={() => remove(item.code)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 4, 
+        backgroundColor: theme.colors.danger, // 👈 Fondo danger
+        borderRadius: 6 
+      }} activeOpacity={0.8}>
         <Text style={{ fontSize: 12 }}>🗑️</Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderCatalogAdded = ({ item }: { item: CatalogAdded }) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: "#eef2f7" }}>
+    <View style={{ 
+      flexDirection: "row", 
+      alignItems: "center", 
+      gap: 8, 
+      paddingVertical: 8, 
+      borderBottomWidth: 1, 
+      borderColor: theme.colors.border // 👈 Color del borde
+    }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#64748b", fontSize: 12 }}>{item.code}</Text>
-        <Text style={{ color: "#334155", fontSize: 12 }}>Precio: ${item.price} — Stock: {item.stock}</Text>
+        <Text style={{ fontWeight: "600", color: theme.colors.text }}>{item.name}</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{item.code}</Text>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Precio: ${item.price} — Stock: {item.stock}</Text>
       </View>
-      <TouchableOpacity onPress={() => setCount(item.code, -1)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#007AFF", backgroundColor: "#f8f9fa", borderRadius: 8 }} activeOpacity={0.8}>
-        <Text style={{ color: "#007AFF", fontWeight: "700" }}>-</Text>
+      
+      {/* Botón '-' */}
+      <TouchableOpacity onPress={() => setCount(item.code, -1)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 6, 
+        borderWidth: 1, 
+        borderColor: theme.colors.primary, // 👈 Borde primario
+        backgroundColor: theme.colors.card, // 👈 Fondo para contraste
+        borderRadius: 8 
+      }} activeOpacity={0.8}>
+        <Text style={{ color: theme.colors.primary, fontWeight: "700" }}>-</Text>
       </TouchableOpacity>
-      <Text style={{ width: 26, textAlign: "center", fontWeight: "700" }}>{item.count}</Text>
-      <TouchableOpacity onPress={() => setCount(item.code, +1)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#007AFF", borderRadius: 8 }} activeOpacity={0.8}>
+      
+      <Text style={{ width: 26, textAlign: "center", fontWeight: "700", color: theme.colors.text }}>{item.count}</Text>
+      
+      {/* Botón '+' */}
+      <TouchableOpacity onPress={() => setCount(item.code, +1)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 6, 
+        backgroundColor: theme.colors.primary, // 👈 Fondo primario
+        borderRadius: 8 
+      }} activeOpacity={0.8}>
         <Text style={{ color: "white", fontWeight: "700" }}>+</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => reopenEditFromCatalog(item.code)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#0ea5e9", marginLeft: 6 }} activeOpacity={0.8}>
+      
+      {/* Botón 'Editar' */}
+      <TouchableOpacity onPress={() => reopenEditFromCatalog(item.code)} style={{ 
+        paddingHorizontal: 12, 
+        paddingVertical: 6, 
+        borderRadius: 8, 
+        backgroundColor: theme.colors.primary, // 👈 Usamos primary (azul)
+        marginLeft: 6 
+      }} activeOpacity={0.8}>
         <Text style={{ color: "white", fontWeight: "700" }}>Editar</Text>
       </TouchableOpacity>
     </View>
@@ -317,28 +386,54 @@ export default function ScanAdd({ navigation, route }: any) {
   const totalAdds = catalogAdds.reduce((a, r) => a + r.count, 0);
 
   return (
-    <View style={{ flex: 1, padding: 12, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "600" }}>Escanear Código de Barras</Text>
+    <View style={{ flex: 1, padding: 12, gap: 12, backgroundColor: theme.colors.background }}> {/* 👈 Fondo de la pantalla */}
+      <Text style={{ fontSize: 18, fontWeight: "600", color: theme.colors.text }}>Escanear Código de Barras</Text>
 
       {lastScanned ? (
-        <View style={{ backgroundColor: "#e3f2fd", padding: 8, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: "#90caf9" }}>
-          <Text style={{ fontSize: 12, color: "#1565c0" }}>✅ Último escaneado: {lastScanned}</Text>
+        <View style={{ 
+          backgroundColor: theme.colors.card, // 👈 Fondo de la notificación
+          padding: 8, 
+          borderRadius: 6, 
+          marginBottom: 8, 
+          borderWidth: 1, 
+          borderColor: theme.colors.border // 👈 Borde de la notificación
+        }}>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>✅ Último escaneado: {lastScanned}</Text>
         </View>
       ) : null}
 
       {Platform.OS !== "web" ? (
         hasPerm === null ? (
-          <Text>Solicitando permiso de cámara…</Text>
+          <Text style={{ color: theme.colors.text }}>Solicitando permiso de cámara…</Text>
         ) : hasPerm ? (
           isFocused ? (
-            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 200, position: "relative" }}>
+            <View style={{ 
+              borderWidth: 1, 
+              borderColor: theme.colors.border, // 👈 Borde del contenedor de la cámara
+              borderRadius: 12, 
+              overflow: "hidden", 
+              height: 200, 
+              position: "relative" 
+            }}>
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
                 onBarcodeScanned={scanEnabled ? ({ data }) => onScan(String(data)) : undefined}
                 barcodeScannerSettings={{ barcodeTypes: ["ean13","ean8","code128","code39","code93","upc_a","upc_e","codabar","itf14"] }}
               />
-              <View style={{ position: "absolute", top: "50%", left: "50%", width: 200, height: 80, marginTop: -40, marginLeft: -100, borderWidth: 2, borderColor: "#007AFF", borderRadius: 4, backgroundColor: "transparent" }} />
+              <View style={{ 
+                position: "absolute", 
+                top: "50%", 
+                left: "50%", 
+                width: 200, 
+                height: 80, 
+                marginTop: -40, 
+                marginLeft: -100, 
+                borderWidth: 2, 
+                borderColor: theme.colors.primary, // 👈 Borde del recuadro de escaneo
+                borderRadius: 4, 
+                backgroundColor: "transparent" 
+              }} />
               <View style={{ position: "absolute", bottom: 20, left: 0, right: 0, alignItems: "center" }}>
                 <Text style={{ color: "white", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, fontSize: 12 }}>
                   Centrá el código de barras en el recuadro
@@ -346,27 +441,49 @@ export default function ScanAdd({ navigation, route }: any) {
               </View>
             </View>
           ) : (
-            <Text>La cámara se pausa cuando salís de esta pantalla.</Text>
+            <Text style={{ color: theme.colors.text }}>La cámara se pausa cuando salís de esta pantalla.</Text>
           )
         ) : (
-          <Text>Sin permiso de cámara. Habilitalo en Ajustes o usá entrada manual.</Text>
+          <Text style={{ color: theme.colors.text }}>Sin permiso de cámara. Habilitalo en Ajustes o usá entrada manual.</Text>
         )
       ) : (
-        <View style={{ borderWidth: 1, borderRadius: 12, height: 200, alignItems: "center", justifyContent: "center" }}>
-          <Text>El escáner de códigos no está soportado en web — usá el campo manual.</Text>
+        <View style={{ 
+          borderWidth: 1, 
+          borderRadius: 12, 
+          height: 200, 
+          alignItems: "center", 
+          justifyContent: "center", 
+          borderColor: theme.colors.border 
+        }}>
+          <Text style={{ color: theme.colors.text }}>El escáner de códigos no está soportado en web — usá el campo manual.</Text>
         </View>
       )}
 
+      {/* Entrada manual */}
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
         <TextInput
-          style={{ borderWidth: 1, borderColor: manualCode ? "#007AFF" : "#ddd", borderRadius: 8, padding: 8, flex: 1, backgroundColor: manualCode ? "#f8f9ff" : "white" }}
+          style={{ 
+            borderWidth: 1, 
+            borderColor: manualCode ? theme.colors.primary : theme.colors.inputBorder, // 👈 Color del borde y foco
+            borderRadius: 8, 
+            padding: 8, 
+            flex: 1, 
+            backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
+            color: theme.colors.text // 👈 Color del texto del input
+          }}
           placeholder="Código manual"
+          placeholderTextColor={theme.colors.textMuted} // 👈 Placeholder color
           value={manualCode}
           onChangeText={setManualCode}
           onSubmitEditing={() => { const c = manualCode.trim(); if (c) onScan(c); }}
         />
         <TouchableOpacity
-          style={{ backgroundColor: manualCode.trim() ? "#007AFF" : "#6c757d", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+          style={{ 
+            backgroundColor: manualCode.trim() ? theme.colors.primary : theme.colors.neutral, // 👈 Fondo del botón
+            paddingHorizontal: 16, 
+            paddingVertical: 8, 
+            borderRadius: 8 
+          }}
           onPress={() => { const c = manualCode.trim(); if (c) onScan(c); }}
           activeOpacity={0.8}
           disabled={!manualCode.trim()}
@@ -377,10 +494,18 @@ export default function ScanAdd({ navigation, route }: any) {
 
       {mode === "batch" ? (
         <>
-          <Text style={{ fontWeight: "600" }}>Lote actual: {totalQty()} items</Text>
+          <Text style={{ fontWeight: "600", color: theme.colors.text }}>Lote actual: {totalQty()} items</Text>
           <FlatList data={items} keyExtractor={(i) => i.code} renderItem={renderBatchRow} showsVerticalScrollIndicator={false} />
+          
+          {/* Botón Volver al remito */}
           <TouchableOpacity
-            style={{ backgroundColor: items.length > 0 ? "#007AFF" : "#6c757d", paddingVertical: 12, borderRadius: 8, alignItems: "center", marginTop: 8 }}
+            style={{ 
+              backgroundColor: items.length > 0 ? theme.colors.primary : theme.colors.neutral, // 👈 Fondo primario/neutral
+              paddingVertical: 12, 
+              borderRadius: 8, 
+              alignItems: "center", 
+              marginTop: 8 
+            }}
             onPress={() => navigation.navigate("RemitoForm")}
             activeOpacity={0.8}
             disabled={items.length === 0}
@@ -391,25 +516,56 @@ export default function ScanAdd({ navigation, route }: any) {
           </TouchableOpacity>
         </>
       ) : (
-        <View style={{ padding: 10, borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 10, backgroundColor: "#f8fafc", gap: 10 }}>
+        <View style={{ 
+          padding: 10, 
+          borderWidth: 1, 
+          borderColor: theme.colors.border, // 👈 Borde del panel
+          borderRadius: 10, 
+          backgroundColor: theme.colors.card, // 👈 Fondo del panel
+          gap: 10 
+        }}>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <TouchableOpacity onPress={() => navigation.navigate("BranchProducts")} style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9", alignItems: "center" }} activeOpacity={0.9}>
+            
+            {/* Botón Ver productos */}
+            <TouchableOpacity onPress={() => navigation.navigate("BranchProducts")} style={{ 
+              flex: 1, 
+              paddingVertical: 10, 
+              borderRadius: 8, 
+              backgroundColor: theme.colors.primary, // 👈 Fondo primario
+              alignItems: "center" 
+            }} activeOpacity={0.9}>
               <Text style={{ color: "white", fontWeight: "700" }}>Ver productos de la sucursal</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setCatalogAdds([])} style={{ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, backgroundColor: "#e5e7eb" }} activeOpacity={0.9}>
-              <Text style={{ color: "#111827", fontWeight: "700" }}>Limpiar</Text>
+            
+            {/* Botón Limpiar */}
+            <TouchableOpacity onPress={() => setCatalogAdds([])} style={{ 
+              paddingVertical: 10, 
+              paddingHorizontal: 14, 
+              borderRadius: 8, 
+              backgroundColor: theme.colors.inputBorder // 👈 Fondo neutral/input
+            }} activeOpacity={0.9}>
+              <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Limpiar</Text>
             </TouchableOpacity>
           </View>
 
           {catalogAdds.length > 0 ? (
             <>
-              <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6 }}>
+              <Text style={{ fontWeight: "700", marginTop: 4, marginBottom: 6, color: theme.colors.text }}>
                 Agregados en esta sesión ({totalAdds} items)
               </Text>
               <FlatList data={catalogAdds} keyExtractor={(x) => x.id} renderItem={renderCatalogAdded} showsVerticalScrollIndicator={false} />
+              
+              {/* Botón Guardar y ver */}
               <TouchableOpacity
                 onPress={commitCatalogAdds}
-                style={{ marginTop: 8, paddingVertical: 12, borderRadius: 8, backgroundColor: "#007AFF", alignItems: "center", opacity: committing ? 0.85 : 1 }}
+                style={{ 
+                  marginTop: 8, 
+                  paddingVertical: 12, 
+                  borderRadius: 8, 
+                  backgroundColor: theme.colors.primary, // 👈 Fondo primario
+                  alignItems: "center", 
+                  opacity: committing ? 0.85 : 1 
+                }}
                 activeOpacity={0.9}
                 disabled={committing || catalogAdds.length === 0}
               >
@@ -421,7 +577,7 @@ export default function ScanAdd({ navigation, route }: any) {
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={{ color: "#64748b", fontSize: 12 }}>
+            <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
               Escaneá o ingresá un código para crear productos nuevos. Se listarán aquí.
             </Text>
           )}

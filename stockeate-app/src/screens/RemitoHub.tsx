@@ -1,17 +1,26 @@
 // src/screens/RemitoHub.tsx
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
+import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
 
 export default function RemitoHub({ navigation }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
+  
+  // Usaremos un color auxiliar para "Ingreso" y "Transferencia"
+  // Para Ingreso, usaremos el primary ya que es una acción positiva/clave.
+  // Para Transferencia, usaremos el neutral para indicar que está deshabilitado/pendiente.
+  const colorIngreso = theme.colors.primary;
+  const colorTransferencia = theme.colors.neutral; 
+
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "700" }}>Remitos</Text>
+    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
+      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Remitos</Text>
 
       {/* Remito de SALIDA (egreso) */}
       <TouchableOpacity
         onPress={() => navigation.navigate("RemitoForm")}
         style={{
-          backgroundColor: "#22c55e",
+          backgroundColor: theme.colors.success, // 👈 Usamos Success
           paddingVertical: 16,
           borderRadius: 10,
         }}
@@ -43,7 +52,7 @@ export default function RemitoHub({ navigation }: any) {
       <TouchableOpacity
         onPress={() => navigation.navigate("RemitoIngreso")}
         style={{
-          backgroundColor: "#38bdf8",
+          backgroundColor: colorIngreso, // 👈 Usamos Primary
           paddingVertical: 16,
           borderRadius: 10,
         }}
@@ -51,7 +60,7 @@ export default function RemitoHub({ navigation }: any) {
       >
         <Text
           style={{
-            color: "white",
+            color: theme.colors.text,
             fontWeight: "800",
             textAlign: "center",
             fontSize: 16,
@@ -61,7 +70,7 @@ export default function RemitoHub({ navigation }: any) {
         </Text>
         <Text
           style={{
-            color: "white",
+            color: theme.colors.text,
             opacity: 0.9,
             textAlign: "center",
             marginTop: 4,
@@ -75,7 +84,7 @@ export default function RemitoHub({ navigation }: any) {
       <TouchableOpacity
         onPress={() => navigation.navigate("RemitosHistory")}
         style={{
-          backgroundColor: "#0ea5e9",
+          backgroundColor: theme.colors.neutral, // 👈 Usamos Neutral (un tono más sobrio para historial)
           paddingVertical: 16,
           borderRadius: 10,
         }}
@@ -107,7 +116,7 @@ export default function RemitoHub({ navigation }: any) {
       <TouchableOpacity
         disabled
         style={{
-          backgroundColor: "#a78bfa",
+          backgroundColor: colorTransferencia, // 👈 Usamos Neutral para deshabilitado
           paddingVertical: 16,
           borderRadius: 10,
           opacity: 0.6,
