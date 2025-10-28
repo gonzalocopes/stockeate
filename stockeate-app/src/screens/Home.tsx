@@ -8,7 +8,8 @@ import { useThemeStore } from "../stores/themeProviders";
 import HamburgerMenu from "../components/HamburgerMenu"; // 👈 Importar el nuevo componente
 
 export default function Home({ navigation }: any) {
-  const { theme, toggleTheme } = useThemeStore();
+  const { mode, theme, toggleTheme } = useThemeStore();
+  console.log('Current theme mode in Home.tsx:', mode);
   const logout = useAuth((s) => s.logout);
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -43,7 +44,23 @@ export default function Home({ navigation }: any) {
       ),
       title: "Menú",
     });
-  }, [navigation, theme.colors.headerIcon]); // Asegurar que useEffect se re-ejecute si el color del ícono del header cambia por el tema.
+  }, [navigation, theme.colors.headerIcon, mode]); // Asegurar que useEffect se re-ejecute si el color del ícono del header o el modo del tema cambia.
+
+  const menuItems = React.useMemo(() => [
+    {
+      label: mode === 'light' ? 'Tema Oscuro' : 'Tema Claro',
+      onPress: toggleTheme,
+    },
+    {
+      label: 'Configuración',
+      onPress: () => alert('Navegar a Configuración'),
+    },
+    {
+      label: 'Cerrar sesión',
+      onPress: logout,
+      isDestructive: true,
+    },
+  ], [mode, toggleTheme, logout]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -277,21 +294,7 @@ export default function Home({ navigation }: any) {
       <HamburgerMenu
         visible={menuVisible}
         onClose={() => setMenuVisible(false)} // Cierra el menú
-        items={[
-          {
-            label: 'Tema Oscuro',
-            onPress: toggleTheme,
-          },
-          {
-            label: 'Configuración',
-            onPress: () => alert('Navegar a Configuración'),
-          },
-          {
-            label: 'Cerrar sesión',
-            onPress: logout,
-            isDestructive: true, // Esto le dará un fondo rojo
-          },
-        ]}
+        items={menuItems}
       />
     </View>
   );
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
   },
   // Se remueve el color hardcodeado para que se aplique el estilo dinámico en el componente
   menuButtonText: {
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: 'bold',
   },
 });
