@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "stockeate-app",
-    "slug": "stockeate-new",
+    "slug": "stockeate",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
