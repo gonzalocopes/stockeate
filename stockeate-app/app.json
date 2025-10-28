@@ -15,9 +15,7 @@
       "bundleIdentifier": "com.gonzalocopes.stockeate"
     },
     "android": {
-      "permissions": [
-        "CAMERA"
-      ],
+      "permissions": ["CAMERA"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#E6F4FE"

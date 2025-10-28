@@ -1,4 +1,4 @@
-﻿// src/screens/Home.tsx
+// src/screens/Home.tsx
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { useAuth } from "../stores/auth";
@@ -9,7 +9,7 @@ import HamburgerMenu from "../components/HamburgerMenu"; // 👈 Importar el nue
 
 export default function Home({ navigation }: any) {
   const { mode, theme, toggleTheme } = useThemeStore();
-  console.log('Current theme mode in Home.tsx:', mode);
+  console.log("Current theme mode in Home.tsx:", mode);
   const logout = useAuth((s) => s.logout);
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -28,7 +28,11 @@ export default function Home({ navigation }: any) {
           <Image
             source={require("../../node_modules/@react-navigation/elements/lib/module/assets/back-icon.png")}
             // Se usa theme.colors.headerIcon para el color de la flecha
-            style={{ width: 24, height: 24, tintColor: theme.colors.headerIcon }}
+            style={{
+              width: 24,
+              height: 24,
+              tintColor: theme.colors.headerIcon,
+            }}
           />
         </TouchableOpacity>
       ),
@@ -39,28 +43,35 @@ export default function Home({ navigation }: any) {
           activeOpacity={0.8}
         >
           {/* El color del texto en el header se define en el StyleSheet, que también se actualizará */}
-          <Text style={[styles.menuButtonText, { color: theme.colors.headerIcon }]}>≡</Text>
+          <Text
+            style={[styles.menuButtonText, { color: theme.colors.headerIcon }]}
+          >
+            ≡
+          </Text>
         </TouchableOpacity>
       ),
       title: "Menú",
     });
   }, [navigation, theme.colors.headerIcon, mode]); // Asegurar que useEffect se re-ejecute si el color del ícono del header o el modo del tema cambia.
 
-  const menuItems = React.useMemo(() => [
-    {
-      label: mode === 'light' ? 'Tema Oscuro' : 'Tema Claro',
-      onPress: toggleTheme,
-    },
-    {
-      label: 'Configuración',
-      onPress: () => alert('Navegar a Configuración'),
-    },
-    {
-      label: 'Cerrar sesión',
-      onPress: logout,
-      isDestructive: true,
-    },
-  ], [mode, toggleTheme, logout]);
+  const menuItems = React.useMemo(
+    () => [
+      {
+        label: mode === "light" ? "Tema Oscuro" : "Tema Claro",
+        onPress: toggleTheme,
+      },
+      {
+        label: "Configuración",
+        onPress: () => alert("Navegar a Configuración"),
+      },
+      {
+        label: "Cerrar sesión",
+        onPress: logout,
+        isDestructive: true,
+      },
+    ],
+    [mode, toggleTheme, logout]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -95,11 +106,23 @@ export default function Home({ navigation }: any) {
             >
               <Text style={{ fontSize: 20, padding: 6 }}>⚠️</Text>
             </View>
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: "500" }}>
+            <Text
+              style={{
+                color: theme.colors.textSecondary,
+                fontSize: 14,
+                fontWeight: "500",
+              }}
+            >
               Productos con stock bajo:
             </Text>
           </View>
-          <Text style={{ color: theme.colors.text, fontSize: 32, fontWeight: "700" }}>
+          <Text
+            style={{
+              color: theme.colors.text,
+              fontSize: 32,
+              fontWeight: "700",
+            }}
+          >
             2
           </Text>
         </View>
@@ -252,49 +275,13 @@ export default function Home({ navigation }: any) {
           shadowOffset: { width: 0, height: -2 },
           elevation: 8,
         }}
-      >
-        {/* Botón Menú (Activo) */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Home")}
-          style={{ alignItems: "center", gap: 4 }}
-          activeOpacity={0.6}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.inputBorder, // Fondo del ícono activo
-              borderRadius: 8,
-              padding: 6,
-            }}
-          >
-            <Text style={{ fontSize: 18, color: theme.colors.headerIcon }}>🏠</Text>
-          </View>
-          <Text style={{ color: theme.colors.text, fontWeight: "600", fontSize: 12 }}>
-            Menú
-          </Text>
-        </TouchableOpacity>
-
-        {/* Ícono Perfil (Inactivo/Neutral) */}
-        <View style={{ alignItems: "center", gap: 4 }}>
-          <View
-            style={{
-              backgroundColor: theme.colors.inputBorder, // Fondo del ícono
-              borderRadius: 8,
-              padding: 6,
-            }}
-          >
-            {/* Color para ícono inactivo, se usa textMuted como referencia. El emoji color se mantiene por defecto. */}
-            <Text style={{ fontSize: 18, color: theme.colors.textMuted }}>👤</Text>
-          </View>
-          <Text style={{ color: theme.colors.text, fontWeight: "600", fontSize: 12 }}>
-            Perfil
-          </Text>
-        </View>
-      </View>
-{/* -------------------- Uso del componente HamburgerMenu -------------------- */}
+      ></View>
+      {/* -------------------- Uso del componente HamburgerMenu -------------------- */}
       <HamburgerMenu
         visible={menuVisible}
         onClose={() => setMenuVisible(false)} // Cierra el menú
         items={menuItems}
+        navigation={navigation}
       />
     </View>
   );
@@ -308,6 +295,6 @@ const styles = StyleSheet.create({
   // Se remueve el color hardcodeado para que se aplique el estilo dinámico en el componente
   menuButtonText: {
     fontSize: 30,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

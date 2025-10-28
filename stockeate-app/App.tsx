@@ -26,6 +26,8 @@ import RemitoIngreso from "./src/screens/RemitoIngreso";
 // 👇 NUEVO: historial + detalle
 import RemitosHistory from "./src/screens/RemitosHistory";
 import RemitoDetail from "./src/screens/RemitoDetail";
+import SettingsScreen from "./src/screens/SettingsScreen";
+import ProfileScreen from "./src/screens/ProfileScreen";
 
 import { useThemeStore } from "./src/stores/themeProviders";
 
@@ -135,6 +137,16 @@ export default function App() {
                 name="BranchArchived"
                 component={BranchArchived}
                 options={{ title: "Archivados" }}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: "Configuración" }}
+              />
+              <Stack.Screen
+                name="Profile"
+                component={ProfileScreen}
+                options={{ title: "Mi Perfil" }}
               />
             </Stack.Navigator>
           )}
