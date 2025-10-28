@@ -1,10 +1,2 @@
-import { Platform } from "react-native";
-
-// Importar la implementación correcta según la plataforma
-if (Platform.OS === "web") {
-  const { DB, initDb } = require("../db.web");
-  module.exports = { DB, initDb };
-} else {
-  const { DB, initDb } = require("../db.native");
-  module.exports = { DB, initDb };
-}
+// Este archivo ya no es necesario, usar ../db.ts directamente
+export * from '../db';

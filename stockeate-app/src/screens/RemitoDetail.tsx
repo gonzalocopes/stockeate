@@ -1,8 +1,7 @@
 // src/screens/RemitoDetail.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from "react-native";
-import { DB } from "../db.native";
-import * as SQLite from "expo-sqlite";
+import { DB } from "../db";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 
@@ -27,7 +26,19 @@ type Item = {
   name?: string;
 };
 
-const db = SQLite.openDatabaseSync("stockeate.db");
+// Función helper para obtener dirección del remito
+const getRemitoDirection = (tmpNumber: string) => {
+  if (Platform.OS === 'web') {
+    return null; // Mock para web
+  }
+  const SQLite = require('expo-sqlite');
+  const db = SQLite.openDatabaseSync("stockeate.db");
+  const row = db.getFirstSync<{ type: string }>(
+    `SELECT type FROM stock_moves WHERE ref = ? LIMIT 1`,
+    [tmpNumber]
+  );
+  return row?.type === "IN" || row?.type === "OUT" ? row.type as "IN" | "OUT" : null;
+};
 
 export default function RemitoDetail({ route }: any) {
   const remitoId: string = route?.params?.remitoId;
@@ -46,11 +57,8 @@ export default function RemitoDetail({ route }: any) {
 
     // obtener dirección desde stock_moves.ref = tmp_number
     if (r?.tmp_number) {
-      const row = db.getFirstSync<{ type: string }>(
-        `SELECT type FROM stock_moves WHERE ref = ? LIMIT 1`,
-        [r.tmp_number]
-      );
-      if (row?.type === "IN" || row?.type === "OUT") setDir(row.type as "IN" | "OUT");
+      const direction = getRemitoDirection(r.tmp_number);
+      if (direction) setDir(direction);
     }
   }, [remitoId]);
 
