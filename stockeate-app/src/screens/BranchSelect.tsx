@@ -217,7 +217,7 @@ export default function BranchSelect({ navigation }: any) {
             }}
             numberOfLines={2}
           >
-            {item.address || "Av. Corrientes 1234, CABA"}
+            {item.address || "Av. Hipólito Yrigoyen 20260, B1856 Glew, Provincia de Buenos Aires"}
           </Text>
         </View>
 
