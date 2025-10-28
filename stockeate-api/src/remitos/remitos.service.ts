@@ -17,6 +17,8 @@ import {
   RemitoWithTypeDto,
   GetMonthlyStatsQueryDto,
   MonthlyStatsResponseDto,
+  Last6MonthsRemitosStatsDto,
+  Last6MonthsProductsStatsDto,
 } from './remitos.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma } from '@prisma/client';
@@ -500,5 +502,216 @@ export class RemitosService {
       totalInQty,
       totalOutQty,
     };
+  }
+
+  // Obtener estadísticas de remitos de los últimos 6 meses (branchId obligatorio)
+  async getLast6MonthsRemitosStats(
+    branchId: string,
+  ): Promise<Last6MonthsRemitosStatsDto[]> {
+    // Verificar que la branch existe
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+    });
+
+    if (!branch) {
+      throw new NotFoundException(`Branch con id ${branchId} no encontrada`);
+    }
+
+    const results: Last6MonthsRemitosStatsDto[] = [];
+    const now = new Date();
+
+    // Nombres de los meses en español
+    const monthNames = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    for (let i = 5; i >= 0; i--) {
+      // Calcular fecha para cada mes (empezando desde hace 5 meses hasta el actual)
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthName = monthNames[date.getMonth()];
+
+      const startDate = startOfMonth(new Date(year, month - 1, 1));
+      const endDate = endOfMonth(new Date(year, month - 1, 1));
+
+      const where: Prisma.RemitoWhereInput = {
+        createdAt: { gte: startDate, lte: endDate },
+        branchId: branchId, // Siempre filtramos por branchId
+      };
+
+      const remitos = await this.prisma.remito.findMany({
+        where,
+        select: { id: true, tmpNumber: true },
+      });
+
+      if (remitos.length === 0) {
+        results.push({
+          month: monthName,
+          ingresos: 0,
+          egresos: 0,
+        });
+        continue;
+      }
+
+      const tmpNumbers = remitos.map((r) => `REMITO-${r.tmpNumber}`);
+      const stockMoves = await this.prisma.stockMove.findMany({
+        where: {
+          ref: { in: tmpNumbers },
+          branchId: branchId, // También filtramos los movimientos por branchId
+        },
+        select: { ref: true, qty: true },
+      });
+
+      const remitoTypes = new Map<string, 'IN' | 'OUT'>();
+      for (const move of stockMoves) {
+        const ref = move.ref;
+        if (!ref) continue;
+        if (!ref.startsWith('REMITO-')) continue;
+        const tmpNumber = ref.substring('REMITO-'.length);
+        if (!remitoTypes.has(tmpNumber)) {
+          remitoTypes.set(tmpNumber, move.qty > 0 ? 'IN' : 'OUT');
+        }
+      }
+
+      let ingresos = 0;
+      let egresos = 0;
+
+      for (const remito of remitos) {
+        const type = remitoTypes.get(remito.tmpNumber);
+        if (type === 'IN') {
+          ingresos++;
+        } else {
+          egresos++;
+        }
+      }
+
+      results.push({
+        month: monthName,
+        ingresos,
+        egresos,
+      });
+    }
+
+    return results;
+  }
+
+  // Obtener estadísticas de productos de los últimos 6 meses (branchId obligatorio)
+  async getLast6MonthsProductsStats(
+    branchId: string,
+  ): Promise<Last6MonthsProductsStatsDto[]> {
+    // Verificar que la branch existe
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+    });
+
+    if (!branch) {
+      throw new NotFoundException(`Branch con id ${branchId} no encontrada`);
+    }
+
+    const results: Last6MonthsProductsStatsDto[] = [];
+    const now = new Date();
+
+    // Nombres de los meses en español
+    const monthNames = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    for (let i = 5; i >= 0; i--) {
+      // Calcular fecha para cada mes (empezando desde hace 5 meses hasta el actual)
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthName = monthNames[date.getMonth()];
+
+      const startDate = startOfMonth(new Date(year, month - 1, 1));
+      const endDate = endOfMonth(new Date(year, month - 1, 1));
+
+      const where: Prisma.RemitoWhereInput = {
+        createdAt: { gte: startDate, lte: endDate },
+        branchId: branchId, // Siempre filtramos por branchId
+      };
+
+      // Obtener remitos con sus items
+      const remitos = await this.prisma.remito.findMany({
+        where,
+        include: {
+          items: true,
+        },
+      });
+
+      if (remitos.length === 0) {
+        results.push({
+          month: monthName,
+          productosIngresados: 0,
+          productosEgresados: 0,
+        });
+        continue;
+      }
+
+      const tmpNumbers = remitos.map((r) => `REMITO-${r.tmpNumber}`);
+      const stockMoves = await this.prisma.stockMove.findMany({
+        where: {
+          ref: { in: tmpNumbers },
+          branchId: branchId, // También filtramos los movimientos por branchId
+        },
+        select: { ref: true, qty: true },
+      });
+
+      const remitoTypes = new Map<string, 'IN' | 'OUT'>();
+      for (const move of stockMoves) {
+        const ref = move.ref;
+        if (!ref) continue;
+        if (!ref.startsWith('REMITO-')) continue;
+        const tmpNumber = ref.substring('REMITO-'.length);
+        if (!remitoTypes.has(tmpNumber)) {
+          remitoTypes.set(tmpNumber, move.qty > 0 ? 'IN' : 'OUT');
+        }
+      }
+
+      let productosIngresados = 0;
+      let productosEgresados = 0;
+
+      for (const remito of remitos) {
+        const type = remitoTypes.get(remito.tmpNumber);
+        const totalQty = remito.items.reduce((sum, item) => sum + item.qty, 0);
+
+        if (type === 'IN') {
+          productosIngresados += totalQty;
+        } else {
+          productosEgresados += totalQty;
+        }
+      }
+
+      results.push({
+        month: monthName,
+        productosIngresados,
+        productosEgresados,
+      });
+    }
+
+    return results;
   }
 }

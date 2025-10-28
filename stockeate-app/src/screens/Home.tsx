@@ -1,17 +1,10 @@
 ﻿// src/screens/Home.tsx
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import { useAuth } from "../stores/auth";
-import DropdownMenu from "../components/DropdownMenu";
-import { useThemeStore } from "../stores/themeProviders";
-
-import HamburgerMenu from "../components/HamburgerMenu"; // 👈 Importar el nuevo componente
 
 export default function Home({ navigation }: any) {
-  const { mode, theme, toggleTheme } = useThemeStore();
-  console.log('Current theme mode in Home.tsx:', mode);
   const logout = useAuth((s) => s.logout);
-  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -27,48 +20,38 @@ export default function Home({ navigation }: any) {
         >
           <Image
             source={require("../../node_modules/@react-navigation/elements/lib/module/assets/back-icon.png")}
-            // Se usa theme.colors.headerIcon para el color de la flecha
-            style={{ width: 24, height: 24, tintColor: theme.colors.headerIcon }}
+            style={{ width: 24, height: 24, tintColor: "#1c1c1e" }}
           />
         </TouchableOpacity>
       ),
       headerRight: () => (
         <TouchableOpacity
-          onPress={() => setMenuVisible(true)}
-          style={styles.menuButton}
+          onPress={logout}
+          style={{
+            backgroundColor: "rgb(195 12 12)",
+            borderRadius: 11,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            marginRight: 4,
+          }}
           activeOpacity={0.8}
         >
-          {/* El color del texto en el header se define en el StyleSheet, que también se actualizará */}
-          <Text style={[styles.menuButtonText, { color: theme.colors.headerIcon }]}>≡</Text>
+          <Text style={{ color: "rgb(255, 255, 255)", fontWeight: "600" }}>
+            Cerrar sesión
+          </Text>
         </TouchableOpacity>
       ),
       title: "Menú",
     });
-  }, [navigation, theme.colors.headerIcon, mode]); // Asegurar que useEffect se re-ejecute si el color del ícono del header o el modo del tema cambia.
-
-  const menuItems = React.useMemo(() => [
-    {
-      label: mode === 'light' ? 'Tema Oscuro' : 'Tema Claro',
-      onPress: toggleTheme,
-    },
-    {
-      label: 'Configuración',
-      onPress: () => alert('Navegar a Configuración'),
-    },
-    {
-      label: 'Cerrar sesión',
-      onPress: logout,
-      isDestructive: true,
-    },
-  ], [mode, toggleTheme, logout]);
+  }, [navigation, logout]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <View style={{ flex: 1, backgroundColor: "#f3f4f6" }}>
       <View style={{ flex: 1, padding: 16, paddingBottom: 90 }}>
         {/* Card de productos con stock bajo */}
         <View
           style={{
-            backgroundColor: theme.colors.card, // Color de fondo de la card
+            backgroundColor: "#ffffff",
             borderRadius: 12,
             paddingVertical: 16,
             paddingHorizontal: 16,
@@ -86,7 +69,6 @@ export default function Home({ navigation }: any) {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View
               style={{
-                // Color de fondo para el ícono de advertencia (se mantiene hardcodeado si no hay un color específico en el tema)
                 backgroundColor: "#fef3c7",
                 borderRadius: 8,
                 padding: 8,
@@ -95,11 +77,11 @@ export default function Home({ navigation }: any) {
             >
               <Text style={{ fontSize: 20, padding: 6 }}>⚠️</Text>
             </View>
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: "500" }}>
+            <Text style={{ color: "#374151", fontSize: 14, fontWeight: "500" }}>
               Productos con stock bajo:
             </Text>
           </View>
-          <Text style={{ color: theme.colors.text, fontSize: 32, fontWeight: "700" }}>
+          <Text style={{ color: "#111827", fontSize: 32, fontWeight: "700" }}>
             2
           </Text>
         </View>
@@ -112,7 +94,7 @@ export default function Home({ navigation }: any) {
               style={{
                 flex: 1,
                 height: 140,
-                backgroundColor: theme.colors.escanear, // Usando theme.colors.escanear
+                backgroundColor: "#10b981",
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
@@ -139,7 +121,6 @@ export default function Home({ navigation }: any) {
                   marginBottom: 8,
                 }}
               >
-                {/* El color del texto del ícono se mantiene blanco para contrastar con el fondo. */}
                 <Text style={{ color: "#ffffff", fontSize: 32 }}>📷</Text>
               </View>
               <Text
@@ -154,7 +135,7 @@ export default function Home({ navigation }: any) {
               style={{
                 flex: 1,
                 height: 140,
-                backgroundColor: theme.colors.primary, // Usando theme.colors.primary
+                backgroundColor: "#3b82f6",
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
@@ -181,7 +162,6 @@ export default function Home({ navigation }: any) {
                   marginBottom: 8,
                 }}
               >
-                {/* El color del texto del ícono se mantiene blanco para contrastar con el fondo. */}
                 <Text style={{ color: "#ffffff", fontSize: 32 }}>📄</Text>
               </View>
               <Text
@@ -197,7 +177,7 @@ export default function Home({ navigation }: any) {
             style={{
               width: "100%",
               height: 140,
-              backgroundColor: theme.colors.neutral, // Usando theme.colors.neutral
+              backgroundColor: "#6b7280",
               borderRadius: 16,
               alignItems: "center",
               justifyContent: "center",
@@ -219,7 +199,6 @@ export default function Home({ navigation }: any) {
                 marginBottom: 8,
               }}
             >
-              {/* El color del texto del ícono se mantiene blanco para contrastar con el fondo. */}
               <Text style={{ color: "#ffffff", fontSize: 32 }}>🔍</Text>
             </View>
             <Text style={{ color: "#ffffff", fontSize: 16, fontWeight: "600" }}>
@@ -227,8 +206,37 @@ export default function Home({ navigation }: any) {
             </Text>
           </TouchableOpacity>
 
-          {/* Transferir Stock (comentado) - Mantenido como estaba */}
-          {/* ... */}
+          {/* Transferir Stock (comentado)
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              height: 140,
+              backgroundColor: "#10b981",
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+            onPress={() => navigation.navigate("RemitosHub")}
+            activeOpacity={0.8}
+          >
+            <View
+              style={{
+                
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: "#ffffff", fontSize: 32 }}>↔️</Text>
+            </View>
+            <Text style={{ color: "#ffffff", fontSize: 16, fontWeight: "600" }}>Transferir Stock</Text>
+          </TouchableOpacity>
+          */}
         </View>
       </View>
 
@@ -240,9 +248,9 @@ export default function Home({ navigation }: any) {
           right: 0,
           bottom: 0,
           height: 70,
-          backgroundColor: theme.colors.inputBackground, // Fondo del footer
+          backgroundColor: "#ffffff",
           borderTopWidth: 1,
-          borderTopColor: theme.colors.border, // Borde superior del footer
+          borderTopColor: "#e5e7eb",
           flexDirection: "row",
           justifyContent: "space-evenly",
           alignItems: "center",
@@ -253,7 +261,6 @@ export default function Home({ navigation }: any) {
           elevation: 8,
         }}
       >
-        {/* Botón Menú (Activo) */}
         <TouchableOpacity
           onPress={() => navigation.navigate("Home")}
           style={{ alignItems: "center", gap: 4 }}
@@ -261,53 +268,32 @@ export default function Home({ navigation }: any) {
         >
           <View
             style={{
-              backgroundColor: theme.colors.inputBorder, // Fondo del ícono activo
+              backgroundColor: "#f3f4f6",
               borderRadius: 8,
               padding: 6,
             }}
           >
-            <Text style={{ fontSize: 18, color: theme.colors.headerIcon }}>🏠</Text>
+            <Text style={{ fontSize: 18, color: "#6b7280" }}>🏠</Text>
           </View>
-          <Text style={{ color: theme.colors.text, fontWeight: "600", fontSize: 12 }}>
+          <Text style={{ color: "#6b7280", fontWeight: "600", fontSize: 12 }}>
             Menú
           </Text>
         </TouchableOpacity>
-
-        {/* Ícono Perfil (Inactivo/Neutral) */}
         <View style={{ alignItems: "center", gap: 4 }}>
           <View
             style={{
-              backgroundColor: theme.colors.inputBorder, // Fondo del ícono
+              backgroundColor: "#f3f4f6",
               borderRadius: 8,
               padding: 6,
             }}
           >
-            {/* Color para ícono inactivo, se usa textMuted como referencia. El emoji color se mantiene por defecto. */}
-            <Text style={{ fontSize: 18, color: theme.colors.textMuted }}>👤</Text>
+            <Text style={{ fontSize: 18, color: "#6b7280" }}>👤</Text>
           </View>
-          <Text style={{ color: theme.colors.text, fontWeight: "600", fontSize: 12 }}>
+          <Text style={{ color: "#6b7280", fontWeight: "600", fontSize: 12 }}>
             Perfil
           </Text>
         </View>
       </View>
-{/* -------------------- Uso del componente HamburgerMenu -------------------- */}
-      <HamburgerMenu
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)} // Cierra el menú
-        items={menuItems}
-      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  menuButton: {
-    marginRight: 10,
-    padding: 10,
-  },
-  // Se remueve el color hardcodeado para que se aplique el estilo dinámico en el componente
-  menuButtonText: {
-    fontSize: 30,
-    fontWeight: 'bold',
-  },
-});

@@ -16,9 +16,7 @@
     },
     "android": {
       "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "CAMERA"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -53,7 +51,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "9354066d-9e71-44db-8b70-8a8603ccd39f"
+        "projectId": "2c07a257-3170-4fc5-a4a6-2768912ba87d"
       }
     }
   }

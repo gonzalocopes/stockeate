@@ -25,9 +25,6 @@ import { api } from "../api";
 import { pullBranchCatalog } from "../sync/index";
 import { pushMoveByCode, pushDeleteProduct } from "../sync/push";
 
-import { useThemeStore } from "../stores/themeProviders";
-
-
 type Prod = {
   id: string;
   code: string;
@@ -38,7 +35,6 @@ type Prod = {
 };
 
 export default function BranchProducts({ navigation }: any) {
-  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const branchId = useBranch((s) => s.id);
   const isFocused = useIsFocused();
 
@@ -230,8 +226,8 @@ export default function BranchProducts({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.background }}>
-        <Text style={{ color: theme.colors.text }}>Primero seleccioná una sucursal.</Text>
+      <View style={{ flex: 1, padding: 16, justifyContent: "center", alignItems: "center" }}>
+        <Text>Primero seleccioná una sucursal.</Text>
       </View>
     );
   }
@@ -240,12 +236,12 @@ export default function BranchProducts({ navigation }: any) {
     const displayStock = pendingStock[item.id] ?? item.stock;
 
     return (
-      <View style={[styles.itemContainer, { borderColor: theme.colors.border }]}>
+      <View style={styles.itemContainer}>
         <View style={styles.itemDetails}>
           <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={[styles.itemName, { color: theme.colors.text }]}>{item.name}</Text>
-            <Text style={[styles.itemCode, { color: theme.colors.textMuted }]}>{item.code}</Text>
-            <Text style={[styles.itemInfo, { color: theme.colors.textSecondary }]}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemCode}>{item.code}</Text>
+            <Text style={styles.itemInfo}>
               Precio: ${item.price ?? 0} — Stock: {displayStock ?? 0}
             </Text>
           </View>
@@ -261,21 +257,21 @@ export default function BranchProducts({ navigation }: any) {
               {/* Custom sliders icon built with Views to avoid adding dependencies */}
               <View style={styles.slidersIcon}>
                 <View style={styles.sliderRow}>
-                  <View style={[styles.sliderLine, { backgroundColor: 'rgba(255,255,255,0.85)' }]} />
+                  <View style={styles.sliderLine} />
                   <View style={[styles.knob, { left: '10%' }]} />
                 </View>
                 <View style={styles.sliderRow}>
-                  <View style={[styles.sliderLine, { backgroundColor: 'rgba(255,255,255,0.85)' }]} />
+                  <View style={styles.sliderLine} />
                   <View style={[styles.knob, { left: '50%' }]} />
                 </View>
                 <View style={styles.sliderRow}>
-                  <View style={[styles.sliderLine, { backgroundColor: 'rgba(255,255,255,0.85)' }]} />
+                  <View style={styles.sliderLine} />
                   <View style={[styles.knob, { left: '85%' }]} />
                 </View>
               </View>
             </TouchableOpacity>
 
-            {/* Editar */}
+            {/* OPCIONES ICONOS EDITAR: ✍️ ✏️ 📝 🖊️ 📋 🖋️ 📄 ✒️ 🖍️ 📑 */}
             <TouchableOpacity
               onPress={() => openEdit(item)}
               style={[styles.button, styles.editButton]}
@@ -284,7 +280,6 @@ export default function BranchProducts({ navigation }: any) {
               <Text style={styles.iconText}>✏️</Text>
             </TouchableOpacity>
 
-            {/* Eliminar */}
             <TouchableOpacity
               onPress={() => confirmDelete(item)}
               style={[styles.button, styles.deleteButton]}
@@ -302,21 +297,19 @@ export default function BranchProducts({ navigation }: any) {
   const isSmallScreen = screenWidth < 400;
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
-      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Productos de la sucursal</Text>
+    <View style={{ flex: 1, padding: 16, gap: 12 }}>
+      <Text style={{ fontSize: 18, fontWeight: "700" }}>Productos de la sucursal</Text>
 
       <View style={styles.searchContainer}>
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar por nombre o código"
-          placeholderTextColor={theme.colors.textMuted} // 👈 Placeholder color
           style={[
             styles.searchInput,
             {
-              borderColor: search ? theme.colors.primary : theme.colors.inputBorder,
-              backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
-              color: theme.colors.text, // 👈 Color del texto del input
+              borderColor: search ? "#007AFF" : "#cbd5e1",
+              backgroundColor: search ? "#f8f9ff" : "white",
             }
           ]}
         />
@@ -345,7 +338,7 @@ export default function BranchProducts({ navigation }: any) {
         </View>
       </View>
 
-      <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
+      <Text style={{ color: "#64748b", fontSize: 12 }}>
         {rows.length} producto{rows.length === 1 ? "" : "s"} en esta sucursal
       </Text>
 
@@ -357,7 +350,7 @@ export default function BranchProducts({ navigation }: any) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Modal editar se mantiene igual, asumiendo que los componentes internos (ProductEditModal) usan el tema */}
+      {/* Modal editar */}
       <ProductEditModal
         visible={editOpen}
         code={editing?.code ?? null}
@@ -376,26 +369,26 @@ export default function BranchProducts({ navigation }: any) {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}>
-              <View style={{ backgroundColor: theme.colors.card, padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+              <View style={{ backgroundColor: "white", padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
                 <View style={{ alignItems: "center", marginBottom: 8 }}>
-                  <View style={{ width: 40, height: 4, backgroundColor: theme.colors.border, borderRadius: 2 }} />
+                  <View style={{ width: 40, height: 4, backgroundColor: "#e2e8f0", borderRadius: 2 }} />
                 </View>
 
-                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12, color: theme.colors.text }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
                   Ajustar stock — {adjusting?.name} ({adjusting?.code})
                 </Text>
 
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
                   <TouchableOpacity
                     onPress={() => applyQuickDelta(-1)}
-                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.danger, alignItems: "center" }} // 👈 Danger
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#ef4444", alignItems: "center" }}
                     activeOpacity={0.9}
                   >
                     <Text style={{ color: "white", fontWeight: "700" }}>-1</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => applyQuickDelta(+1)}
-                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: theme.colors.success, alignItems: "center" }} // 👈 Success
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#22c55e", alignItems: "center" }}
                     activeOpacity={0.9}
                   >
                     <Text style={{ color: "white", fontWeight: "700" }}>+1</Text>
@@ -403,29 +396,27 @@ export default function BranchProducts({ navigation }: any) {
                 </View>
 
                 <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Fijar stock</Text>
+                  <Text style={{ fontWeight: "600", marginBottom: 6 }}>Fijar stock</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TextInput
                       value={targetStr}
                       onChangeText={setTargetStr}
                       placeholder="Ej: 0, 15"
-                      placeholderTextColor={theme.colors.textMuted} // 👈 Placeholder
                       keyboardType="number-pad"
                       style={{
                         flex: 1,
                         borderWidth: 1,
-                        borderColor: theme.colors.inputBorder, // 👈 Borde del input
+                        borderColor: "#cbd5e1",
                         borderRadius: 8,
                         padding: 10,
-                        backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
-                        color: theme.colors.text, // 👈 Color del texto
+                        backgroundColor: "#fff",
                       }}
                       returnKeyType="done"
                       onSubmitEditing={applySetExact}
                     />
                     <TouchableOpacity
                       onPress={applySetExact}
-                      style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: theme.colors.primary }} // 👈 Primary
+                      style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }}
                       activeOpacity={0.9}
                     >
                       <Text style={{ color: "white", fontWeight: "700" }}>Fijar</Text>
@@ -435,18 +426,18 @@ export default function BranchProducts({ navigation }: any) {
 
                 <TouchableOpacity
                   onPress={archiveCurrent}
-                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.inputBorder, alignItems: "center", marginBottom: 8 }} // 👈 Color neutro (inputBorder)
+                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#f1f5f9", alignItems: "center", marginBottom: 8 }}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Archivar producto</Text>
+                  <Text style={{ color: "#0f172a", fontWeight: "700" }}>Archivar producto</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={() => { setAdjOpen(false); setAdjusting(null); }}
-                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.border, alignItems: "center" }} // 👈 Color neutro (border)
+                  style={{ paddingVertical: 12, borderRadius: 10, backgroundColor: "#e5e7eb", alignItems: "center" }}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: theme.colors.text, fontWeight: "700" }}>Cerrar</Text>
+                  <Text style={{ color: "#111827", fontWeight: "700" }}>Cerrar</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
@@ -485,20 +476,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
-  // Se usa theme.colors.primary y theme.colors.primary/neutral inline en el return
   refreshButton: {
-    // Usamos el color de fondo primario
-    backgroundColor: '#3b82f6', // Valor por defecto, se sobrescribe inline
+    backgroundColor: "#007AFF",
     flex: 1,
   },
   archivedButton: {
-    // Usamos el color de fondo primario/secundario
-    backgroundColor: '#0ea5e9', // Valor por defecto, se sobrescribe inline
+    backgroundColor: "#0ea5e9",
     flex: 1,
   },
   itemContainer: {
     borderBottomWidth: 1,
-    // borderColor: theme.colors.border, aplicado inline
+    borderColor: "#eee",
     paddingVertical: 12,
   },
   itemDetails: {
@@ -509,16 +497,15 @@ const styles = StyleSheet.create({
   itemName: {
     fontWeight: "600",
     fontSize: 16,
-    // color: theme.colors.text, aplicado inline
   },
   itemCode: {
-    // color: theme.colors.textMuted, aplicado inline
+    color: "#475569",
     fontSize: 12,
     marginVertical: 2,
   },
   itemInfo: {
     fontSize: 12,
-    // color: theme.colors.textSecondary, aplicado inline
+    color: "#334155",
   },
   buttonContainer: {
     flexDirection: "row",
@@ -544,16 +531,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   adjustButton: {
-    // Fondo neutro, se usa neutral
-    backgroundColor: '#6b7280', // Valor por defecto, se sobrescribe inline
+    backgroundColor: "#1e293b",
   },
   editButton: {
-    // Fondo primario
-    backgroundColor: '#3b82f6', // Valor por defecto, se sobrescribe inline
+    backgroundColor: "#007AFF",
   },
   deleteButton: {
-    // Fondo peligro
-    backgroundColor: 'rgb(195, 12, 12)', // Valor por defecto, se sobrescribe inline
+    backgroundColor: "#b91c1c",
   },
   iconContainer: {
     paddingHorizontal: 8,
@@ -575,7 +559,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    // backgroundColor: 'rgba(255,255,255,0.85)', aplicado inline
+    backgroundColor: 'rgba(255,255,255,0.85)',
     borderRadius: 1,
   },
   knob: {
