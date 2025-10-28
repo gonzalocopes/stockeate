@@ -22,6 +22,8 @@ import * as Print from "expo-print";
 import { api } from "../api";
 import { pushMovesBatchByCodes } from "../sync/push";
 
+import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+
 type Row = {
   id: string;
   code: string;
@@ -34,6 +36,7 @@ const COOLDOWN_MS = 900;
 const SAME_CODE_BLOCK_MS = 800;
 
 export default function RemitoIngreso({ navigation }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const branchId = useBranch((s) => s.id);
   const branchName = useBranch((s) => s.name);
   const isFocused = useIsFocused();
@@ -193,17 +196,47 @@ export default function RemitoIngreso({ navigation }: any) {
   };
 
   const renderRow = ({ item }: { item: Row }) => (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: "#eef2f7" }}>
+    <View style={{ 
+        flexDirection: "row", 
+        alignItems: "center", 
+        gap: 8, 
+        paddingVertical: 8, 
+        borderBottomWidth: 1, 
+        borderColor: theme.colors.border // 👈 Borde de la fila
+    }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#64748b", fontSize: 12 }}>{item.code}</Text>
-        <Text style={{ color: "#334155", fontSize: 12 }}>${item.unit_price} c/u</Text>
+        <Text style={{ fontWeight: "600", color: theme.colors.text }}>{item.name}</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{item.code}</Text>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>${item.unit_price} c/u</Text>
       </View>
-      <TouchableOpacity onPress={() => setCount(item.code, -1)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#007AFF", backgroundColor: "#f8f9fa", borderRadius: 8 }} activeOpacity={0.9}>
-        <Text style={{ color: "#007AFF", fontWeight: "800" }}>-</Text>
+      
+      {/* Botón - */}
+      <TouchableOpacity onPress={() => setCount(item.code, -1)} 
+        style={{ 
+            paddingHorizontal: 12, 
+            paddingVertical: 6, 
+            borderWidth: 1, 
+            borderColor: theme.colors.primary, // 👈 Borde primario
+            backgroundColor: theme.colors.card, // 👈 Fondo de contraste
+            borderRadius: 8 
+        }} 
+        activeOpacity={0.9}
+      >
+        <Text style={{ color: theme.colors.primary, fontWeight: "800" }}>-</Text>
       </TouchableOpacity>
-      <Text style={{ width: 28, textAlign: "center", fontWeight: "800" }}>{item.count}</Text>
-      <TouchableOpacity onPress={() => setCount(item.code, +1)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#22c55e", borderRadius: 8 }} activeOpacity={0.9}>
+      
+      <Text style={{ width: 28, textAlign: "center", fontWeight: "800", color: theme.colors.text }}>{item.count}</Text>
+      
+      {/* Botón + */}
+      <TouchableOpacity onPress={() => setCount(item.code, +1)} 
+        style={{ 
+            paddingHorizontal: 12, 
+            paddingVertical: 6, 
+            backgroundColor: theme.colors.success, // 👈 Fondo Success
+            borderRadius: 8 
+        }} 
+        activeOpacity={0.9}
+      >
         <Text style={{ color: "white", fontWeight: "800" }}>+</Text>
       </TouchableOpacity>
     </View>
@@ -270,44 +303,44 @@ export default function RemitoIngreso({ navigation }: any) {
 
       // 4) sync
       try {
-  // a) movimientos IN
-  await pushMovesBatchByCodes(branchId, rows.map(r => ({
-    code: r.code,
-    qty: r.count,
-    reason: "Remito ingreso"
-  })), "IN");
+        // a) movimientos IN
+        await pushMovesBatchByCodes(branchId, rows.map(r => ({
+          code: r.code,
+          qty: r.count,
+          reason: "Remito ingreso"
+        })), "IN");
 
-  // b) remito + items (con productId)
-  const remitoItems = rows.map((r) => {
-    const p = DB.getProductByCode(r.code);
-    return {
-      remito_id: remitoId,
-      productId: p?.id,   // 👈 usar productId
-      qty: r.count,
-      unit_price: r.unit_price ?? 0,
-    };
-  }).filter(Boolean);
+        // b) remito + items (con productId)
+        const remitoItems = rows.map((r) => {
+          const p = DB.getProductByCode(r.code);
+          return {
+            remito_id: remitoId,
+            productId: p?.id,  // 👈 usar productId
+            qty: r.count,
+            unit_price: r.unit_price ?? 0,
+          };
+        }).filter(Boolean);
 
-  await api.post("/sync", {
-    branchId,
-    products: [],
-    stockMoves: [],
-    remitos: [
-      {
-        id: remitoId,
-        tmp_number: tmpNum,
-        official_number: null,
-        branch_id: branchId,
-        customer: provider?.trim() || null,
-        notes: notes?.trim() || "Remito de ENTRADA",
-        created_at: new Date().toISOString(),
-      },
-    ],
-    remitoItems,
-  });
-} catch (e) {
-  console.log("Sync IN fallo:", e?.toString?.());
-}
+        await api.post("/sync", {
+          branchId,
+          products: [],
+          stockMoves: [],
+          remitos: [
+            {
+              id: remitoId,
+              tmp_number: tmpNum,
+              official_number: null,
+              branch_id: branchId,
+              customer: provider?.trim() || null,
+              notes: notes?.trim() || "Remito de ENTRADA",
+              created_at: new Date().toISOString(),
+            },
+          ],
+          remitoItems,
+        });
+      } catch (e) {
+        console.log("Sync IN fallo:", e?.toString?.());
+      }
 
       // 5) limpiar y navegar
       setRows([]);
@@ -319,37 +352,62 @@ export default function RemitoIngreso({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center" }}>
-        <Text>Primero elegí una sucursal.</Text>
+      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.background }}>
+        <Text style={{ color: theme.colors.text }}>Primero elegí una sucursal.</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 18, fontWeight: "700" }}>Remito de entrada (ingreso)</Text>
+    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
+      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Remito de entrada (ingreso)</Text>
 
       {/* Datos del remito */}
-      <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, padding: 10 }}>
-        <Text style={{ fontWeight: "600", marginBottom: 6 }}>Datos</Text>
-        <Text style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>
-          Sucursal: <Text style={{ fontWeight: "700", color: "#0f172a" }}>{branchName || branchId}</Text>
+      <View style={{ 
+          borderWidth: 1, 
+          borderColor: theme.colors.border, // 👈 Borde del panel
+          borderRadius: 10, 
+          padding: 10,
+          backgroundColor: theme.colors.card // 👈 Fondo del panel
+      }}>
+        <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Datos</Text>
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+          Sucursal: <Text style={{ fontWeight: "700", color: theme.colors.text }}>{branchName || branchId}</Text>
         </Text>
 
-        <Text style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>Proveedor / origen</Text>
+        {/* Proveedor / origen */}
+        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Proveedor / origen</Text>
         <TextInput
           placeholder="Ej: Distribuidora S.A."
+          placeholderTextColor={theme.colors.textMuted}
           value={provider}
           onChangeText={setProvider}
-          style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 10, marginBottom: 8, backgroundColor: "white" }}
+          style={{ 
+            borderWidth: 1, 
+            borderColor: theme.colors.inputBorder, 
+            borderRadius: 8, 
+            padding: 10, 
+            marginBottom: 8, 
+            backgroundColor: theme.colors.inputBackground,
+            color: theme.colors.text // 👈 Texto del input
+          }}
         />
 
-        <Text style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>Notas</Text>
+        {/* Notas */}
+        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Notas</Text>
         <TextInput
           placeholder="Observaciones"
+          placeholderTextColor={theme.colors.textMuted}
           value={notes}
           onChangeText={setNotes}
-          style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: "white" }}
+          style={{ 
+            borderWidth: 1, 
+            borderColor: theme.colors.inputBorder, 
+            borderRadius: 8, 
+            padding: 10, 
+            backgroundColor: theme.colors.inputBackground,
+            color: theme.colors.text // 👈 Texto del input
+          }}
           multiline
         />
       </View>
@@ -357,17 +415,35 @@ export default function RemitoIngreso({ navigation }: any) {
       {/* Scanner */}
       {Platform.OS !== "web" ? (
         hasPerm === null ? (
-          <Text>Solicitando permiso de cámara…</Text>
+          <Text style={{ color: theme.colors.text }}>Solicitando permiso de cámara…</Text>
         ) : hasPerm ? (
           isFocused ? (
-            <View style={{ borderWidth: 1, borderRadius: 12, overflow: "hidden", height: 220, position: "relative" }}>
+            <View style={{ 
+                borderWidth: 1, 
+                borderColor: theme.colors.border, 
+                borderRadius: 12, 
+                overflow: "hidden", 
+                height: 220, 
+                position: "relative" 
+            }}>
               <CameraView
                 style={{ width: "100%", height: "100%" }}
                 facing="back"
                 onBarcodeScanned={scanEnabled ? ({ data }) => onScan(String(data)) : undefined}
                 barcodeScannerSettings={{ barcodeTypes: ["ean13","ean8","code128","code39","code93","upc_a","upc_e","codabar","itf14"] }}
               />
-              <View style={{ position: "absolute", top: "50%", left: "50%", width: 200, height: 80, marginTop: -40, marginLeft: -100, borderWidth: 2, borderColor: "#22c55e", borderRadius: 4 }} />
+              <View style={{ 
+                  position: "absolute", 
+                  top: "50%", 
+                  left: "50%", 
+                  width: 200, 
+                  height: 80, 
+                  marginTop: -40, 
+                  marginLeft: -100, 
+                  borderWidth: 2, 
+                  borderColor: theme.colors.success, // 👈 Recuadro de escaneo (Success)
+                  borderRadius: 4 
+              }} />
               <View style={{ position: "absolute", bottom: 12, left: 0, right: 0, alignItems: "center" }}>
                 <Text style={{ color: "white", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, fontSize: 12 }}>
                   Escaneá productos para agregar al ingreso
@@ -375,10 +451,10 @@ export default function RemitoIngreso({ navigation }: any) {
               </View>
             </View>
           ) : (
-            <Text>La cámara se pausa cuando salís de esta pantalla.</Text>
+            <Text style={{ color: theme.colors.text }}>La cámara se pausa cuando salís de esta pantalla.</Text>
           )
         ) : (
-          <Text>Sin permiso de cámara.</Text>
+          <Text style={{ color: theme.colors.text }}>Sin permiso de cámara.</Text>
         )
       ) : null}
 
@@ -388,12 +464,26 @@ export default function RemitoIngreso({ navigation }: any) {
           value={manual}
           onChangeText={setManual}
           placeholder="Código manual"
-          style={{ flex: 1, borderWidth: 1, borderColor: manual ? "#007AFF" : "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: manual ? "#f8f9ff" : "white" }}
+          placeholderTextColor={theme.colors.textMuted}
+          style={{ 
+            flex: 1, 
+            borderWidth: 1, 
+            borderColor: manual ? theme.colors.primary : theme.colors.inputBorder, 
+            borderRadius: 8, 
+            padding: 10, 
+            backgroundColor: theme.colors.inputBackground, // 👈 Fondo Input
+            color: theme.colors.text // 👈 Texto del input
+          }}
           onSubmitEditing={() => { const c = manual.trim(); if (c) onScan(c); }}
         />
         <TouchableOpacity
           onPress={() => { const c = manual.trim(); if (c) onScan(c); }}
-          style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: manual ? "#007AFF" : "#94a3b8", borderRadius: 8 }}
+          style={{ 
+            paddingHorizontal: 14, 
+            paddingVertical: 10, 
+            backgroundColor: manual ? theme.colors.primary : theme.colors.neutral, // 👈 Primary / Neutral
+            borderRadius: 8 
+          }}
           activeOpacity={0.9}
           disabled={!manual.trim()}
         >
@@ -402,15 +492,21 @@ export default function RemitoIngreso({ navigation }: any) {
       </View>
 
       {/* Lista */}
-      <Text style={{ fontWeight: "700", marginTop: 4 }}>Items del ingreso ({totalQty})</Text>
-      <FlatList data={rows} keyExtractor={(x) => x.code} renderItem={renderRow} />
+      <Text style={{ fontWeight: "700", marginTop: 4, color: theme.colors.text }}>Items del ingreso ({totalQty})</Text>
+      <FlatList data={rows} keyExtractor={(x) => x.code} renderItem={renderRow} showsVerticalScrollIndicator={false} />
 
       {/* Acciones */}
-      <View style={{ gap: 8, borderTopWidth: 1, borderColor: "#e5e7eb", paddingTop: 10 }}>
-        <Text style={{ fontWeight: "700" }}>Total estimado: ${totalImporte.toFixed(2)}</Text>
+      <View style={{ gap: 8, borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 10 }}>
+        <Text style={{ fontWeight: "700", color: theme.colors.text }}>Total estimado: ${totalImporte.toFixed(2)}</Text>
         <TouchableOpacity
           onPress={confirmAndSave}
-          style={{ paddingVertical: 14, borderRadius: 8, backgroundColor: rows.length > 0 ? "#22c55e" : "#94a3b8", alignItems: "center", opacity: saving ? 0.85 : 1 }}
+          style={{ 
+            paddingVertical: 14, 
+            borderRadius: 8, 
+            backgroundColor: rows.length > 0 ? theme.colors.success : theme.colors.neutral, // 👈 Success / Neutral
+            alignItems: "center", 
+            opacity: saving ? 0.85 : 1 
+          }}
           activeOpacity={0.9}
           disabled={saving || rows.length === 0}
         >
@@ -430,59 +526,60 @@ export default function RemitoIngreso({ navigation }: any) {
   );
 }
 
+// ... Las funciones buildHtmlIN y escapeHtml se mantienen sin cambios ya que son para PDF.
 function buildHtmlIN(
-  remitoId: string,
-  tmpNumber: string,
-  branchLabel: string,
-  provider: string,
-  rows: Row[],
-  notes: string,
-  totalImporte: number
+  remitoId: string,
+  tmpNumber: string,
+  branchLabel: string,
+  provider: string,
+  rows: Row[],
+  notes: string,
+  totalImporte: number
 ) {
-  const tr = rows
-    .map(
-      (r) => `
-      <tr>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${r.code}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name)}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.count}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.count).toFixed(2)}</td>
-      </tr>`
-    )
-    .join("");
+  const tr = rows
+    .map(
+      (r) => `
+      <tr>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${r.code}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name)}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.count}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.count).toFixed(2)}</td>
+      </tr>`
+    )
+    .join("");
 
-  return `
-    <html>
-      <head><meta charset="utf-8"/><title>Remito de entrada ${tmpNumber}</title></head>
-      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
-        <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
-        <div style="color:#334155;margin-bottom:12px;">
-          <div><strong>N° temporal:</strong> ${tmpNumber}</div>
-          <div><strong>Sucursal:</strong> ${escapeHtml(branchLabel)}</div>
-          ${provider ? `<div><strong>Proveedor:</strong> ${escapeHtml(provider)}</div>` : ""}
-          <div><strong>Fecha:</strong> ${new Date().toLocaleString()}</div>
-        </div>
-        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
-          <thead>
-            <tr>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
-            </tr>
-          </thead>
-          <tbody>${tr}</tbody>
-        </table>
-        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${totalImporte.toFixed(2)}</strong></div>
-        ${notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(notes)}</div>` : ""}
-        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remitoId}</div>
-      </body>
-    </html>
-  `;
+  return `
+    <html>
+      <head><meta charset="utf-8"/><title>Remito de entrada ${tmpNumber}</title></head>
+      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
+        <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
+        <div style="color:#334155;margin-bottom:12px;">
+          <div><strong>N° temporal:</strong> ${tmpNumber}</div>
+          <div><strong>Sucursal:</strong> ${escapeHtml(branchLabel)}</div>
+          ${provider ? `<div><strong>Proveedor:</strong> ${escapeHtml(provider)}</div>` : ""}
+          <div><strong>Fecha:</strong> ${new Date().toLocaleString()}</div>
+        </div>
+        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
+          <thead>
+            <tr>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
+            </tr>
+          </thead>
+          <tbody>${tr}</tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${totalImporte.toFixed(2)}</strong></div>
+        ${notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(notes)}</div>` : ""}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remitoId}</div>
+      </body>
+    </html>
+  `;
 }
 
 function escapeHtml(s: string) {
-  return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
