@@ -1,5 +1,5 @@
-﻿import React, { useEffect } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+﻿﻿import React, { useEffect } from "react";
+import { NavigationContainer, DarkTheme, DefaultTheme} from "@react-navigation/native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"; // cambio para los botones de navegacion
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -26,6 +26,11 @@ import RemitoIngreso from "./src/screens/RemitoIngreso";
 // 👇 NUEVO: historial + detalle
 import RemitosHistory from "./src/screens/RemitosHistory";
 import RemitoDetail from "./src/screens/RemitoDetail";
+import SettingsScreen from "./src/screens/SettingsScreen";
+import ProfileScreen from "./src/screens/ProfileScreen";
+
+import { useThemeStore } from "./src/stores/themeProviders";
+
 
 const Stack = createNativeStackNavigator();
 
@@ -37,6 +42,11 @@ export default function App() {
   // branch
   const hydrateBranch = useBranch((s) => s.hydrate); // 👈 NUEVO
 
+  // theme
+  const { theme, mode, toggleTheme } = useThemeStore();
+
+
+
   useEffect(() => {
     initDb();
     hydrateAuth(); // hidrata token guardado
@@ -45,8 +55,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }}>
-        <NavigationContainer>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} >
+        <NavigationContainer theme={ mode === 'dark' ? DarkTheme : DefaultTheme} >
           {!token ? (
             <Stack.Navigator>
               <Stack.Screen
@@ -128,6 +138,16 @@ export default function App() {
                 component={BranchArchived}
                 options={{ title: "Archivados" }}
               />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: "Configuración" }}
+              />
+              <Stack.Screen
+                name="Profile"
+                component={ProfileScreen}
+                options={{ title: "Mi Perfil" }}
+              />
             </Stack.Navigator>
           )}
         </NavigationContainer>
@@ -135,3 +155,5 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+//

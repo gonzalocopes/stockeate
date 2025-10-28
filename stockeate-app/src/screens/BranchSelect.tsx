@@ -12,6 +12,8 @@ import { useBranch } from "../stores/branch";
 import { useAuth } from "../stores/auth";
 import { pullBranchCatalog } from "../sync/index";
 
+import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+
 type Branch = {
   id: string;
   name: string;
@@ -20,6 +22,7 @@ type Branch = {
 };
 
 export default function BranchSelect({ navigation }: any) {
+  const { theme } = useThemeStore(); // 👈 Obtener el tema
   const setBranch = useBranch((s) => s.set);
   const logout = useAuth((s) => s.logout);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -113,32 +116,6 @@ export default function BranchSelect({ navigation }: any) {
     })();
   }, [navigation]);
 
-  // // Botón "Cerrar sesión" en el header
-  // useEffect(() => {
-  //   navigation.setOptions({
-  //     headerRight: () => (
-  //       <TouchableOpacity
-  //         onPress={async () => {
-  //           await logout();
-  //           navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-  //         }}
-  //         style={{
-  //           paddingHorizontal: 12,
-  //           paddingVertical: 6,
-  //           backgroundColor: "#dc3545",
-  //           borderRadius: 16,
-  //           marginRight: 8,
-  //         }}
-  //         activeOpacity={0.8}
-  //       >
-  //         <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
-  //           Cerrar sesión
-  //         </Text>
-  //       </TouchableOpacity>
-  //     ),
-  //   });
-  // }, [navigation, logout]);
-
   const renderItem = ({ item }: { item: Branch }) => (
     <TouchableOpacity
       onPress={() => (sel?.id === item.id ? setSel(null) : setSel(item))}
@@ -147,12 +124,17 @@ export default function BranchSelect({ navigation }: any) {
         alignItems: "center",
         justifyContent: "space-between",
         borderWidth: 1,
-        borderColor: sel && sel.id === item.id ? "#007AFF" : "#E5E7EB",
+        // Borde primario si está seleccionado, borde normal si no
+        borderColor:
+          sel && sel.id === item.id
+            ? theme.colors.primary
+            : theme.colors.border,
         borderRadius: 16,
         padding: 14,
         marginBottom: 12,
         marginHorizontal: 4,
-        backgroundColor: "#fff",
+        backgroundColor: theme.colors.card, // 👈 Fondo de la card
+        // Se mantiene la sombra con valores fijos
         shadowColor: "#000",
         shadowOffset: {
           width: 0,
@@ -170,7 +152,7 @@ export default function BranchSelect({ navigation }: any) {
           flexDirection: "row",
           alignItems: "center",
           flex: 1,
-          minHeight: 50, // Reducido de 64 a 50
+          minHeight: 50,
         }}
       >
         {/* Círculo de selección */}
@@ -179,7 +161,11 @@ export default function BranchSelect({ navigation }: any) {
             width: 22,
             height: 22,
             borderRadius: 11,
-            backgroundColor: sel && sel.id === item.id ? "#007AFF" : "#F3F4F6",
+            // Fondo primario si está seleccionado, inputBorder si no
+            backgroundColor:
+              sel && sel.id === item.id
+                ? theme.colors.primary
+                : theme.colors.inputBorder,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 12,
@@ -187,7 +173,9 @@ export default function BranchSelect({ navigation }: any) {
         >
           <Text
             style={{
-              color: sel && sel.id === item.id ? "#fff" : "#9CA3AF",
+              // Texto blanco si está seleccionado, textMuted si no
+              color:
+                sel && sel.id === item.id ? "#fff" : theme.colors.textMuted,
               fontSize: 14,
               marginTop: -1,
             }}
@@ -202,7 +190,7 @@ export default function BranchSelect({ navigation }: any) {
             style={{
               fontSize: 17,
               fontWeight: "600",
-              color: "#111827",
+              color: theme.colors.text, // 👈 Color del nombre
               marginBottom: 4,
             }}
             numberOfLines={1}
@@ -212,7 +200,7 @@ export default function BranchSelect({ navigation }: any) {
           <Text
             style={{
               fontSize: 14,
-              color: "#6B7280",
+              color: theme.colors.textMuted, // 👈 Color de la dirección
               lineHeight: 18,
             }}
             numberOfLines={2}
@@ -224,17 +212,21 @@ export default function BranchSelect({ navigation }: any) {
         {/* Badge de estado */}
         <View
           style={{
-            backgroundColor: branchStatus[item.id] ? "#DCFCE7" : "#FEE2E2",
+            // Fondo Success o Danger
+            backgroundColor: branchStatus[item.id]
+              ? theme.colors.success
+              : theme.colors.danger,
             paddingHorizontal: 8,
             paddingVertical: 4,
             borderRadius: 10,
             alignSelf: "flex-start",
             marginTop: 2,
+            opacity: 0.8, // Opacidad para que el color sea más suave en el badge
           }}
         >
           <Text
             style={{
-              color: branchStatus[item.id] ? "#16A34A" : "#DC2626",
+              color: "white", // Texto blanco fijo para contraste
               fontSize: 12,
               fontWeight: "500",
             }}
@@ -263,24 +255,34 @@ export default function BranchSelect({ navigation }: any) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Contenedor principal con padding seguro */}
       <View style={{ flex: 1, padding: 16, paddingTop: 32 }}>
         {loading && (
           <ActivityIndicator
             size="large"
-            color="#007AFF"
+            color={theme.colors.primary} // 👈 Color primario
             style={{ marginTop: 20 }}
           />
         )}
         {err ? (
-          <Text style={{ color: "red", marginBottom: 8, textAlign: "center" }}>
+          <Text
+            style={{
+              color: theme.colors.danger,
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
+            {" "}
+            {/* 👈 Color danger */}
             {err}
           </Text>
         ) : null}
 
         {!loading && !err && branches.length === 0 ? (
-          <Text style={{ textAlign: "center" }}>No hay sucursales.</Text>
+          <Text style={{ textAlign: "center", color: theme.colors.text }}>
+            No hay sucursales.
+          </Text>
         ) : (
           <FlatList
             data={branches}
@@ -288,33 +290,34 @@ export default function BranchSelect({ navigation }: any) {
             renderItem={renderItem}
             contentContainerStyle={{
               paddingHorizontal: 8,
-              paddingTop: "6%", // Margen superior del 6%
-              paddingBottom: 100, // Espacio extra para evitar que el último ítem quede detrás del botón
+              paddingTop: "6%",
+              paddingBottom: 100,
             }}
             showsVerticalScrollIndicator={false}
           />
         )}
       </View>
 
-      {/* Contenedor del botón con posición absoluta y padding seguro */}
+      {/* Contenedor del botón flotante */}
       <View
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          backgroundColor: "#F9FAFB",
+          backgroundColor: theme.colors.inputBackground, // 👈 Fondo del contenedor del botón
           paddingHorizontal: 16,
           paddingBottom: 16,
           paddingTop: 8,
           borderTopWidth: 1,
-          borderTopColor: "#E5E7EB",
+          borderTopColor: theme.colors.border, // 👈 Borde superior
         }}
       >
         <TouchableOpacity
           style={{
-            backgroundColor: sel ? "#007AFF" : "#6c757d",
-            paddingVertical: 16, // Aumentado para mejor área táctil
+            // Fondo primario si está seleccionado, neutral si no
+            backgroundColor: sel ? theme.colors.primary : theme.colors.neutral,
+            paddingVertical: 16,
             borderRadius: 8,
             alignItems: "center",
             opacity: syncing ? 0.85 : 1,
