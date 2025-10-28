@@ -125,7 +125,10 @@ export default function BranchSelect({ navigation }: any) {
         justifyContent: "space-between",
         borderWidth: 1,
         // Borde primario si está seleccionado, borde normal si no
-        borderColor: sel && sel.id === item.id ? theme.colors.primary : theme.colors.border, 
+        borderColor:
+          sel && sel.id === item.id
+            ? theme.colors.primary
+            : theme.colors.border,
         borderRadius: 16,
         padding: 14,
         marginBottom: 12,
@@ -159,7 +162,10 @@ export default function BranchSelect({ navigation }: any) {
             height: 22,
             borderRadius: 11,
             // Fondo primario si está seleccionado, inputBorder si no
-            backgroundColor: sel && sel.id === item.id ? theme.colors.primary : theme.colors.inputBorder,
+            backgroundColor:
+              sel && sel.id === item.id
+                ? theme.colors.primary
+                : theme.colors.inputBorder,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 12,
@@ -168,7 +174,8 @@ export default function BranchSelect({ navigation }: any) {
           <Text
             style={{
               // Texto blanco si está seleccionado, textMuted si no
-              color: sel && sel.id === item.id ? "#fff" : theme.colors.textMuted,
+              color:
+                sel && sel.id === item.id ? "#fff" : theme.colors.textMuted,
               fontSize: 14,
               marginTop: -1,
             }}
@@ -206,7 +213,9 @@ export default function BranchSelect({ navigation }: any) {
         <View
           style={{
             // Fondo Success o Danger
-            backgroundColor: branchStatus[item.id] ? theme.colors.success : theme.colors.danger,
+            backgroundColor: branchStatus[item.id]
+              ? theme.colors.success
+              : theme.colors.danger,
             paddingHorizontal: 8,
             paddingVertical: 4,
             borderRadius: 10,
@@ -217,7 +226,7 @@ export default function BranchSelect({ navigation }: any) {
         >
           <Text
             style={{
-              color: 'white', // Texto blanco fijo para contraste
+              color: "white", // Texto blanco fijo para contraste
               fontSize: 12,
               fontWeight: "500",
             }}
@@ -246,7 +255,7 @@ export default function BranchSelect({ navigation }: any) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}> {/* 👈 Fondo de la pantalla */}
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Contenedor principal con padding seguro */}
       <View style={{ flex: 1, padding: 16, paddingTop: 32 }}>
         {loading && (
@@ -257,13 +266,23 @@ export default function BranchSelect({ navigation }: any) {
           />
         )}
         {err ? (
-          <Text style={{ color: theme.colors.danger, marginBottom: 8, textAlign: "center" }}> {/* 👈 Color danger */}
+          <Text
+            style={{
+              color: theme.colors.danger,
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
+            {" "}
+            {/* 👈 Color danger */}
             {err}
           </Text>
         ) : null}
 
         {!loading && !err && branches.length === 0 ? (
-          <Text style={{ textAlign: "center", color: theme.colors.text }}>No hay sucursales.</Text>
+          <Text style={{ textAlign: "center", color: theme.colors.text }}>
+            No hay sucursales.
+          </Text>
         ) : (
           <FlatList
             data={branches}
@@ -271,8 +290,8 @@ export default function BranchSelect({ navigation }: any) {
             renderItem={renderItem}
             contentContainerStyle={{
               paddingHorizontal: 8,
-              paddingTop: "6%", 
-              paddingBottom: 100, 
+              paddingTop: "6%",
+              paddingBottom: 100,
             }}
             showsVerticalScrollIndicator={false}
           />
@@ -297,7 +316,7 @@ export default function BranchSelect({ navigation }: any) {
         <TouchableOpacity
           style={{
             // Fondo primario si está seleccionado, neutral si no
-            backgroundColor: sel ? theme.colors.primary : theme.colors.neutral, 
+            backgroundColor: sel ? theme.colors.primary : theme.colors.neutral,
             paddingVertical: 16,
             borderRadius: 8,
             alignItems: "center",
