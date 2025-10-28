@@ -1,6 +1,5 @@
 // src/components/ProductEditModal.tsx
 import React, { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
 import {
   Modal,
   View,
@@ -20,7 +19,7 @@ type Props = {
   code: string | null;
   initialName?: string;
   initialPrice?: number;
-  /** stock inicial opcional para prefijar el campo  */
+  /** stock inicial opcional para prefijar el campo cuando edites/crees */
   initialStock?: number;
   onCancel: () => void;
   onSave: (data: { code: string; name: string; price: number; stock?: number }) => void | Promise<void>;
@@ -72,10 +71,7 @@ export default function ProductEditModal({
     const nm = name.trim();
     const cd = codeStr.trim();
     if (!nm || !cd || saving) return;
-    if (stock < 0) {
-      Alert.alert("El stock no puede ser negativo");
-      return;
-    }
+    
     setSaving(true);
     try {
       await onSave({ code: cd, name: nm, price, stock });
