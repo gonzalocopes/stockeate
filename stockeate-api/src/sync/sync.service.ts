@@ -178,9 +178,20 @@ export class SyncService {
         });
 
         const delta = type === 'IN' ? qty : -qty;
+        console.log('[SYNC] Movimiento recibido:', {
+          productId: pid,
+          productCode,
+          branchId,
+          tipo: type,
+          cantidad: qty,
+          delta,
+          stockAntes: prod.stock,
+          stockDespues: Math.max(0, (prod.stock ?? 0) + delta)
+        });
+        const newStock = Math.max(0, (prod.stock ?? 0) + delta);
         const updated = await tx.product.update({
           where: { id: pid },
-          data: { stock: (prod.stock ?? 0) + delta, version: (prod.version ?? 0) + 1 },
+          data: { stock: newStock, version: (prod.version ?? 0) + 1 },
         });
 
         patched.push({ entity: 'product', id: updated.id, stock: updated.stock, version: updated.version });

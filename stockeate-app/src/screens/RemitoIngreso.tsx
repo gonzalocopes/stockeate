@@ -16,7 +16,7 @@ import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
 
 import { useBranch } from "../stores/branch";
-import { DB } from "../db.native";
+import { DB } from "../db";
 import ProductEditModal from "../components/ProductEditModal";
 import * as Print from "expo-print";
 import { api } from "../api";

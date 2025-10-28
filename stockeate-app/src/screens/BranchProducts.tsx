@@ -13,11 +13,14 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
+  StyleSheet,
+  Dimensions,
 } from "react-native";
+
 import { useIsFocused } from "@react-navigation/native";
 import { useBranch } from "../stores/branch";
 import ProductEditModal from "../components/ProductEditModal";
-import { DB } from "../db.native";
+import { DB } from "../db";
 import { api } from "../api";
 import { pullBranchCatalog } from "../sync/index";
 import { pushMoveByCode, pushDeleteProduct } from "../sync/push";
@@ -160,6 +163,18 @@ export default function BranchProducts({ navigation }: any) {
 
   const applyQuickDelta = async (delta: number) => {
     if (!adjusting || !branchId) return;
+    // Buscar el producto actualizado en rows
+    const prodActual = rows.find(r => r.id === adjusting.id);
+    const currentStock = prodActual?.stock ?? 0;
+    // Solo permitir ajuste si el resultado es >= 0
+    if (delta < 0 && currentStock <= 0) {
+      Alert.alert("El stock no puede ser negativo");
+      return;
+    }
+    if (currentStock + delta < 0) {
+      Alert.alert("El stock no puede ser negativo");
+      return;
+    }
     const updated = DB.adjustStock(adjusting.id, branchId, delta, delta > 0 ? "Ajuste +1" : "Ajuste -1");
     setRows((cur) => cur.map((r) => (r.id === adjusting.id ? updated : r)));
     await pushMoveByCode(branchId, adjusting.code, delta, delta > 0 ? "+1" : "-1");
@@ -230,41 +245,59 @@ export default function BranchProducts({ navigation }: any) {
   }
 
   const renderItem = ({ item }: { item: Prod }) => {
-    // usar overlay si existe
     const displayStock = pendingStock[item.id] ?? item.stock;
+
     return (
-      <View style={{ borderBottomWidth: 1, borderColor: "#eee", paddingVertical: 8, gap: 6 }}>
-        <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#475569", fontSize: 12 }}>{item.code}</Text>
+      <View style={styles.itemContainer}>
+        <View style={styles.itemDetails}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemCode}>{item.code}</Text>
+            <Text style={styles.itemInfo}>
+              Precio: ${item.price ?? 0} — Stock: {displayStock ?? 0}
+            </Text>
+          </View>
 
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: "#334155" }}>
-            Precio: ${item.price ?? 0} — Stock: {displayStock ?? 0}
-          </Text>
-
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          <View style={styles.buttonContainer}>
+            {/* Ajustar stock - icono de sliders */}
             <TouchableOpacity
               onPress={() => openAdjust(item)}
-              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#1e293b" }}
+              style={[styles.button, styles.adjustButton]}
               activeOpacity={0.8}
+              accessibilityLabel={`Ajustar stock de ${item.name}`}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>Ajustar</Text>
+              {/* Custom sliders icon built with Views to avoid adding dependencies */}
+              <View style={styles.slidersIcon}>
+                <View style={styles.sliderRow}>
+                  <View style={styles.sliderLine} />
+                  <View style={[styles.knob, { left: '10%' }]} />
+                </View>
+                <View style={styles.sliderRow}>
+                  <View style={styles.sliderLine} />
+                  <View style={[styles.knob, { left: '50%' }]} />
+                </View>
+                <View style={styles.sliderRow}>
+                  <View style={styles.sliderLine} />
+                  <View style={[styles.knob, { left: '85%' }]} />
+                </View>
+              </View>
             </TouchableOpacity>
 
+            {/* OPCIONES ICONOS EDITAR: ✍️ ✏️ 📝 🖊️ 📋 🖋️ 📄 ✒️ 🖍️ 📑 */}
             <TouchableOpacity
               onPress={() => openEdit(item)}
-              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#007AFF" }}
+              style={[styles.button, styles.editButton]}
               activeOpacity={0.8}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>Editar</Text>
+              <Text style={styles.iconText}>✏️</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => confirmDelete(item)}
-              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#b91c1c" }}
+              style={[styles.button, styles.deleteButton]}
               activeOpacity={0.8}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>Eliminar</Text>
+              <Text style={styles.iconText}>🗑️</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -272,45 +305,49 @@ export default function BranchProducts({ navigation }: any) {
     );
   };
 
+  const screenWidth = Dimensions.get('window').width;
+  const isSmallScreen = screenWidth < 400;
+
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
       <Text style={{ fontSize: 18, fontWeight: "700" }}>Productos de la sucursal</Text>
 
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={styles.searchContainer}>
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Buscar por nombre o código"
-          style={{
-            flex: 1,
-            borderWidth: 1,
-            borderColor: search ? "#007AFF" : "#cbd5e1",
-            borderRadius: 8,
-            padding: 10,
-            backgroundColor: search ? "#f8f9ff" : "white",
-          }}
+          style={[
+            styles.searchInput,
+            {
+              borderColor: search ? "#007AFF" : "#cbd5e1",
+              backgroundColor: search ? "#f8f9ff" : "white",
+            }
+          ]}
         />
+        
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            onPress={pullThenLoad}
+            style={[styles.actionButton, styles.refreshButton, isSmallScreen && styles.actionButtonSmall]}
+            activeOpacity={0.9}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.actionButtonText}>Refrescar</Text>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={pullThenLoad}
-          style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#007AFF" }}
-          activeOpacity={0.9}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: "white", fontWeight: "700" }}>Refrescar</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate("BranchArchived")}
-          style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: "#0ea5e9" }}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: "white", fontWeight: "700" }}>Archivados</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("BranchArchived")}
+            style={[styles.actionButton, styles.archivedButton, isSmallScreen && styles.actionButtonSmall]}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.actionButtonText}>Archivados</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Text style={{ color: "#64748b", fontSize: 12 }}>
@@ -322,6 +359,7 @@ export default function BranchProducts({ navigation }: any) {
         keyExtractor={(x) => x.id}
         renderItem={renderItem}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Modal editar */}
@@ -348,14 +386,25 @@ export default function BranchProducts({ navigation }: any) {
                   <View style={{ width: 40, height: 4, backgroundColor: "#e2e8f0", borderRadius: 2 }} />
                 </View>
 
-                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
+
+                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 4 }}>
                   Ajustar stock — {adjusting?.name} ({adjusting?.code})
+                </Text>
+                <Text style={{ fontWeight: "600", fontSize: 16, marginBottom: 12 }}>
+                  Stock actual: {adjusting?.stock ?? 0}
                 </Text>
 
                 <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
                   <TouchableOpacity
                     onPress={() => applyQuickDelta(-1)}
-                    style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#ef4444", alignItems: "center" }}
+                    disabled={adjusting?.stock === 0}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      backgroundColor: adjusting?.stock === 0 ? "#d1d5db" : "#ef4444",
+                      alignItems: "center"
+                    }}
                     activeOpacity={0.9}
                   >
                     <Text style={{ color: "white", fontWeight: "700" }}>-1</Text>
@@ -377,7 +426,14 @@ export default function BranchProducts({ navigation }: any) {
                       onChangeText={setTargetStr}
                       placeholder="Ej: 0, 15"
                       keyboardType="number-pad"
-                      style={{ flex: 1, borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 10, backgroundColor: "#fff" }}
+                      style={{
+                        flex: 1,
+                        borderWidth: 1,
+                        borderColor: "#cbd5e1",
+                        borderRadius: 8,
+                        padding: 10,
+                        backgroundColor: "#fff",
+                      }}
                       returnKeyType="done"
                       onSubmitEditing={applySetExact}
                     />
@@ -414,3 +470,133 @@ export default function BranchProducts({ navigation }: any) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  searchContainer: {
+    gap: 8,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+  },
+
+  actionButtonText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  refreshButton: {
+    backgroundColor: "#007AFF",
+    flex: 1,
+  },
+  archivedButton: {
+    backgroundColor: "#0ea5e9",
+    flex: 1,
+  },
+  itemContainer: {
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+    paddingVertical: 12,
+  },
+  itemDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  itemName: {
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  itemCode: {
+    color: "#475569",
+    fontSize: 12,
+    marginVertical: 2,
+  },
+  itemInfo: {
+    fontSize: 12,
+    color: "#334155",
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  button: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "white",
+    fontWeight: "700",
+    paddingHorizontal: 12,
+  },
+  iconText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  adjustButton: {
+    backgroundColor: "#1e293b",
+  },
+  editButton: {
+    backgroundColor: "#007AFF",
+  },
+  deleteButton: {
+    backgroundColor: "#b91c1c",
+  },
+  iconContainer: {
+    paddingHorizontal: 8,
+  },
+  slidersIcon: {
+    width: 24,
+    height: 18,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sliderRow: {
+    height: 5,
+    justifyContent: 'center',
+    width: '100%',
+    position: 'relative',
+  },
+  sliderLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 1,
+  },
+  knob: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.2)'
+  },
+  actionButtonSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    minHeight: 36,
+  },
+});
