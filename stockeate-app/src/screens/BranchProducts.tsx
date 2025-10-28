@@ -383,7 +383,7 @@ export default function BranchProducts({ navigation }: any) {
         onSave={onSaveEdit}
       />
 
- {/* Modal AJUSTAR */}
+      {/* Modal AJUSTAR */}
       <Modal visible={adjOpen} transparent animationType="slide" onRequestClose={() => setAdjOpen(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
@@ -393,13 +393,12 @@ export default function BranchProducts({ navigation }: any) {
                   <View style={{ width: 40, height: 4, backgroundColor: theme.colors.border, borderRadius: 2 }} />
                 </View>
 
-                {/* AQUÍ ESTABA EL ERROR: 
-                  Se eliminó una etiqueta <Text> que envolvía incorrectamente a las dos siguientes.
-                */}
+
+                <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 4 }}>
                 <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12, color: theme.colors.text }}>
                   Ajustar stock — {adjusting?.name} ({adjusting?.code})
                 </Text>
-                <Text style={{ fontWeight: "600", fontSize: 16, marginBottom: 12, color: theme.colors.text }}>
+                <Text style={{ fontWeight: "600", fontSize: 16, marginBottom: 12 }}>
                   Stock actual: {adjusting?.stock ?? 0}
                 </Text>
 
