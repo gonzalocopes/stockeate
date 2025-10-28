@@ -19,6 +19,8 @@ model User {
 
   // ← back-relation requerido para PasswordReset
   passwordResets PasswordReset[]
+    digitalizedRemitos DigitalizedRemito[]
+
 }
 
 model Branch {
@@ -27,6 +29,7 @@ model Branch {
   users    BranchUser[]
   products Product[]
   remitos  Remito[]
+  digitalizedRemitos DigitalizedRemito[]
 }
 
 model BranchUser {
@@ -64,6 +67,8 @@ model Remito {
   branch         Branch       @relation(fields: [branchId], references: [id])
   @@index([branchId], map: "idx_remito_branchId")
   @@index([createdAt], map: "idx_remito_createdAt")
+  digitalizedOrigin   DigitalizedRemito? @relation(fields: [digitalizedOriginId], references: [id])
+  digitalizedOriginId String?            @unique
 }
 
 model RemitoItem {
@@ -86,6 +91,28 @@ model StockMove {
   createdAt DateTime @default(now())
 
   @@index([ref], map: "idx_stockmove_ref")
+}
+
+model DigitalizedRemito {
+  id              String               @id @default(uuid())
+  status          DigitalizationStatus @default(PROCESSING)
+  originalFileUrl String
+  extractedData   Json?
+  errorMessage    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id])
+  branchId        String
+  branch          Branch               @relation(fields: [branchId], references: [id])
+  finalRemito     Remito?              // Relación inversa al remito final creado
+}
+
+enum DigitalizationStatus {
+  PROCESSING
+  PENDING_VALIDATION
+  COMPLETED
+  FAILED
 }
 
 model PasswordReset {
