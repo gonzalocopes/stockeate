@@ -8,6 +8,7 @@ import { SyncModule } from './sync/sync.module';
 import { BranchesModule } from './branches/branches.module';
 import { EmailModule } from './email/email.module';
 import { PrismaService } from './prisma.service';
+import { RemitosModule } from './remitos/remitos.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { PrismaService } from './prisma.service';
     ProductsModule,
     SyncModule,
     BranchesModule,
-    EmailModule,            // 👈 agregado
+    EmailModule, // 👈 agregado
+    RemitosModule,
   ],
   providers: [PrismaService], // 👈 agregado
 })

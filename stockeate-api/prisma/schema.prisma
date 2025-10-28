@@ -7,7 +7,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DATABASE_URL_UNPOOLED")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
@@ -47,6 +47,7 @@ model Product {
   stock      Int          @default(0)
   version    Int          @default(0)
   updatedAt  DateTime     @updatedAt
+  isActive   Boolean      @default(true)
   branch     Branch       @relation(fields: [branchId], references: [id])
   RemitoItem RemitoItem[]
 }
@@ -61,6 +62,8 @@ model Remito {
   createdAt      DateTime     @default(now())
   items          RemitoItem[]
   branch         Branch       @relation(fields: [branchId], references: [id])
+  @@index([branchId], map: "idx_remito_branchId")
+  @@index([createdAt], map: "idx_remito_createdAt")
 }
 
 model RemitoItem {
@@ -81,6 +84,8 @@ model StockMove {
   type      String // 'IN' | 'OUT'
   ref       String?
   createdAt DateTime @default(now())
+
+  @@index([ref], map: "idx_stockmove_ref")
 }
 
 model PasswordReset {
