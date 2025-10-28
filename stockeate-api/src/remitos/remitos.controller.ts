@@ -17,6 +17,7 @@ import {
   GetRemitosQueryDto,
   RemitoType,
   GetMonthlyStatsQueryDto,
+  GetLast6MonthsStatsQueryDto,
 } from './remitos.dto';
 import { ApiOperation } from '@nestjs/swagger';
 
@@ -68,6 +69,24 @@ export class RemitosController {
   @ApiOperation({ summary: 'Obtener estadísticas mensuales de remitos' })
   getMonthlyStats(@Query() query: GetMonthlyStatsQueryDto) {
     return this.remitosService.getMonthlyStats(query);
+  }
+
+  @Get('stats/last-6-months/remitos')
+  @ApiOperation({
+    summary:
+      'Obtener estadísticas de remitos de los últimos 6 meses para una sucursal',
+  })
+  getLast6MonthsRemitosStats(@Query() query: GetLast6MonthsStatsQueryDto) {
+    return this.remitosService.getLast6MonthsRemitosStats(query.branchId);
+  }
+
+  @Get('stats/last-6-months/productos')
+  @ApiOperation({
+    summary:
+      'Obtener estadísticas de productos de los últimos 6 meses para una sucursal',
+  })
+  getLast6MonthsProductsStats(@Query() query: GetLast6MonthsStatsQueryDto) {
+    return this.remitosService.getLast6MonthsProductsStats(query.branchId);
   }
 
   @Patch(':id')

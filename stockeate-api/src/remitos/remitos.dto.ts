@@ -109,20 +109,6 @@ export class RemitosStatsResponseDto {
   outCount: number;
 }
 
-// // DTO extendido para remito con tipo
-// export class RemitoWithTypeDto {
-//   id: string;
-//   branchId: string;
-//   tmpNumber: string;
-//   officialNumber?: string;
-//   customer?: string;
-//   notes?: string;
-//   createdAt: Date;
-//   type: RemitoType;
-//   items: any[];
-//   branch?: any;
-// }
-
 // DTO para items del remito
 export class RemitoItemWithProductDto {
   id: string;
@@ -191,4 +177,24 @@ export class GetMonthlyStatsQueryDto {
   @IsOptional()
   @IsString()
   branchId?: string;
+}
+
+// DTO para estadísticas de últimos 6 meses (remitos)
+export class Last6MonthsRemitosStatsDto {
+  month: string;
+  ingresos: number;
+  egresos: number;
+}
+
+// DTO para estadísticas de últimos 6 meses (productos)
+export class Last6MonthsProductsStatsDto {
+  month: string;
+  productosIngresados: number;
+  productosEgresados: number;
+}
+
+export class GetLast6MonthsStatsQueryDto {
+  @IsString()
+  @IsNotEmpty()
+  branchId: string;
 }
