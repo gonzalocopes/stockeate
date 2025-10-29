@@ -147,12 +147,18 @@ export class RemitosService {
         const moveType = type === RemitoType.IN ? 'IN' : 'OUT';
 
         // Actualizar stock del producto
-        await tx.product.update({
+        const updatedProduct = await tx.product.update({
           where: { id: product.id },
           data: {
             stock: { increment: stockChange },
           },
         });
+
+        if (updatedProduct.stock < 0) {
+          throw new BadRequestException(
+            `Operación inválida: el stock del producto ${product.name} no puede ser negativo.`,
+          );
+        }
 
         // Crear movimiento de stock
         await tx.stockMove.create({
