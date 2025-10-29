@@ -17,6 +17,7 @@ import {
   IsNumber,
   IsBoolean,
   IsOptional,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiQuery } from '@nestjs/swagger';
@@ -38,6 +39,7 @@ export class ProductDto {
 
   @IsNumber()
   @Type(() => Number)
+  @Min(0)
   stock: number;
 
   @IsNumber()
@@ -62,6 +64,7 @@ export class UpdateProductDto {
   stock?: number;
 
   @IsNumber()
+  @Min(0)
   @Type(() => Number)
   @IsOptional()
   price?: number;

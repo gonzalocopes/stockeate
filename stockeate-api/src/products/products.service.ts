@@ -102,8 +102,15 @@ export class ProductsService {
     if (updateData.code !== undefined) data.code = updateData.code;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (updateData.name !== undefined) data.name = updateData.name;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (updateData.stock !== undefined) data.stock = updateData.stock;
+    if (updateData.stock !== undefined) {
+      if (updateData.stock < 0) {
+        throw new BadRequestException(
+          `El stock no puede ser negativo (${updateData.stock})`,
+        );
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      data.stock = updateData.stock;
+    }
     if (updateData.price !== undefined)
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       data.price = new Decimal(updateData.price);
