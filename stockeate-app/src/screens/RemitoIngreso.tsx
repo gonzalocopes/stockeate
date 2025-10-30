@@ -22,7 +22,12 @@ import * as Print from "expo-print";
 import { api } from "../api";
 import { pushMovesBatchByCodes } from "../sync/push";
 
-import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+import { useThemeStore } from "../stores/themeProviders"; // 👈 tema
+
+// 👇 imports del menú (idénticos a RemitoForm.tsx)
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../stores/auth";
+import HamburgerMenu from "../components/HamburgerMenu";
 
 type Row = {
   id: string;
@@ -36,10 +41,22 @@ const COOLDOWN_MS = 900;
 const SAME_CODE_BLOCK_MS = 800;
 
 export default function RemitoIngreso({ navigation }: any) {
-  const { theme } = useThemeStore(); // 👈 Obtener el tema
+  // 👇 ahora traigo también mode y toggleTheme para el menú
+  const { mode, theme, toggleTheme } = useThemeStore();
   const branchId = useBranch((s) => s.id);
   const branchName = useBranch((s) => s.name);
   const isFocused = useIsFocused();
+
+  // ── estado menú (igual que en RemitoForm.tsx)
+  const [menuVisible, setMenuVisible] = useState(false);
+  const menuItems = React.useMemo(
+    () => [
+      { label: mode === "light" ? "Tema Oscuro" : "Tema Claro", onPress: toggleTheme },
+      { label: "Configuración", onPress: () => navigation.navigate("Settings") },
+      { label: "Cerrar sesión", onPress: useAuth.getState().logout, isDestructive: true },
+    ],
+    [mode, toggleTheme]
+  );
 
   // cámara + feedback
   const [hasPerm, setHasPerm] = useState<boolean | null>(null);
@@ -66,6 +83,25 @@ export default function RemitoIngreso({ navigation }: any) {
   const totalQty = useMemo(() => rows.reduce((a, r) => a + r.count, 0), [rows]);
 
   const [saving, setSaving] = useState(false);
+
+  // 👇 header con hamburguesa (igual a RemitoForm.tsx)
+  useEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.colors.header ?? theme.colors.background },
+      headerTitleStyle: { color: theme.colors.text },
+      headerTintColor: theme.colors.text,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setMenuVisible(true)}
+          style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Abrir menú"
+        >
+          <Ionicons name="menu" size={22} color={theme.colors.text} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme, mode]);
 
   useEffect(() => {
     (async () => {
@@ -202,7 +238,7 @@ export default function RemitoIngreso({ navigation }: any) {
         gap: 8, 
         paddingVertical: 8, 
         borderBottomWidth: 1, 
-        borderColor: theme.colors.border // 👈 Borde de la fila
+        borderColor: theme.colors.border
     }}>
       <View style={{ flex: 1 }}>
         <Text style={{ fontWeight: "600", color: theme.colors.text }}>{item.name}</Text>
@@ -216,8 +252,8 @@ export default function RemitoIngreso({ navigation }: any) {
             paddingHorizontal: 12, 
             paddingVertical: 6, 
             borderWidth: 1, 
-            borderColor: theme.colors.primary, // 👈 Borde primario
-            backgroundColor: theme.colors.card, // 👈 Fondo de contraste
+            borderColor: theme.colors.primary,
+            backgroundColor: theme.colors.card,
             borderRadius: 8 
         }} 
         activeOpacity={0.9}
@@ -232,7 +268,7 @@ export default function RemitoIngreso({ navigation }: any) {
         style={{ 
             paddingHorizontal: 12, 
             paddingVertical: 6, 
-            backgroundColor: theme.colors.success, // 👈 Fondo Success
+            backgroundColor: theme.colors.success,
             borderRadius: 8 
         }} 
         activeOpacity={0.9}
@@ -365,10 +401,10 @@ export default function RemitoIngreso({ navigation }: any) {
       {/* Datos del remito */}
       <View style={{ 
           borderWidth: 1, 
-          borderColor: theme.colors.border, // 👈 Borde del panel
+          borderColor: theme.colors.border,
           borderRadius: 10, 
           padding: 10,
-          backgroundColor: theme.colors.card // 👈 Fondo del panel
+          backgroundColor: theme.colors.card
       }}>
         <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Datos</Text>
         <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginBottom: 8 }}>
@@ -389,7 +425,7 @@ export default function RemitoIngreso({ navigation }: any) {
             padding: 10, 
             marginBottom: 8, 
             backgroundColor: theme.colors.inputBackground,
-            color: theme.colors.text // 👈 Texto del input
+            color: theme.colors.text
           }}
         />
 
@@ -406,7 +442,7 @@ export default function RemitoIngreso({ navigation }: any) {
             borderRadius: 8, 
             padding: 10, 
             backgroundColor: theme.colors.inputBackground,
-            color: theme.colors.text // 👈 Texto del input
+            color: theme.colors.text
           }}
           multiline
         />
@@ -441,7 +477,7 @@ export default function RemitoIngreso({ navigation }: any) {
                   marginTop: -40, 
                   marginLeft: -100, 
                   borderWidth: 2, 
-                  borderColor: theme.colors.success, // 👈 Recuadro de escaneo (Success)
+                  borderColor: theme.colors.success,
                   borderRadius: 4 
               }} />
               <View style={{ position: "absolute", bottom: 12, left: 0, right: 0, alignItems: "center" }}>
@@ -471,8 +507,8 @@ export default function RemitoIngreso({ navigation }: any) {
             borderColor: manual ? theme.colors.primary : theme.colors.inputBorder, 
             borderRadius: 8, 
             padding: 10, 
-            backgroundColor: theme.colors.inputBackground, // 👈 Fondo Input
-            color: theme.colors.text // 👈 Texto del input
+            backgroundColor: theme.colors.inputBackground,
+            color: theme.colors.text
           }}
           onSubmitEditing={() => { const c = manual.trim(); if (c) onScan(c); }}
         />
@@ -481,7 +517,7 @@ export default function RemitoIngreso({ navigation }: any) {
           style={{ 
             paddingHorizontal: 14, 
             paddingVertical: 10, 
-            backgroundColor: manual ? theme.colors.primary : theme.colors.neutral, // 👈 Primary / Neutral
+            backgroundColor: manual ? theme.colors.primary : theme.colors.neutral,
             borderRadius: 8 
           }}
           activeOpacity={0.9}
@@ -503,7 +539,7 @@ export default function RemitoIngreso({ navigation }: any) {
           style={{ 
             paddingVertical: 14, 
             borderRadius: 8, 
-            backgroundColor: rows.length > 0 ? theme.colors.success : theme.colors.neutral, // 👈 Success / Neutral
+            backgroundColor: rows.length > 0 ? theme.colors.success : theme.colors.neutral,
             alignItems: "center", 
             opacity: saving ? 0.85 : 1 
           }}
@@ -522,62 +558,70 @@ export default function RemitoIngreso({ navigation }: any) {
         onCancel={() => { setEditVisible(false); setPendingCode(null); setScanEnabled(true); }}
         onSave={onSaveNewProduct}
       />
+
+      {/* 👇 Modal del menú (igual que en RemitoForm.tsx) */}
+      <HamburgerMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        items={menuItems}
+        navigation={navigation}
+      />
     </View>
   );
 }
 
 // ... Las funciones buildHtmlIN y escapeHtml se mantienen sin cambios ya que son para PDF.
 function buildHtmlIN(
-  remitoId: string,
-  tmpNumber: string,
-  branchLabel: string,
-  provider: string,
-  rows: Row[],
-  notes: string,
-  totalImporte: number
+  remitoId: string,
+  tmpNumber: string,
+  branchLabel: string,
+  provider: string,
+  rows: Row[],
+  notes: string,
+  totalImporte: number
 ) {
-  const tr = rows
-    .map(
-      (r) => `
-      <tr>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${r.code}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name)}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.count}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.count).toFixed(2)}</td>
-      </tr>`
-    )
-    .join("");
+  const tr = rows
+    .map(
+      (r) => `
+      <tr>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${r.code}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name)}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.count}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.count).toFixed(2)}</td>
+      </tr>`
+    )
+    .join("");
 
-  return `
-    <html>
-      <head><meta charset="utf-8"/><title>Remito de entrada ${tmpNumber}</title></head>
-      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
-        <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
-        <div style="color:#334155;margin-bottom:12px;">
-          <div><strong>N° temporal:</strong> ${tmpNumber}</div>
-          <div><strong>Sucursal:</strong> ${escapeHtml(branchLabel)}</div>
-          ${provider ? `<div><strong>Proveedor:</strong> ${escapeHtml(provider)}</div>` : ""}
-          <div><strong>Fecha:</strong> ${new Date().toLocaleString()}</div>
-        </div>
-        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
-          <thead>
-            <tr>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
-              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
-            </tr>
-          </thead>
-          <tbody>${tr}</tbody>
-        </table>
-        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${totalImporte.toFixed(2)}</strong></div>
-        ${notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(notes)}</div>` : ""}
-        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remitoId}</div>
-      </body>
-    </html>
-  `;
+  return `
+    <html>
+      <head><meta charset="utf-8"/><title>Remito de entrada ${tmpNumber}</title></head>
+      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
+        <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
+        <div style="color:#334155;margin-bottom:12px;">
+          <div><strong>N° temporal:</strong> ${tmpNumber}</div>
+          <div><strong>Sucursal:</strong> ${escapeHtml(branchLabel)}</div>
+          ${provider ? `<div><strong>Proveedor:</strong> ${escapeHtml(provider)}</div>` : ""}
+          <div><strong>Fecha:</strong> ${new Date().toLocaleString()}</div>
+        </div>
+        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
+          <thead>
+            <tr>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
+            </tr>
+          </thead>
+          <tbody>${tr}</tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${totalImporte.toFixed(2)}</strong></div>
+        ${notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(notes)}</div>` : ""}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remitoId}</div>
+      </body>
+    </html>
+  `;
 }
 
 function escapeHtml(s: string) {

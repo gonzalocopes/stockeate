@@ -9,8 +9,13 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useBranch } from "../stores/branch";
-import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+import { useThemeStore } from "../stores/themeProviders";
+
+// 👇 imports menú
+import { useAuth } from "../stores/auth";
+import HamburgerMenu from "../components/HamburgerMenu";
 
 type Row = {
   id: string;
@@ -26,16 +31,13 @@ type Row = {
   total_amount: number;
 };
 
-// Función helper para obtener remitos (mock para web)
 const getRemitosHistory = (branchId: string, q: string, dir: string): any[] => {
-  if (Platform.OS === 'web') {
-    // Mock data para web
+  if (Platform.OS === "web") {
     return [];
   }
-  // En móvil, usar SQLite nativo
-  const SQLite = require('expo-sqlite');
+  const SQLite = require("expo-sqlite");
   const db = SQLite.openDatabaseSync("stockeate.db");
-  
+
   const qLike = `%${q.trim()}%`;
   const limit = 200;
   const off = 0;
@@ -101,16 +103,45 @@ const getRemitosHistory = (branchId: string, q: string, dir: string): any[] => {
 };
 
 export default function RemitosHistory({ navigation }: any) {
-  const { theme } = useThemeStore(); // 👈 Obtener el tema
+  const { mode, theme, toggleTheme } = useThemeStore();
   const branchId = useBranch((s) => s.id);
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"ALL" | "IN" | "OUT">("ALL");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // ── menú
+  const [menuVisible, setMenuVisible] = useState(false);
+  const menuItems = useMemo(
+    () => [
+      { label: mode === "light" ? "Tema Oscuro" : "Tema Claro", onPress: toggleTheme },
+      { label: "Configuración", onPress: () => navigation.navigate("Settings") },
+      { label: "Cerrar sesión", onPress: useAuth.getState().logout, isDestructive: true },
+    ],
+    [mode, toggleTheme]
+  );
+
+  // header con hamburguesa
+  useEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.colors.header ?? theme.colors.background },
+      headerTitleStyle: { color: theme.colors.text },
+      headerTintColor: theme.colors.text,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setMenuVisible(true)}
+          style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Abrir menú"
+        >
+          <Ionicons name="menu" size={22} color={theme.colors.text} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme, mode]);
+
   const subtitle = useMemo(() => {
-    const label =
-      dir === "ALL" ? "Entrada y salida" : dir === "IN" ? "Entrada" : "Salida";
+    const label = dir === "ALL" ? "Entrada y salida" : dir === "IN" ? "Entrada" : "Salida";
     return `${label} — ${rows.length} remito${rows.length === 1 ? "" : "s"}`;
   }, [dir, rows.length]);
 
@@ -125,14 +156,11 @@ export default function RemitosHistory({ navigation }: any) {
     if (!branchId) return;
     setLoading(true);
     try {
-      // Obtenemos remitos de la sucursal con: dirección (IN/OUT), total de ítems y total $
       const data = getRemitosHistory(branchId, q, dir);
-
-      // Normalizamos dir por si viene null
       setRows(
         data.map((r: any) => ({
           ...r,
-          dir: (r.dir === "IN" || r.dir === "OUT") ? r.dir : null,
+          dir: r.dir === "IN" || r.dir === "OUT" ? r.dir : null,
         }))
       );
     } finally {
@@ -143,48 +171,43 @@ export default function RemitosHistory({ navigation }: any) {
   const renderItem = ({ item }: { item: Row }) => {
     const created = new Date(item.created_at).toLocaleString();
     const isIN = item.dir === "IN";
-    
-    // Colores del Badge: usamos los colores semánticos para el fondo
     const badgeBg = isIN ? theme.colors.success : theme.colors.danger;
-    
+
     return (
       <View
         style={{
           borderBottomWidth: 1,
-          borderColor: theme.colors.border, // 👈 Borde del item
+          borderColor: theme.colors.border,
           paddingVertical: 10,
           gap: 6,
         }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontWeight: "700", color: theme.colors.text }}> {/* 👈 Color de texto principal */}
+          <Text style={{ fontWeight: "700", color: theme.colors.text }}>
             {item.tmp_number || "(sin nro.)"}
           </Text>
-          
-          {/* Badge IN/OUT */}
           <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: badgeBg }}>
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}> {/* 👈 Texto blanco para contraste */}
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}>
               {item.dir || "?"}
             </Text>
           </View>
         </View>
-        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}> {/* 👈 Color de texto secundario/mutado */}
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
           {created}
           {item.customer ? ` — ${item.dir === "IN" ? "Proveedor" : "Cliente"}: ${item.customer}` : ""}
         </Text>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}> {/* 👈 Color de texto secundario */}
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
           Items: {item.total_qty} — Total: ${item.total_amount.toFixed(2)}
         </Text>
 
         <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-          {/* Botón Ver detalle */}
           <TouchableOpacity
             onPress={() => navigation.navigate("RemitoDetail", { remitoId: item.id })}
-            style={{ 
-              paddingHorizontal: 12, 
-              paddingVertical: 8, 
-              borderRadius: 8, 
-              backgroundColor: theme.colors.primary // 👈 Color Primario
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              backgroundColor: theme.colors.primary
             }}
             activeOpacity={0.9}
           >
@@ -209,7 +232,6 @@ export default function RemitosHistory({ navigation }: any) {
 
       {/* Filtros */}
       <View style={{ gap: 8 }}>
-        {/* Input de Búsqueda */}
         <TextInput
           value={q}
           onChangeText={setQ}
@@ -220,13 +242,11 @@ export default function RemitosHistory({ navigation }: any) {
             borderColor: q ? theme.colors.primary : theme.colors.inputBorder,
             borderRadius: 8,
             padding: 10,
-            backgroundColor: theme.colors.inputBackground, 
-            color: theme.colors.text, 
+            backgroundColor: theme.colors.inputBackground,
+            color: theme.colors.text,
           }}
         />
         <View style={{ flexDirection: "row", gap: 8 }}>
-          
-          {/* Botón Todos */}
           <TouchableOpacity
             onPress={() => setDir("ALL")}
             style={{
@@ -235,20 +255,16 @@ export default function RemitosHistory({ navigation }: any) {
               borderRadius: 10,
               borderWidth: 1,
               borderColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBorder,
-              backgroundColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBackground, // Primary cuando activo
+              backgroundColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBackground,
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "ALL" ? 'white' : theme.colors.text // Texto blanco cuando activo, sino texto normal
-            }}>
+            <Text style={{ fontWeight: "700", color: dir === "ALL" ? "white" : theme.colors.text }}>
               Todos
             </Text>
           </TouchableOpacity>
-          
-          {/* Botón Entrada (IN) */}
+
           <TouchableOpacity
             onPress={() => setDir("IN")}
             style={{
@@ -257,20 +273,16 @@ export default function RemitosHistory({ navigation }: any) {
               borderRadius: 10,
               borderWidth: 1,
               borderColor: dir === "IN" ? theme.colors.success : theme.colors.inputBorder,
-              backgroundColor: dir === "IN" ? theme.colors.success : theme.colors.inputBackground, // Success cuando activo
+              backgroundColor: dir === "IN" ? theme.colors.success : theme.colors.inputBackground,
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "IN" ? 'white' : theme.colors.text
-            }}>
+            <Text style={{ fontWeight: "700", color: dir === "IN" ? "white" : theme.colors.text }}>
               Entrada
             </Text>
           </TouchableOpacity>
-          
-          {/* Botón Salida (OUT) */}
+
           <TouchableOpacity
             onPress={() => setDir("OUT")}
             style={{
@@ -279,15 +291,12 @@ export default function RemitosHistory({ navigation }: any) {
               borderRadius: 10,
               borderWidth: 1,
               borderColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBorder,
-              backgroundColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBackground, // Danger cuando activo
+              backgroundColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBackground,
               alignItems: "center",
             }}
             activeOpacity={0.9}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "OUT" ? 'white' : theme.colors.text
-            }}>
+            <Text style={{ fontWeight: "700", color: dir === "OUT" ? "white" : theme.colors.text }}>
               Salida
             </Text>
           </TouchableOpacity>
@@ -307,6 +316,14 @@ export default function RemitosHistory({ navigation }: any) {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* 👇 Modal del menú */}
+      <HamburgerMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        items={menuItems}
+        navigation={navigation}
+      />
     </View>
   );
 }

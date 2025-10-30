@@ -1,10 +1,10 @@
 ﻿﻿import React, { useEffect } from "react";
-import { NavigationContainer, DarkTheme, DefaultTheme} from "@react-navigation/native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"; // cambio para los botones de navegacion
+import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useAuth } from "./src/stores/auth";
-import { useBranch } from "./src/stores/branch"; // 👈 NUEVO
+import { useBranch } from "./src/stores/branch";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
@@ -15,15 +15,10 @@ import RemitoForm from "./src/screens/RemitoForm";
 import RemitoResult from "./src/screens/RemitoResult";
 import { initDb } from "./src/db";
 
-// 👇 NUEVO: importar la pantalla de productos de la sucursal
 import BranchProducts from "./src/screens/BranchProducts";
-// 👇 NUEVO: importar archivados
 import BranchArchived from "./src/screens/BranchArchived";
-// 👇 NUEVO: hub de remitos
 import RemitosHub from "./src/screens/RemitoHub";
-// 👇 NUEVO: remito de ENTRADA (ingreso)
 import RemitoIngreso from "./src/screens/RemitoIngreso";
-// 👇 NUEVO: historial + detalle
 import RemitosHistory from "./src/screens/RemitosHistory";
 import RemitoDetail from "./src/screens/RemitoDetail";
 import SettingsScreen from "./src/screens/SettingsScreen";
@@ -31,38 +26,35 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 
 import { useThemeStore } from "./src/stores/themeProviders";
 
-
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   // auth
-  const hydrateAuth = useAuth((s) => s.hydrate); // 👈 cambio de nombre para claridad
+  const hydrateAuth = useAuth((s) => s.hydrate);
   const token = useAuth((s) => s.token);
 
   // branch
-  const hydrateBranch = useBranch((s) => s.hydrate); // 👈 NUEVO
+  const hydrateBranch = useBranch((s) => s.hydrate);
 
   // theme
-  const { theme, mode, toggleTheme } = useThemeStore();
-
-
+  const { theme, mode } = useThemeStore();
 
   useEffect(() => {
     initDb();
-    hydrateAuth(); // hidrata token guardado
-    hydrateBranch(); // 👈 hidrata sucursal guardada
+    hydrateAuth();
+    hydrateBranch();
   }, []);
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} >
-        <NavigationContainer theme={ mode === 'dark' ? DarkTheme : DefaultTheme} >
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <NavigationContainer theme={mode === "dark" ? DarkTheme : DefaultTheme}>
           {!token ? (
             <Stack.Navigator>
               <Stack.Screen
                 name="Login"
                 component={LoginScreen}
-                options={{ title: "Stockeate - Acceso" }}
+                options={{ headerShown: false }}
               />
               <Stack.Screen
                 name="Register"
@@ -87,7 +79,6 @@ export default function App() {
                   title: "Menú",
                 }}
               />
-              {/* 👇 NUEVO: hub de remitos */}
               <Stack.Screen
                 name="RemitosHub"
                 component={RemitosHub}
@@ -103,13 +94,11 @@ export default function App() {
                 component={RemitoForm}
                 options={{ title: "Formar remito" }}
               />
-              {/* 👇 NUEVO: remito de ENTRADA */}
               <Stack.Screen
                 name="RemitoIngreso"
                 component={RemitoIngreso}
                 options={{ title: "Remito de entrada" }}
               />
-              {/* 👇 NUEVO: historial + detalle */}
               <Stack.Screen
                 name="RemitosHistory"
                 component={RemitosHistory}
@@ -120,19 +109,16 @@ export default function App() {
                 component={RemitoDetail}
                 options={{ title: "Remito" }}
               />
-
               <Stack.Screen
                 name="RemitoResult"
                 component={RemitoResult}
                 options={{ title: "Remito generado" }}
               />
-              {/* 👇 NUEVO: pantalla para ver/editar productos de la sucursal */}
               <Stack.Screen
                 name="BranchProducts"
                 component={BranchProducts}
                 options={{ title: "Productos de la sucursal" }}
               />
-              {/* 👇 NUEVO: pantalla para ver/desarchivar/elim. productos archivados */}
               <Stack.Screen
                 name="BranchArchived"
                 component={BranchArchived}
@@ -155,5 +141,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-//
