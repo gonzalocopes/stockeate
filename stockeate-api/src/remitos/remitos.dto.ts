@@ -189,8 +189,8 @@ export class Last6MonthsRemitosStatsDto {
 // DTO para estadísticas de últimos 6 meses (productos)
 export class Last6MonthsProductsStatsDto {
   month: string;
-  productosIngresados: number;
-  productosEgresados: number;
+  ingresos: number;
+  egresos: number;
 }
 
 export class GetLast6MonthsStatsQueryDto {
