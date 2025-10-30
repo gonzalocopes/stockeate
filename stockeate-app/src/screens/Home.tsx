@@ -173,19 +173,20 @@ export default function Home({ navigation }: any) {
         </View>
       </View>
 
-      {/* Footer */}
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 70,
-          backgroundColor: theme.colors.inputBackground,
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-        }}
-      />
+{/* Footer */}
+{/*     <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 70, // Altura de la barra
+        backgroundColor: theme.colors.inputBackground, // Color de fondo
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+      }}
+    />
+*/}
 
       <HamburgerMenu
         visible={menuVisible}
