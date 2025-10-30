@@ -26,6 +26,7 @@ model User {
 model Branch {
   id       String       @id @default(uuid())
   name     String
+  location String?
   users    BranchUser[]
   products Product[]
   remitos  Remito[]
