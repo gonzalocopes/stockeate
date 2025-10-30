@@ -671,8 +671,8 @@ export class RemitosService {
       if (remitos.length === 0) {
         results.push({
           month: monthName,
-          productosIngresados: 0,
-          productosEgresados: 0,
+          ingresos: 0,
+          egresos: 0,
         });
         continue;
       }
@@ -697,24 +697,24 @@ export class RemitosService {
         }
       }
 
-      let productosIngresados = 0;
-      let productosEgresados = 0;
+      let ingresos = 0;
+      let egresos = 0;
 
       for (const remito of remitos) {
         const type = remitoTypes.get(remito.tmpNumber);
         const totalQty = remito.items.reduce((sum, item) => sum + item.qty, 0);
 
         if (type === 'IN') {
-          productosIngresados += totalQty;
+          ingresos += totalQty;
         } else {
-          productosEgresados += totalQty;
+          egresos += totalQty;
         }
       }
 
       results.push({
         month: monthName,
-        productosIngresados,
-        productosEgresados,
+        ingresos,
+        egresos,
       });
     }
 
