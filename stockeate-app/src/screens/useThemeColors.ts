@@ -15,6 +15,13 @@ export const lightColors = {
   inputBorder: "#cbd5e1",
   headerIcon: "#1c1c1e",
   escanear: "#10b981",
+
+  // --- 👇 COLORES AÑADIDOS ---
+  digitalizar: '#166534', // Verde oscuro
+  warning: '#ffc107',     // Amarillo
+  info: '#0ea5e9',         // Azul medio
+  textOnPrimary: '#FFFFFF', // Texto sobre color primario (ej: blanco)
+  textOnWarning: '#212529', // Texto sobre color warning (ej: negro/gris oscuro)
 };
 
 export const darkColors = {
@@ -30,8 +37,15 @@ export const darkColors = {
   neutral: "#6b7280",
   inputBackground: "#373b42ff",
   inputBorder: "#4b5563",
-  headerIcon: "#ffffff", // Asumiendo que el header también cambiará
+  headerIcon: "#ffffff",
   escanear: "#10b981",
+
+  // --- 👇 COLORES AÑADIDOS ---
+  digitalizar: '#16a34a', // Verde (versión dark)
+  warning: '#facc15',     // Amarillo (versión dark)
+  info: '#38bdf8',         // Azul claro (versión dark)
+  textOnPrimary: '#FFFFFF', // Texto sobre color primario
+  textOnWarning: '#212529', // Texto sobre color warning
 };
 
 export const themes = {
@@ -42,7 +56,6 @@ export const themes = {
         colors: darkColors,
     },
 };
-
 
 // Ejemplo de cómo podrías usarlo en un StyleSheet
 /*

@@ -8,10 +8,16 @@ import {
   FlatList,
   ActivityIndicator,
   Platform,
+  StyleSheet, // <-- 1. Importamos StyleSheet
 } from "react-native";
 import { useBranch } from "../stores/branch";
-import { useThemeStore } from "../stores/themeProviders"; // 👈 Importar el store del tema
+import { useThemeStore } from "../stores/themeProviders";
+// 👇 2. Importamos las funciones de sincronización
+import { api, pullFromServer, PullPayload } from "../api"; 
+import { applyPull } from "../sync/apply"; // Asegúrate que la ruta a 'apply.ts' sea correcta
+import * as SQLite from "expo-sqlite";
 
+// ... (El tipo 'Row' se mantiene igual) ...
 type Row = {
   id: string;
   tmp_number: string | null;
@@ -26,169 +32,138 @@ type Row = {
   total_amount: number;
 };
 
-// Función helper para obtener remitos (mock para web)
-const getRemitosHistory = (branchId: string, q: string, dir: string): any[] => {
+// ... (La función 'getRemitosHistoryFromLocalDB' se mantiene igual que la que ya tenías) ...
+const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string): Row[] => {
   if (Platform.OS === 'web') {
-    // Mock data para web
     return [];
   }
-  // En móvil, usar SQLite nativo
-  const SQLite = require('expo-sqlite');
   const db = SQLite.openDatabaseSync("stockeate.db");
-  
   const qLike = `%${q.trim()}%`;
   const limit = 200;
   const off = 0;
 
-  return (db as any).getAllSync(
+  // 👇 3. Usamos la consulta SQL mejorada que incluye COALESCE
+  const data = (db as any).getAllSync(
     `
     SELECT
       r.*,
-      (
-        SELECT sm.type
-        FROM stock_moves sm
-        WHERE sm.ref = r.tmp_number
-        LIMIT 1
+      COALESCE(
+        (SELECT sm.type FROM stock_moves sm WHERE sm.ref LIKE '%' || r.tmp_number LIMIT 1),
+        CASE WHEN r.tmp_number LIKE 'ENT-%' THEN 'IN' ELSE NULL END
       ) AS dir,
-      (
-        SELECT IFNULL(SUM(ri.qty),0)
-        FROM remito_items ri
-        WHERE ri.remito_id = r.id
-      ) AS total_qty,
-      (
-        SELECT IFNULL(SUM(ri.qty * ri.unit_price),0)
-        FROM remito_items ri
-        WHERE ri.remito_id = r.id
-      ) AS total_amount
+      (SELECT IFNULL(SUM(ri.qty),0) FROM remito_items ri WHERE ri.remito_id = r.id) AS total_qty,
+      (SELECT IFNULL(SUM(ri.qty * ri.unit_price),0) FROM remito_items ri WHERE ri.remito_id = r.id) AS total_amount
     FROM remitos r
     WHERE r.branch_id = ?
-      AND (
-        ? = '' OR
-        r.tmp_number LIKE ? OR
-        IFNULL(r.customer,'') LIKE ? OR
-        EXISTS (
-          SELECT 1
-          FROM remito_items ri
-          JOIN products p ON p.id = ri.product_id
-          WHERE ri.remito_id = r.id
-            AND (p.code LIKE ? OR p.name LIKE ?)
-        )
-      )
-      AND (
-        ? = 'ALL' OR EXISTS (
-          SELECT 1
-          FROM stock_moves sm
-          WHERE sm.ref = r.tmp_number
-            AND sm.type = ?
+      AND (? = '' OR r.tmp_number LIKE ? OR IFNULL(r.customer,'') LIKE ? OR EXISTS (
+          SELECT 1 FROM remito_items ri JOIN products p ON p.id = ri.product_id
+          WHERE ri.remito_id = r.id AND (p.code LIKE ? OR p.name LIKE ?)
         )
       )
     ORDER BY datetime(r.created_at) DESC
     LIMIT ? OFFSET ?;
     `,
-    [
-      branchId,
-      q.trim(),
-      qLike,
-      qLike,
-      qLike,
-      qLike,
-      dir,
-      dir === "ALL" ? null : dir,
-      limit,
-      off,
-    ]
+    [branchId, q.trim(), qLike, qLike, qLike, qLike, limit, off]
   );
+  
+  return data.filter((r: any) => dir === 'ALL' || r.dir === dir);
 };
 
+
 export default function RemitosHistory({ navigation }: any) {
-  const { theme } = useThemeStore(); // 👈 Obtener el tema
+  const { theme } = useThemeStore();
   const branchId = useBranch((s) => s.id);
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"ALL" | "IN" | "OUT">("ALL");
   const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Empezar cargando
 
   const subtitle = useMemo(() => {
     const label =
       dir === "ALL" ? "Entrada y salida" : dir === "IN" ? "Entrada" : "Salida";
     return `${label} — ${rows.length} remito${rows.length === 1 ? "" : "s"}`;
-  }, [dir, rows.length]);
+  }, [rows.length]);
 
   useEffect(() => {
-    if (!branchId) return;
-    const id = setTimeout(load, 180);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!branchId) {
+        setLoading(false);
+        return;
+    };
+    const timerId = setTimeout(load, 250); // Debounce
+    return () => clearTimeout(timerId);
   }, [q, dir, branchId]);
 
-  const load = () => {
+  // 👇 4. Función 'load' actualizada para incluir la sincronización COMPLETA
+  const load = async () => {
     if (!branchId) return;
     setLoading(true);
     try {
-      // Obtenemos remitos de la sucursal con: dirección (IN/OUT), total de ítems y total $
-      const data = getRemitosHistory(branchId, q, dir);
+      // 1. TRAEMOS los datos del servidor
+      const payload: PullPayload = await pullFromServer(branchId);
+      
+      // 2. APLICAMOS los datos a la BD local
+      await applyPull(branchId, payload); 
 
-      // Normalizamos dir por si viene null
+      // 3. AHORA SÍ consultamos la BD local actualizada
+      const data = getRemitosHistoryFromLocalDB(branchId, q, dir);
+      
       setRows(
         data.map((r: any) => ({
           ...r,
           dir: (r.dir === "IN" || r.dir === "OUT") ? r.dir : null,
         }))
       );
+    } catch (error) {
+        console.error("Error loading history:", error);
+        setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // 👇 5. Lógica de 'renderItem' con la etiqueta de digitalización
   const renderItem = ({ item }: { item: Row }) => {
     const created = new Date(item.created_at).toLocaleString();
     const isIN = item.dir === "IN";
-    
-    // Colores del Badge: usamos los colores semánticos para el fondo
     const badgeBg = isIN ? theme.colors.success : theme.colors.danger;
-    
+    const isDigitalized = item.notes?.startsWith("Ingreso por digitalización"); // Lógica de la etiqueta
+
     return (
-      <View
-        style={{
-          borderBottomWidth: 1,
-          borderColor: theme.colors.border, // 👈 Borde del item
-          paddingVertical: 10,
-          gap: 6,
-        }}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontWeight: "700", color: theme.colors.text }}> {/* 👈 Color de texto principal */}
+      <View style={[styles.itemContainer, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
+        <View style={styles.header}>
+          <Text style={[styles.remitoNumber, { color: theme.colors.text }]}>
             {item.tmp_number || "(sin nro.)"}
           </Text>
-          
-          {/* Badge IN/OUT */}
-          <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: badgeBg }}>
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 12 }}> {/* 👈 Texto blanco para contraste */}
-              {item.dir || "?"}
-            </Text>
-          </View>
+          {item.dir && (
+            <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+              <Text style={[styles.badgeText, { color: "white" }]}>
+                {item.dir}
+              </Text>
+            </View>
+          )}
         </View>
-        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}> {/* 👈 Color de texto secundario/mutado */}
+        <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>
           {created}
-          {item.customer ? ` — ${item.dir === "IN" ? "Proveedor" : "Cliente"}: ${item.customer}` : ""}
+          {item.customer ? ` — ${isIN ? "Proveedor" : "Cliente"}: ${item.customer}` : ""}
         </Text>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}> {/* 👈 Color de texto secundario */}
+        <Text style={[styles.detailsText, { color: theme.colors.textSecondary }]}>
           Items: {item.total_qty} — Total: ${item.total_amount.toFixed(2)}
         </Text>
 
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-          {/* Botón Ver detalle */}
+        {/* Mostramos la etiqueta si es digitalizado */}
+        {isDigitalized && (
+          <Text style={styles.digitalizedTag}>
+            ✔️ Ingresado por digitalización
+          </Text>
+        )}
+
+        <View style={styles.actions}>
           <TouchableOpacity
             onPress={() => navigation.navigate("RemitoDetail", { remitoId: item.id })}
-            style={{ 
-              paddingHorizontal: 12, 
-              paddingVertical: 8, 
-              borderRadius: 8, 
-              backgroundColor: theme.colors.primary // 👈 Color Primario
-            }}
+            style={[styles.button, { backgroundColor: theme.colors.primary }]}
             activeOpacity={0.9}
           >
-            <Text style={{ color: "white", fontWeight: "700" }}>Ver detalle</Text>
+            <Text style={styles.buttonText}>Ver detalle</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -197,107 +172,76 @@ export default function RemitosHistory({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={{ flex: 1, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.background }}>
+      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
         <Text style={{ color: theme.colors.text }}>Primero seleccioná una sucursal.</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
-      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.text }}>Historial de remitos</Text>
+    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Historial de remitos</Text>
 
-      {/* Filtros */}
-      <View style={{ gap: 8 }}>
-        {/* Input de Búsqueda */}
+      {/* Filtros (adaptados a StyleSheet y temas) */}
+      <View style={styles.filtersContainer}>
         <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder="Buscar por nro., cliente/proveedor, código o nombre"
+          placeholder="Buscar por nro., cliente/proveedor..."
           placeholderTextColor={theme.colors.textMuted}
-          style={{
-            borderWidth: 1,
-            borderColor: q ? theme.colors.primary : theme.colors.inputBorder,
-            borderRadius: 8,
-            padding: 10,
-            backgroundColor: theme.colors.inputBackground, 
-            color: theme.colors.text, 
-          }}
+          style={[
+            styles.searchInput,
+            { 
+              borderColor: q ? theme.colors.primary : theme.colors.inputBorder,
+              backgroundColor: theme.colors.inputBackground, 
+              color: theme.colors.text, 
+            }
+          ]}
         />
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          
-          {/* Botón Todos */}
-          <TouchableOpacity
-            onPress={() => setDir("ALL")}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBorder,
-              backgroundColor: dir === "ALL" ? theme.colors.primary : theme.colors.inputBackground, // Primary cuando activo
-              alignItems: "center",
-            }}
-            activeOpacity={0.9}
+        <View style={styles.filterButtons}>
+          <TouchableOpacity 
+            onPress={() => setDir("ALL")} 
+            style={[
+              styles.filterButton, 
+              { borderColor: theme.colors.inputBorder, backgroundColor: theme.colors.inputBackground },
+              dir === 'ALL' && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary }
+            ]}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "ALL" ? 'white' : theme.colors.text // Texto blanco cuando activo, sino texto normal
-            }}>
+            <Text style={[styles.filterButtonText, { color: theme.colors.text }, dir === 'ALL' && { color: 'white' }]}>
               Todos
             </Text>
           </TouchableOpacity>
-          
-          {/* Botón Entrada (IN) */}
-          <TouchableOpacity
-            onPress={() => setDir("IN")}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: dir === "IN" ? theme.colors.success : theme.colors.inputBorder,
-              backgroundColor: dir === "IN" ? theme.colors.success : theme.colors.inputBackground, // Success cuando activo
-              alignItems: "center",
-            }}
-            activeOpacity={0.9}
+          <TouchableOpacity 
+            onPress={() => setDir("IN")} 
+            style={[
+              styles.filterButton, 
+              { borderColor: theme.colors.inputBorder, backgroundColor: theme.colors.inputBackground },
+              dir === 'IN' && { borderColor: theme.colors.success, backgroundColor: theme.colors.success }
+            ]}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "IN" ? 'white' : theme.colors.text
-            }}>
+            <Text style={[styles.filterButtonText, { color: theme.colors.text }, dir === 'IN' && { color: 'white' }]}>
               Entrada
             </Text>
           </TouchableOpacity>
-          
-          {/* Botón Salida (OUT) */}
-          <TouchableOpacity
-            onPress={() => setDir("OUT")}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBorder,
-              backgroundColor: dir === "OUT" ? theme.colors.danger : theme.colors.inputBackground, // Danger cuando activo
-              alignItems: "center",
-            }}
-            activeOpacity={0.9}
+          <TouchableOpacity 
+            onPress={() => setDir("OUT")} 
+            style={[
+              styles.filterButton, 
+              { borderColor: theme.colors.inputBorder, backgroundColor: theme.colors.inputBackground },
+              dir === 'OUT' && { borderColor: theme.colors.danger, backgroundColor: theme.colors.danger }
+            ]}
           >
-            <Text style={{ 
-              fontWeight: "700", 
-              color: dir === "OUT" ? 'white' : theme.colors.text
-            }}>
+            <Text style={[styles.filterButtonText, { color: theme.colors.text }, dir === 'OUT' && { color: 'white' }]}>
               Salida
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>{subtitle}</Text>
+      <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
 
       {loading ? (
-        <ActivityIndicator color={theme.colors.primary} />
+        <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }}/>
       ) : (
         <FlatList
           data={rows}
@@ -305,8 +249,36 @@ export default function RemitosHistory({ navigation }: any) {
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={[styles.emptyText, {color: theme.colors.textMuted}]}>No se encontraron remitos.</Text>}
+          onRefresh={load} // Pull-to-refresh ahora sincroniza
+          refreshing={loading}
         />
       )}
     </View>
   );
 }
+
+// 👇 6. Centralizamos todos los estilos en StyleSheet
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: 16, gap: 12 },
+  centered: { flex: 1, padding: 16, alignItems: "center", justifyContent: "center" },
+  screenTitle: { fontSize: 22, fontWeight: "800", marginBottom: 8 },
+  filtersContainer: { gap: 12 },
+  searchInput: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },
+  filterButtons: { flexDirection: "row", gap: 8 },
+  filterButton: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  filterButtonText: { fontWeight: "600" },
+  subtitle: { fontSize: 12, marginTop: 4 },
+  emptyText: { textAlign: 'center', marginTop: 40, fontSize: 16 },
+  itemContainer: { borderBottomWidth: 1, paddingVertical: 12, gap: 4, paddingHorizontal: 4, backgroundColor: 'white', marginBottom: 8, borderRadius: 8, elevation: 1 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  remitoNumber: { fontWeight: "700", fontSize: 16 },
+  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  badgeText: { fontWeight: "bold", fontSize: 12 },
+  dateText: { fontSize: 12 },
+  detailsText: { fontSize: 14, fontWeight: '500' },
+  digitalizedTag: { fontSize: 11, color: "#059669", fontWeight: 'bold', marginTop: 4 }, // Color verde para la etiqueta
+  actions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  button: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  buttonText: { color: "white", fontWeight: "600" },
+});
