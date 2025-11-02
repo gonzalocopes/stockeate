@@ -19,10 +19,15 @@ export const useAuth = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      if (!validateUserInput(email, password)) {
+        throw new Error("Entradas del usuario inválidas");
+      }
+      const sanitizedEmail = sanitizeInput(email);
+      const sanitizedPassword = sanitizeInput(password);
+      const { data } = await api.post("/auth/login", { email: sanitizedEmail, password: sanitizedPassword });
       const access = data?.access_token as string;
       set({ token: access });
-      setAuthToken(access); 
+      setAuthToken(access);
     } catch (e: any) {
       throw new Error(getMsg(e));
     }
@@ -30,7 +35,12 @@ export const useAuth = create<AuthState>((set) => ({
 
   register: async (email, password) => {
     try {
-      const { data } = await api.post("/auth/register", { email, password });
+      if (!validateUserInput(email, password)) {
+        throw new Error("Entradas del usuario inválidas");
+      }
+      const sanitizedEmail = sanitizeInput(email);
+      const sanitizedPassword = sanitizeInput(password);
+      const { data } = await api.post("/auth/register", { email: sanitizedEmail, password: sanitizedPassword });
       const access = data?.access_token as string;
       set({ token: access });
       setAuthToken(access);
@@ -45,8 +55,16 @@ export const useAuth = create<AuthState>((set) => ({
       // await api.post("/auth/logout");
     } finally {
       set({ token: null });
-      setAuthToken(null); // quita Authorization
-      // NO se guarda nada, así que al cerrar la app se pierde naturalmente.
+      setAuthToken(null);
     }
   },
 }));
+
+const validateUserInput = (email: string, password: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && password.length >= 6;
+};
+
+const sanitizeInput = (input: string): string => {
+  return input.replace(/[\u0000-\u001F'";\\]/g, "");
+};

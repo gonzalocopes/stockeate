@@ -2,7 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
-  NotFoundException,
+
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
@@ -39,13 +39,12 @@ export class AuthService {
     return this.sign(user.id, user.email);
   }
 
-  // -------- Password Reset por email con código de 6 dígitos --------
+
   async forgot(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    // Siempre respondemos OK para no filtrar existencia
-    if (!user) throw new NotFoundException('El correo no está registrado');
+    
+    if (!user) return;
 
-    // invalidar tokens viejos
     await this.prisma.passwordReset.deleteMany({ where: { userId: user.id } });
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
@@ -55,7 +54,15 @@ export class AuthService {
       data: { userId: user.id, token: token, expiresAt },
     });
 
-    await this.email.sendPasswordResetToken(user.email, token);
+    try {
+      await this.email.sendPasswordResetToken(user.email, token);
+    } catch (error) {
+      console.error('[AuthService] Error enviando email:', {
+        email: user.email,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 
   async reset(token: string, newPassword: string): Promise<void> {
@@ -83,7 +90,7 @@ export class AuthService {
     ]);
   }
 
-  // -------- Helpers --------
+  
   private sign(sub: string, email: string) {
     return this.jwt.sign({ sub, email });
   }
