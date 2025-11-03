@@ -60,11 +60,12 @@ export default function RegisterScreen({ navigation }: any) {
     
     setLoading(true);
     try {
-      // VERSIÓN SIMPLIFICADA - Solo email y password (backend de Lisandro)
-      // Los campos nombre/apellido se validan pero no se envían
+      // Enviar nombre, apellido, email y contraseña
       await register(
         formData.email,
-        formData.password
+        formData.password,
+        formData.nombre,
+        formData.apellido
       );
       
       Alert.alert(

@@ -1,6 +1,6 @@
 // src/components/HamburgerMenu.tsx
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   Modal,
   View,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeStore } from "../stores/themeProviders";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type MenuItem = {
   label: string;
@@ -46,6 +47,31 @@ export default function HamburgerMenu({
 }: HamburgerMenuProps) {
   const { theme, mode } = useThemeStore();
   const [dimensions, setDimensions] = React.useState(Dimensions.get("window"));
+  const [displayName, setDisplayName] = useState(userName || "Usuario");
+  const [displayEmail, setDisplayEmail] = useState(userEmail || "");
+
+  // ---- Cargar datos del usuario desde AsyncStorage
+  useEffect(() => {
+    if (visible) {
+      loadUserData();
+    }
+  }, [visible]);
+
+  const loadUserData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem("user");
+      if (userData) {
+        const user = JSON.parse(userData);
+        const firstName = user.firstName || "";
+        const lastName = user.lastName || "";
+        const fullName = `${firstName} ${lastName}`.trim() || "Usuario";
+        setDisplayName(fullName);
+        setDisplayEmail(user.email || "");
+      }
+    } catch (error) {
+      console.error("Error al cargar datos del usuario en HamburgerMenu:", error);
+    }
+  };
 
   // ---- Layout & positioning
   const isDark = mode === "dark";
@@ -286,13 +312,13 @@ export default function HamburgerMenu({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.menuTitle, { color: theme.colors.text }]} numberOfLines={1}>
-              {userName || "Usuario"}
+              {displayName}
             </Text>
             <Text
               style={[styles.menuSubtitle, { color: isDark ? "#9CA3AF" : "#6B7280" }]}
               numberOfLines={1}
             >
-              {userEmail || "example@mail.com"}
+              {displayEmail}
             </Text>
           </View>
         </Pressable>

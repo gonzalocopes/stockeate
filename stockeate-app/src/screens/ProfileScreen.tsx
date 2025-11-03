@@ -1,5 +1,5 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,55 +8,141 @@ import {
   Pressable,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeStore } from "../stores/themeProviders";
+import { updateProfile } from "../api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen({ navigation }: any) {
   const { theme } = useThemeStore();
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Usuario");
-  const [email, setEmail] = useState("example@mail.com");
-  const [tempName, setTempName] = useState(name);
-  const [tempEmail, setTempEmail] = useState(email);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = () => {
-    setName(tempName);
-    setEmail(tempEmail);
-    setIsEditing(false);
-    Alert.alert("Éxito", "Perfil actualizado correctamente");
+  // State para datos del usuario
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [dni, setDni] = useState("");
+  const [cuit, setCuit] = useState("");
+
+  // State temporal para edición
+  const [tempFirstName, setTempFirstName] = useState(firstName);
+  const [tempLastName, setTempLastName] = useState(lastName);
+  const [tempDni, setTempDni] = useState(dni);
+  const [tempCuit, setTempCuit] = useState(cuit);
+
+  // Cargar datos del usuario al montar
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem("user");
+      if (userData) {
+        const user = JSON.parse(userData);
+        setFirstName(user.firstName || "");
+        setLastName(user.lastName || "");
+        setEmail(user.email || "");
+        setDni(user.dni || "");
+        setCuit(user.cuit || "");
+
+        // Inicializar valores temporales
+        setTempFirstName(user.firstName || "");
+        setTempLastName(user.lastName || "");
+        setTempDni(user.dni || "");
+        setTempCuit(user.cuit || "");
+      }
+    } catch (error) {
+      console.error("Error al cargar datos del usuario:", error);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!tempFirstName.trim() || !tempLastName.trim()) {
+      Alert.alert("Error", "El nombre y apellido son requeridos");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await updateProfile(
+        tempFirstName,
+        tempLastName,
+        undefined,
+        undefined,
+        tempDni || undefined,
+        tempCuit || undefined,
+      );
+
+      // Actualizar datos locales
+      setFirstName(tempFirstName);
+      setLastName(tempLastName);
+      setDni(tempDni);
+      setCuit(tempCuit);
+
+      // Guardar en AsyncStorage
+      await AsyncStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...response,
+        }),
+      );
+
+      setIsEditing(false);
+      Alert.alert("Éxito", "Perfil actualizado correctamente");
+    } catch (error: any) {
+      Alert.alert("Error", error.response?.data?.message || "Error al actualizar el perfil");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
-    setTempName(name);
-    setTempEmail(email);
+    setTempFirstName(firstName);
+    setTempLastName(lastName);
+    setTempDni(dni);
+    setTempCuit(cuit);
     setIsEditing(false);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors?.background || '#f9f9f9' }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors?.background || "#f9f9f9" }]}>
       <ScrollView style={styles.scrollView}>
         {/* Profile Header */}
-        <View style={[styles.profileHeader, { backgroundColor: theme.colors?.card || '#fff' }]}>
+        <View style={[styles.profileHeader, { backgroundColor: theme.colors?.card || "#fff" }]}>
           <View style={styles.profileImageContainer}>
-            <Text style={styles.profileIcon}>👤</Text>
+            <Ionicons
+              name="person-circle"
+              size={80}
+              color={theme.colors?.primary || "#007AFF"}
+            />
           </View>
-          <Text style={[styles.profileTitle, { color: theme.colors?.text || '#000' }]}>
-            Mi Perfil
+          <Text
+            style={[styles.profileTitle, { color: theme.colors?.text || "#000" }]}
+          >
+            Hola {tempFirstName || "Usuario"}!
+          </Text>
+          <Text
+            style={[styles.profileSubtitle, { color: theme.colors?.text + "80" || "#666" }]}
+          >
+            {email}
           </Text>
         </View>
 
         {/* Profile Fields */}
-        <View style={[styles.fieldsContainer, { backgroundColor: theme.colors?.card || '#fff' }]}>
-          {/* Name Field */}
+        <View style={[styles.fieldsContainer, { backgroundColor: theme.colors?.card || "#fff" }]}>
+          {/* First Name Field */}
           <View style={styles.fieldItem}>
             <View style={styles.fieldHeader}>
               <Ionicons
                 name="person-outline"
                 size={20}
-                color={theme.colors?.primary || '#007AFF'}
+                color={theme.colors?.primary || "#007AFF"}
               />
-              <Text style={[styles.fieldLabel, { color: theme.colors?.text || '#000' }]}>
+              <Text style={[styles.fieldLabel, { color: theme.colors?.text || "#000" }]}>
                 Nombre
               </Text>
             </View>
@@ -65,33 +151,33 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[
                   styles.textInput,
                   {
-                    backgroundColor: theme.colors?.background || '#f5f5f5',
-                    borderColor: theme.colors?.border || '#e0e0e0',
-                    color: theme.colors?.text || '#000',
-                  }
+                    backgroundColor: theme.colors?.background || "#f5f5f5",
+                    borderColor: theme.colors?.border || "#e0e0e0",
+                    color: theme.colors?.text || "#000",
+                  },
                 ]}
-                value={tempName}
-                onChangeText={setTempName}
+                value={tempFirstName}
+                onChangeText={setTempFirstName}
                 placeholder="Ingresa tu nombre"
-                placeholderTextColor={theme.colors?.text + '80' || '#999'}
+                placeholderTextColor={theme.colors?.text + "80" || "#999"}
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: theme.colors?.text || '#000' }]}>
-                {name}
+              <Text style={[styles.fieldValue, { color: theme.colors?.text || "#000" }]}>
+                {firstName || "-"}
               </Text>
             )}
           </View>
 
-          {/* Email Field */}
+          {/* Last Name Field */}
           <View style={styles.fieldItem}>
             <View style={styles.fieldHeader}>
               <Ionicons
-                name="mail-outline"
+                name="person-outline"
                 size={20}
-                color={theme.colors?.primary || '#007AFF'}
+                color={theme.colors?.primary || "#007AFF"}
               />
-              <Text style={[styles.fieldLabel, { color: theme.colors?.text || '#000' }]}>
-                Email
+              <Text style={[styles.fieldLabel, { color: theme.colors?.text || "#000" }]}>
+                Apellido
               </Text>
             </View>
             {isEditing ? (
@@ -99,20 +185,106 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[
                   styles.textInput,
                   {
-                    backgroundColor: theme.colors?.background || '#f5f5f5',
-                    borderColor: theme.colors?.border || '#e0e0e0',
-                    color: theme.colors?.text || '#000',
-                  }
+                    backgroundColor: theme.colors?.background || "#f5f5f5",
+                    borderColor: theme.colors?.border || "#e0e0e0",
+                    color: theme.colors?.text || "#000",
+                  },
                 ]}
-                value={tempEmail}
-                onChangeText={setTempEmail}
-                placeholder="Ingresa tu email"
-                placeholderTextColor={theme.colors?.text + '80' || '#999'}
-                keyboardType="email-address"
+                value={tempLastName}
+                onChangeText={setTempLastName}
+                placeholder="Ingresa tu apellido"
+                placeholderTextColor={theme.colors?.text + "80" || "#999"}
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: theme.colors?.text || '#000' }]}>
-                {email}
+              <Text style={[styles.fieldValue, { color: theme.colors?.text || "#000" }]}>
+                {lastName || "-"}
+              </Text>
+            )}
+          </View>
+
+          {/* Email Field (Read-only) */}
+          <View style={styles.fieldItem}>
+            <View style={styles.fieldHeader}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={theme.colors?.primary || "#007AFF"}
+              />
+              <Text style={[styles.fieldLabel, { color: theme.colors?.text || "#000" }]}>
+                Email
+              </Text>
+            </View>
+            <Text style={[styles.fieldValue, { color: theme.colors?.text || "#000" }]}>
+              {email}
+            </Text>
+          </View>
+
+          {/* DNI Field */}
+          <View style={styles.fieldItem}>
+            <View style={styles.fieldHeader}>
+              <Ionicons
+                name="document-outline"
+                size={20}
+                color={theme.colors?.primary || "#007AFF"}
+              />
+              <Text style={[styles.fieldLabel, { color: theme.colors?.text || "#000" }]}>
+                DNI
+              </Text>
+            </View>
+            {isEditing ? (
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: theme.colors?.background || "#f5f5f5",
+                    borderColor: theme.colors?.border || "#e0e0e0",
+                    color: theme.colors?.text || "#000",
+                  },
+                ]}
+                value={tempDni}
+                onChangeText={setTempDni}
+                placeholder="Ingresa tu DNI"
+                placeholderTextColor={theme.colors?.text + "80" || "#999"}
+                keyboardType="numeric"
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: theme.colors?.text || "#000" }]}>
+                {dni || "-"}
+              </Text>
+            )}
+          </View>
+
+          {/* CUIT Field */}
+          <View style={styles.fieldItem}>
+            <View style={styles.fieldHeader}>
+              <Ionicons
+                name="briefcase-outline"
+                size={20}
+                color={theme.colors?.primary || "#007AFF"}
+              />
+              <Text style={[styles.fieldLabel, { color: theme.colors?.text || "#000" }]}>
+                CUIT
+              </Text>
+            </View>
+            {isEditing ? (
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: theme.colors?.background || "#f5f5f5",
+                    borderColor: theme.colors?.border || "#e0e0e0",
+                    color: theme.colors?.text || "#000",
+                  },
+                ]}
+                value={tempCuit}
+                onChangeText={setTempCuit}
+                placeholder="Ingresa tu CUIT"
+                placeholderTextColor={theme.colors?.text + "80" || "#999"}
+                keyboardType="numeric"
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: theme.colors?.text || "#000" }]}>
+                {cuit || "-"}
               </Text>
             )}
           </View>
@@ -123,23 +295,42 @@ export default function ProfileScreen({ navigation }: any) {
           {isEditing ? (
             <View style={styles.editButtons}>
               <Pressable
-                style={[styles.button, styles.cancelButton, { borderColor: theme.colors?.border || '#ccc' }]}
+                style={[
+                  styles.button,
+                  styles.cancelButton,
+                  { borderColor: theme.colors?.border || "#ccc" },
+                ]}
                 onPress={handleCancel}
+                disabled={isLoading}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.colors?.text || '#666' }]}>
+                <Text style={[styles.cancelButtonText, { color: theme.colors?.text || "#666" }]}>
                   Cancelar
                 </Text>
               </Pressable>
               <Pressable
-                style={[styles.button, styles.saveButton, { backgroundColor: theme.colors?.primary || '#007AFF' }]}
+                style={[
+                  styles.button,
+                  styles.saveButton,
+                  { backgroundColor: theme.colors?.primary || "#007AFF" },
+                  isLoading && { opacity: 0.6 },
+                ]}
                 onPress={handleSave}
+                disabled={isLoading}
               >
-                <Text style={styles.saveButtonText}>Guardar</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Guardar</Text>
+                )}
               </Pressable>
             </View>
           ) : (
             <Pressable
-              style={[styles.button, styles.editButton, { backgroundColor: theme.colors?.primary || '#007AFF' }]}
+              style={[
+                styles.button,
+                styles.editButton,
+                { backgroundColor: theme.colors?.primary || "#007AFF" },
+              ]}
               onPress={() => setIsEditing(true)}
             >
               <Ionicons name="pencil-outline" size={20} color="#fff" />
@@ -183,6 +374,10 @@ const styles = StyleSheet.create({
   profileTitle: {
     fontSize: 24,
     fontWeight: "600",
+  },
+  profileSubtitle: {
+    fontSize: 14,
+    marginTop: 8,
   },
   fieldsContainer: {
     marginHorizontal: '4%',

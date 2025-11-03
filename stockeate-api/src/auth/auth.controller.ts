@@ -1,11 +1,18 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Put, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 class RegisterDto {
   @IsEmail() email: string;
   @IsString() @MinLength(6) password: string;
+  @IsOptional() @IsString() firstName?: string;
+  @IsOptional() @IsString() lastName?: string;
+  @IsOptional() @IsString() role?: UserRole;
+  @IsOptional() @IsString() dni?: string;
+  @IsOptional() @IsString() cuit?: string;
 }
 class LoginDto {
   @IsEmail() email: string;
@@ -21,6 +28,15 @@ class ResetDto {
   @IsString() @MinLength(6) newPassword: string;
 }
 
+class UpdateProfileDto {
+  @IsOptional() @IsString() firstName?: string;
+  @IsOptional() @IsString() lastName?: string;
+  @IsOptional() @IsString() avatarUrl?: string;
+  @IsOptional() @IsString() role?: UserRole;
+  @IsOptional() @IsString() dni?: string;
+  @IsOptional() @IsString() cuit?: string;
+}
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -28,14 +44,22 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    const token = await this.auth.register(dto.email, dto.password);
-    return { access_token: token };
+    const result = await this.auth.register(
+      dto.email,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+      dto.role,
+      dto.dni,
+      dto.cuit,
+    );
+    return result;
   }
 
   @Post('login')
   async login(@Body() dto: LoginDto) {
-    const token = await this.auth.login(dto.email, dto.password);
-    return { access_token: token };
+    const result = await this.auth.login(dto.email, dto.password);
+    return result;
   }
 
   @Post('forgot')
@@ -48,5 +72,20 @@ export class AuthController {
   async reset(@Body() dto: ResetDto) {
     await this.auth.reset(dto.token, dto.newPassword);
     return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('profile')
+  async updateProfile(@Request() req: any, @Body() dto: UpdateProfileDto) {
+    const profile = await this.auth.updateProfile(
+      req.user.sub,
+      dto.firstName,
+      dto.lastName,
+      dto.avatarUrl,
+      dto.role,
+      dto.dni,
+      dto.cuit,
+    );
+    return profile;
   }
 }

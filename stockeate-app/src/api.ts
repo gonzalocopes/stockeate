@@ -18,10 +18,10 @@ api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("token");
     if (token) {
-      config.headers = {
-        ...(config.headers ?? {}),
-        Authorization: `Bearer ${token}`,
-      };
+      if (!config.headers) {
+        config.headers = {} as any;
+      }
+      config.headers.Authorization = `Bearer ${token}`;
     }
   } catch {}
   return config;
@@ -36,6 +36,55 @@ export async function wakeServer() {
       await api.get("/branches", { timeout: 8000 });
     } catch {}
   }
+}
+
+// -------- Auth --------
+export async function register(
+  email: string,
+  password: string,
+  firstName?: string,
+  lastName?: string,
+  role?: string,
+  dni?: string,
+  cuit?: string,
+) {
+  const { data } = await api.post("/auth/register", {
+    email,
+    password,
+    firstName,
+    lastName,
+    role,
+    dni,
+    cuit,
+  });
+  return data;
+}
+
+export async function login(email: string, password: string) {
+  const { data } = await api.post("/auth/login", {
+    email,
+    password,
+  });
+  return data;
+}
+
+export async function updateProfile(
+  firstName?: string,
+  lastName?: string,
+  avatarUrl?: string,
+  role?: string,
+  dni?: string,
+  cuit?: string,
+) {
+  const { data } = await api.put("/auth/profile", {
+    firstName,
+    lastName,
+    avatarUrl,
+    role,
+    dni,
+    cuit,
+  });
+  return data;
 }
 
 export type PullProduct = {

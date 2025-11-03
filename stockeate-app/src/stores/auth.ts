@@ -6,7 +6,7 @@ type AuthState = {
   token: string | null;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -33,24 +33,33 @@ export const useAuth = create<AuthState>((set) => ({
     try {
       const { data } = await api.post('/auth/login', { email, password });
       await AsyncStorage.setItem('token', data.access_token);
+
+      // Guardar datos del usuario en AsyncStorage
+      if (data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      }
+
       set({ token: data.access_token });
     } catch (e: any) {
       throw new Error(getMsg(e));
     }
   },
 
-register: async (email, password) => {
-  try {
-    // VERSIÓN SIMPLIFICADA - Solo email y password (como espera Lisandro)
-    const { data } = await api.post('/auth/register', { email, password });
-    
-    // NO auto-login, para que vuelva al login
-    // await AsyncStorage.setItem('token', data.access_token);
-    // set({ token: data.access_token });
-  } catch (e: any) {
-    throw new Error(getMsg(e));
-  }
-},
+  register: async (email, password, firstName, lastName) => {
+    try {
+      const { data } = await api.post('/auth/register', {
+        email,
+        password,
+        firstName,
+        lastName,
+      });
+
+      // NO guardar token aquí - solo en login
+      // El usuario debe ir a login para autenticarse
+    } catch (e: any) {
+      throw new Error(getMsg(e));
+    }
+  },
 
   logout: async () => {
     try {
