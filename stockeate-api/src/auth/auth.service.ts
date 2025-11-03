@@ -43,7 +43,7 @@ export class AuthService {
         cuit: cuit || null,
       },
     });
-
+    
     const token = this.sign(user.id, user.email);
     return {
       access_token: token,

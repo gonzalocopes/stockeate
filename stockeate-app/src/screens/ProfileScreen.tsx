@@ -123,7 +123,7 @@ export default function ProfileScreen({ navigation }: any) {
           <Text
             style={[styles.profileTitle, { color: theme.colors?.text || "#000" }]}
           >
-            Hola {tempFirstName || "Usuario"}!
+            Hola {firstName || "Usuario"}!
           </Text>
           <Text
             style={[styles.profileSubtitle, { color: theme.colors?.text + "80" || "#666" }]}
