@@ -54,6 +54,11 @@ export const useAuth = create<AuthState>((set) => ({
         lastName,
       });
 
+      // Guardar datos del usuario aunque no guardemos el token
+      if (data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      }
+
       // NO guardar token aquí - solo en login
       // El usuario debe ir a login para autenticarse
     } catch (e: any) {
