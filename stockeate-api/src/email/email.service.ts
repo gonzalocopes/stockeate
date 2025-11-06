@@ -1,16 +1,25 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private resend: Resend;
+  private transporter;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY not configured');
+    const user = process.env.GMAIL_USER;
+    const pass = process.env.GMAIL_PASS;
+
+    if (!user || !pass) {
+      throw new Error('GMAIL_USER y GMAIL_PASS deben estar configurados en .env');
     }
-    this.resend = new Resend(apiKey);
+
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
   }
 
   async sendPasswordResetToken(email: string, token: string) {
@@ -30,14 +39,15 @@ export class EmailService {
     `;
 
     try {
-      await this.resend.emails.send({
-        from: 'onboarding@resend.dev',
+      await this.transporter.sendMail({
+        from: `"Stockeate" <${process.env.GMAIL_USER}>`,
         to: email,
         subject,
         html,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      console.log(`✅ Email enviado exitosamente a ${email}`);
     } catch (e) {
+      console.error('❌ Error enviando email:', e);
       throw new InternalServerErrorException(
         'No se pudo enviar el email de recuperación',
       );
