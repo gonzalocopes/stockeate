@@ -25,6 +25,9 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 
 import { useThemeStore } from "./src/stores/themeProviders";
+import { UploadRemitoScreen } from './src/screens/UploadRemitoScreen';
+import { PendingRemitosScreen } from './src/screens/PendingRemitosScreen';
+import { ValidationScreen } from './src/screens/ValidationScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -47,10 +50,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      {/*<SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>*/}
         <NavigationContainer theme={mode === "dark" ? DarkTheme : DefaultTheme}>
           {!token ? (
-            <Stack.Navigator>
+            <Stack.Navigator
+            >
               <Stack.Screen
                 name="Login"
                 component={LoginScreen}
@@ -134,10 +138,13 @@ export default function App() {
                 component={ProfileScreen}
                 options={{ title: "Mi Perfil" }}
               />
+              <Stack.Screen name="UploadRemito" component={UploadRemitoScreen} options={{ title: "Digitalizar Remito" }}/>
+              <Stack.Screen name="PendingRemitos" component={PendingRemitosScreen} options={{ title: "Remitos por Validar" }}/>
+              <Stack.Screen name="Validation" component={ValidationScreen} options={{ title: "Validar Remito" }}/>
             </Stack.Navigator>
           )}
         </NavigationContainer>
-      </SafeAreaView>
+      {/*</SafeAreaView>*/}
     </SafeAreaProvider>
   );
 }

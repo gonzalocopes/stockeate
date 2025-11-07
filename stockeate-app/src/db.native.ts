@@ -58,7 +58,7 @@ export const DB = {
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at`,
+       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=excluded.archived`, // Asegúrate de que tu payload 'p' incluya 'archived'
       [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
     );
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
@@ -204,9 +204,7 @@ export const DB = {
     db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
   },
 
-  // ===== PRUNE: borrar todo lo que no venga del server para esa sucursal =====
   pruneProductsNotIn(branchId: string, keepCodes: string[]) {
-    // buscamos IDs a borrar
     let rows: any[] = [];
     if (keepCodes.length > 0) {
       const placeholders = keepCodes.map(() => "?").join(",");
@@ -222,14 +220,44 @@ export const DB = {
     }
     const ids = rows.map((r) => r.id);
     if (ids.length === 0) return;
-
     const ph = ids.map(() => "?").join(",");
-
-    // borrar dependencias locales para no dejar basura
     try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
     try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
-
-    // borrar productos
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
+  },
+
+  // --- 👇 FUNCIONES DE SINCRONIZACIÓN AÑADIDAS ---
+
+  upsertRemito(r: any) {
+    // Inserta un remito de la sincronización. Si ya existe, actualiza los campos.
+    try {
+      db.runSync(
+        `INSERT INTO remitos(id, tmp_number, customer, notes, created_at, branch_id)
+         VALUES(?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           tmp_number=excluded.tmp_number,
+           customer=excluded.customer,
+           notes=excluded.notes`,
+        [r.id, r.tmp_number, r.customer, r.notes, r.created_at, r.branch_id]
+      );
+    } catch (e) {
+      console.error(`Error guardando remito ${r.id}:`, e);
+    }
+  },
+
+  upsertRemitoItem(item: any) {
+    // Inserta un ítem de remito de la sincronización. Si ya existe, actualiza.
+    try {
+      db.runSync(
+        `INSERT INTO remito_items(id, remito_id, product_id, qty, unit_price)
+         VALUES(?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           qty=excluded.qty,
+           unit_price=excluded.unit_price`,
+        [item.id, item.remito_id, item.product_id, item.qty, item.unit_price]
+      );
+    } catch (e) {
+      console.error(`Error guardando item ${item.id}:`, e);
+    }
   },
 };

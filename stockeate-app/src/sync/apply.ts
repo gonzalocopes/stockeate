@@ -88,4 +88,28 @@ export async function applyPull(branchId: string, payload: PullPayload) {
     const keepCodes = payload.products.map((p) => p.code);
     DB.pruneProductsNotIn(branchId, keepCodes);
   }
+console.log(`[Sync] Recibidos ${payload.remitos.length} remitos para guardar.`);
+  for (const remito of payload.remitos) {
+    DB.upsertRemito({
+      id: remito.id,
+      tmp_number: remito.tmpNumber,
+      customer: remito.customer,
+      notes: remito.notes,
+      created_at: remito.createdAt,
+      branch_id: remito.branchId,
+      // (Aquí añadiremos los nuevos campos de CUIT, etc. en el futuro)
+    });
+  }
+
+  // 5. Guardar los ítems de los remitos
+  console.log(`[Sync] Recibidos ${payload.remitoItems.length} items de remito para guardar.`);
+  for (const item of payload.remitoItems) {
+    DB.upsertRemitoItem({
+      id: item.id,
+      remito_id: item.remitoId,
+      product_id: item.productId,
+      qty: item.qty,
+      unit_price: item.unitPrice,
+    });
+  }
 }
