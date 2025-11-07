@@ -1,9 +1,12 @@
 ﻿import * as SQLite from "expo-sqlite";
 const db = SQLite.openDatabaseSync("stockeate.db");
 
+// En: src/db.native.ts
+
 export function initDb() {
   db.execSync(`
     PRAGMA journal_mode = WAL;
+    
     CREATE TABLE IF NOT EXISTS products(
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
@@ -15,6 +18,7 @@ export function initDb() {
       updated_at TEXT,
       archived INTEGER DEFAULT 0
     );
+    
     CREATE TABLE IF NOT EXISTS stock_moves(
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL,
@@ -25,6 +29,7 @@ export function initDb() {
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0
     );
+    
     CREATE TABLE IF NOT EXISTS remitos(
       id TEXT PRIMARY KEY,
       tmp_number TEXT UNIQUE,
@@ -36,6 +41,7 @@ export function initDb() {
       synced INTEGER DEFAULT 0,
       pdf_path TEXT
     );
+    
     CREATE TABLE IF NOT EXISTS remito_items(
       id TEXT PRIMARY KEY,
       remito_id TEXT NOT NULL,
@@ -46,10 +52,13 @@ export function initDb() {
   `);
 }
 
+
+
 const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export const DB = {
+  // ... (getProductByCode, upsertProduct, incrementStock, insertRemito, insertRemitoItem, insertStockMove se mantienen igual) ...
   getProductByCode(code: string) {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
@@ -58,7 +67,7 @@ export const DB = {
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=excluded.archived`, // Asegúrate de que tu payload 'p' incluya 'archived'
+       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=excluded.archived`,
       [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
     );
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
@@ -95,7 +104,6 @@ export const DB = {
     );
   },
 
-  // PDF helpers
   setRemitoPdfPath(remitoId: string, path: string) {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
@@ -111,7 +119,6 @@ export const DB = {
     );
   },
 
-  // ===== Activos / Archivados =====
   listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
     const q = `%${search.trim()}%`;
     if (search.trim()) {
@@ -226,10 +233,9 @@ export const DB = {
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
 
-  // --- 👇 FUNCIONES DE SINCRONIZACIÓN AÑADIDAS ---
+  // --- 👇 CORRECCIÓN AÑADIDA AQUÍ ---
 
   upsertRemito(r: any) {
-    // Inserta un remito de la sincronización. Si ya existe, actualiza los campos.
     try {
       db.runSync(
         `INSERT INTO remitos(id, tmp_number, customer, notes, created_at, branch_id)
@@ -238,7 +244,14 @@ export const DB = {
            tmp_number=excluded.tmp_number,
            customer=excluded.customer,
            notes=excluded.notes`,
-        [r.id, r.tmp_number, r.customer, r.notes, r.created_at, r.branch_id]
+        [
+          r.id,
+          r.tmp_number,
+          r.customer ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
+          r.notes ?? null,    // 👈 CORREGIDO: Asegura que no sea 'undefined'
+          r.created_at,
+          r.branch_id
+        ]
       );
     } catch (e) {
       console.error(`Error guardando remito ${r.id}:`, e);
@@ -246,7 +259,6 @@ export const DB = {
   },
 
   upsertRemitoItem(item: any) {
-    // Inserta un ítem de remito de la sincronización. Si ya existe, actualiza.
     try {
       db.runSync(
         `INSERT INTO remito_items(id, remito_id, product_id, qty, unit_price)
@@ -254,7 +266,13 @@ export const DB = {
          ON CONFLICT(id) DO UPDATE SET
            qty=excluded.qty,
            unit_price=excluded.unit_price`,
-        [item.id, item.remito_id, item.product_id, item.qty, item.unit_price]
+        [
+          item.id,
+          item.remito_id,
+          item.product_id,
+          item.qty,
+          item.unit_price ?? 0 // <-- Ya estaba bien, pero lo confirmamos
+        ]
       );
     } catch (e) {
       console.error(`Error guardando item ${item.id}:`, e);
