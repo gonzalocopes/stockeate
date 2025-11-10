@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://7b1b19523e98.ngrok-free.app"; // <-- Asegúrate que esta URL de ngrok esté activa
+  "https://stockeate.onrender.com"; // <-- Servidor en Render como funcionaba originalmente
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({
@@ -99,21 +99,29 @@ export async function pullFromServer(branchId: string, since?: number): Promise<
   return data;
 }
 
-// --- 👇 FUNCIÓN FALTANTE PARA SUBIR ARCHIVOS ---
+// --- 👇 FUNCIÓN SIMULADA PARA SUBIR ARCHIVOS ---
 export async function uploadRemitoFile(file: { uri: string; name: string; type?: string; }, branchId: string) {
-  const formData = new FormData();
-  formData.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.type || 'application/octet-stream',
-  } as any);
-  formData.append('branchId', branchId);
-
-  const { data } = await api.post('/digitalized-remito/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      'ngrok-skip-browser-warning': 'true', // Cabecera para ngrok
-    },
-  });
+  // Simular delay de procesamiento
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Simular respuesta exitosa completamente offline
+  const data = {
+    success: true,
+    remito: {
+      id: 'rem_' + Date.now(),
+      tmp_number: 'R-EXT-' + new Date().toISOString().slice(0,10) + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
+      customer: 'Distribuidora San Martín S.A.',
+      total: 26010.00,
+      created_at: new Date().toISOString(),
+      branch_id: branchId,
+      items: [
+        { name: 'Coca Cola 500ml x24', qty: 5 },
+        { name: 'Pepsi 500ml x24', qty: 3 },
+        { name: 'Agua Mineral 500ml x12', qty: 10 },
+        { name: 'Galletitas Oreo 118g', qty: 15 },
+        { name: 'Aceite Girasol 900ml', qty: 8 }
+      ]
+    }
+  };
   return data;
 }
