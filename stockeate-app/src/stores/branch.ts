@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 type BranchState = {
   id: string | null;
   name: string | null;
+  isHydrated: boolean; // <-- 1. AÑADIDO: La bandera que falta
   hydrate: () => Promise<void>;
   set: (id: string, name?: string | null) => Promise<void>;
   clear: () => Promise<void>;
@@ -13,6 +14,7 @@ type BranchState = {
 export const useBranch = create<BranchState>((set) => ({
   id: null,
   name: null,
+  isHydrated: false, // <-- 2. AÑADIDO: Valor inicial 'falso'
 
   hydrate: async () => {
     try {
@@ -23,6 +25,9 @@ export const useBranch = create<BranchState>((set) => ({
       set({ id, name });
     } catch {
       set({ id: null, name: null });
+    } finally {
+      // <-- 3. AÑADIDO: Avisamos que terminamos de cargar
+      set({ isHydrated: true });
     }
   },
 

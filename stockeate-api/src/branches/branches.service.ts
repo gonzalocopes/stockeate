@@ -8,7 +8,7 @@ export class BranchesService {
   findAll() {
     return this.prisma.branch.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, name: true },
+      select: { id: true, name: true},
     });
   }
 }

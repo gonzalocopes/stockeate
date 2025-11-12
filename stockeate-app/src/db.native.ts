@@ -1,9 +1,12 @@
 ﻿import * as SQLite from "expo-sqlite";
 const db = SQLite.openDatabaseSync("stockeate.db");
 
+// En: src/db.native.ts
+
 export function initDb() {
   db.execSync(`
     PRAGMA journal_mode = WAL;
+    
     CREATE TABLE IF NOT EXISTS products(
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
@@ -15,6 +18,7 @@ export function initDb() {
       updated_at TEXT,
       archived INTEGER DEFAULT 0
     );
+    
     CREATE TABLE IF NOT EXISTS stock_moves(
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL,
@@ -25,6 +29,7 @@ export function initDb() {
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0
     );
+    
     CREATE TABLE IF NOT EXISTS remitos(
       id TEXT PRIMARY KEY,
       tmp_number TEXT UNIQUE,
@@ -36,6 +41,7 @@ export function initDb() {
       synced INTEGER DEFAULT 0,
       pdf_path TEXT
     );
+    
     CREATE TABLE IF NOT EXISTS remito_items(
       id TEXT PRIMARY KEY,
       remito_id TEXT NOT NULL,
@@ -46,10 +52,13 @@ export function initDb() {
   `);
 }
 
+
+
 const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export const DB = {
+  // ... (getProductByCode, upsertProduct, incrementStock, insertRemito, insertRemitoItem, insertStockMove se mantienen igual) ...
   getProductByCode(code: string) {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
@@ -114,7 +123,6 @@ upsertProduct(p: any) {
     );
   },
 
-  // PDF helpers
   setRemitoPdfPath(remitoId: string, path: string) {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
@@ -130,7 +138,6 @@ upsertProduct(p: any) {
     );
   },
 
-  // ===== Activos / Archivados =====
   listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
     const q = `%${search.trim()}%`;
     if (search.trim()) {
@@ -223,9 +230,7 @@ upsertProduct(p: any) {
     db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
   },
 
-  // ===== PRUNE: borrar todo lo que no venga del server para esa sucursal =====
   pruneProductsNotIn(branchId: string, keepCodes: string[]) {
-    // buscamos IDs a borrar
     let rows: any[] = [];
     if (keepCodes.length > 0) {
       const placeholders = keepCodes.map(() => "?").join(",");
@@ -241,14 +246,55 @@ upsertProduct(p: any) {
     }
     const ids = rows.map((r) => r.id);
     if (ids.length === 0) return;
-
     const ph = ids.map(() => "?").join(",");
-
-    // borrar dependencias locales para no dejar basura
     try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
     try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
-
-    // borrar productos
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
+  },
+
+  // --- 👇 CORRECCIÓN AÑADIDA AQUÍ ---
+
+  upsertRemito(r: any) {
+    try {
+      db.runSync(
+        `INSERT INTO remitos(id, tmp_number, customer, notes, created_at, branch_id)
+         VALUES(?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           tmp_number=excluded.tmp_number,
+           customer=excluded.customer,
+           notes=excluded.notes`,
+        [
+          r.id,
+          r.tmp_number,
+          r.customer ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
+          r.notes ?? null,    // 👈 CORREGIDO: Asegura que no sea 'undefined'
+          r.created_at,
+          r.branch_id
+        ]
+      );
+    } catch (e) {
+      console.error(`Error guardando remito ${r.id}:`, e);
+    }
+  },
+
+  upsertRemitoItem(item: any) {
+    try {
+      db.runSync(
+        `INSERT INTO remito_items(id, remito_id, product_id, qty, unit_price)
+         VALUES(?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           qty=excluded.qty,
+           unit_price=excluded.unit_price`,
+        [
+          item.id,
+          item.remito_id,
+          item.product_id,
+          item.qty,
+          item.unit_price ?? 0 // <-- Ya estaba bien, pero lo confirmamos
+        ]
+      );
+    } catch (e) {
+      console.error(`Error guardando item ${item.id}:`, e);
+    }
   },
 };
