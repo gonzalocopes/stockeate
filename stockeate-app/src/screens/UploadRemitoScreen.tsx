@@ -1,10 +1,11 @@
 // src/screens/UploadRemitoScreen.tsx
 import React, { useState } from 'react';
-import { View, Button, Image, ActivityIndicator, Alert, StyleSheet, Text } from 'react-native';
+import { View, Button, Image, ActivityIndicator, Alert, StyleSheet, Text, SafeAreaView, ScrollView, KeyboardAvoidingView, useWindowDimensions, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 // 👇 1. Usamos la función centralizada y el hook del store
 import { api } from '../api'; // Usar API existente 
-import { useBranch } from '../stores/branch'; 
+import { useBranch } from '../stores/branch';
+import { pullBranchCatalog } from '../sync'; // <-- Asegurar este import
 
 type SelectedFile = {
   uri: string;
@@ -80,18 +81,15 @@ export default function UploadRemitoScreen({ navigation }: any) {
             official_number: null,
             branch_id: branchId,
             customer: remitoData.customer,
-            notes: `Remito externo procesado desde archivo: ${selectedFile.name}`,
+            notes: `Ingreso por digitalización: ${selectedFile.name}`,
             created_at: remitoData.created_at,
           }],
-          remitoItems: remitoData.items.map((item, index) => ({
-            remito_id: remitoData.id,
-            productId: `ext_prod_${index}`,
-            qty: item.qty,
-            unit_price: 0,
-          }))
+          remitoItems: [], // <-- sin items para evitar FK inválida en Prisma
         });
-
-        // Navegar a resultado
+    
+        // Sincronizar inmediatamente para reflejar en Historial Remitos
+        await pullBranchCatalog(branchId);
+    
         navigation.replace('ExternalRemitoResult', {
           remitoData: remitoData,
           isExternal: true
@@ -133,26 +131,42 @@ export default function UploadRemitoScreen({ navigation }: any) {
     }
   };
 
+  // Añadimos dimensiones para ajustar tamaños
+  const { width, height } = useWindowDimensions();
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Digitalizar Remito Externo</Text>
-      <Button title="Seleccionar Archivo (Imagen/PDF)" onPress={selectFile} />
+    <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+        <ScrollView contentContainerStyle={[styles.content, { minHeight: height }]}>
+          <View style={[styles.container, { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
+            <Text style={styles.title}>Digitalizar Remito Externo</Text>
 
-      {selectedFile && selectedFile.mimeType?.startsWith('image/') ? (
-        <Image source={{ uri: selectedFile.uri }} style={styles.image} />
-      ) : selectedFile ? (
-        <View style={styles.filePreview}>
-          <Text>Archivo seleccionado:</Text>
-          <Text style={styles.fileName}>{selectedFile.name}</Text>
-        </View>
-      ) : null}
+            <View style={styles.actionsRow}>
+              <Button title="Seleccionar Archivo (Imagen/PDF)" onPress={selectFile} />
+            </View>
 
-      {isLoading ? (
-        <ActivityIndicator size="large" color="#0000ff" style={styles.loader} />
-      ) : (
-        <Button title="Subir y Procesar" onPress={handleUpload} disabled={!selectedFile || isLoading} />
-      )}
-    </View>
+            {selectedFile && selectedFile.mimeType?.startsWith('image/') ? (
+              <Image
+                source={{ uri: selectedFile.uri }}
+                style={[styles.image, { width: Math.min(width - 40, 600), height: Math.min(width * 0.6, 360) }]}
+              />
+            ) : selectedFile ? (
+              <View style={styles.filePreview}>
+                <Text>Archivo seleccionado:</Text>
+                <Text style={styles.fileName}>{selectedFile.name}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.actions}>
+              {isLoading ? (
+                <ActivityIndicator size="large" color="#0000ff" style={styles.loader} />
+              ) : (
+                <Button title="Subir y Procesar" onPress={handleUpload} disabled={!selectedFile || isLoading} />
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -160,7 +174,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, gap: 20 },
   title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
   image: { width: 300, height: 300, resizeMode: 'contain', marginVertical: 20, borderWidth: 1, borderColor: '#ccc' },
-  filePreview: { marginVertical: 20, alignItems: 'center', backgroundColor: '#f0f0f0', padding: 15, borderRadius: 8 },
+  filePreview: { marginVertical: 20, alignItems: 'center', backgroundColor: '#f0f0f0', padding: 15, borderRadius: 8, width: '100%', maxWidth: 800 },
   fileName: { fontWeight: 'bold', marginTop: 5 },
-  loader: { marginTop: 20 }
+  actions: { width: '100%', maxWidth: 800, alignSelf: 'center', paddingBottom: 12 },
+  loader: { marginTop: 12 },
+  // Agregado: estilos usados en la pantalla para evitar referencias undefined
+  screen: { flex: 1 },
+  content: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  actionsRow: { marginBottom: 12 },
 });

@@ -3,10 +3,13 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import RemitoQR from '../components/RemitoQR';
 import * as Sharing from 'expo-sharing';
+import { useBranch } from '../stores/branch';
+import { pullBranchCatalog } from '../sync';
 
 export default function ExternalRemitoResult({ route, navigation }: any) {
   const { remitoData } = route.params ?? {};
   const [showQR, setShowQR] = useState(false);
+  const branchId = useBranch((s) => s.id);
 
   if (!remitoData) {
     return (
@@ -22,23 +25,19 @@ export default function ExternalRemitoResult({ route, navigation }: any) {
     );
   }
 
-  // QR HIPER CLARO para humanos
-  const fecha = new Date(remitoData.created_at).toLocaleDateString('es-AR');
-  const total = Number(remitoData.total || 0).toLocaleString('es-AR');
-  
-  const qrData = [
-    '=== STOCKEATE REMITO ===',
-    '',
-    `Numero: ${remitoData.tmp_number || 'EXTERNO'}`,
-    `Cliente: ${remitoData.customer || 'Sin especificar'}`,
-    `Total: $${total}`,
-    `Items: ${remitoData.items?.length || 0} productos`,
-    `Fecha: ${fecha}`,
-    '',
-    'ESCANEAR = RECIBIDO',
-    '',
-    `ID: ${remitoData.id}`
-  ].join('\n');
+  // Contenido del QR, legible en una sola línea por secciones
+  const d = new Date(remitoData.created_at);
+  const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const nro = remitoData.tmp_number || remitoData.official_number || 'N/A';
+  const proveedor = remitoData.customer || 'Sin especificar';
+  const itemsCount = remitoData.items?.length ?? 0;
+  const total = Number(remitoData.total || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const qrData =
+    `[Stockeate] Remito Externo | Fecha: ${fecha} ${hora} | Nº: ${nro} | ` +
+    `Proveedor: ${proveedor} | Productos: ${itemsCount} | Total: $${total} | ` +
+    `ID: ${remitoData.id} | www.stockeate.com`;
 
   const shareQR = async () => {
     try {
@@ -266,7 +265,18 @@ export default function ExternalRemitoResult({ route, navigation }: any) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => navigation.navigate('RemitosHistory')}
+            onPress={async () => {
+              if (!branchId) {
+                Alert.alert("Sucursal requerida", "Selecciona una sucursal antes de ver el historial.");
+                return;
+              }
+              try {
+                await pullBranchCatalog(branchId);
+              } catch (e) {
+                console.warn("Sincronización previa al historial falló:", e);
+              }
+              navigation.navigate('RemitosHistory');
+            }}
             style={{
               backgroundColor: '#6366f1',
               paddingVertical: 14,

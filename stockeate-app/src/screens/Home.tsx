@@ -1,4 +1,4 @@
-// src/screens/Home.tsx
+﻿// src/screens/Home.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -29,6 +29,7 @@ export default function Home({ navigation }: any) {
   const logout = useAuth((s) => s.logout);
   const [menuVisible, setMenuVisible] = useState(false);
   const branchId = useBranch((s) => s.id);
+  const isBranchHydrated = useBranch((s) => s.isHydrated);
   
   // 1. Obtenemos el estado de foco de la pantalla
   const isFocused = useIsFocused();
@@ -70,9 +71,9 @@ export default function Home({ navigation }: any) {
   };
 
   useEffect(() => {
-    if (isFocused) syncAndRecompute();
+    if (isFocused && isBranchHydrated) syncAndRecompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, branchId]);
+  }, [isFocused, branchId, isBranchHydrated]);
 
   // -------- Header ----------
   useEffect(() => {

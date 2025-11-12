@@ -117,7 +117,7 @@ export const DB = {
     };
     moves.push(move);
     setStockMoves(moves);
-  },
+  }, // <-- IMPORTANTE: coma aquí
 
   setRemitoPdfPath(remitoId: string, path: string) {
     const remitos = getRemitos();
@@ -284,5 +284,55 @@ export const DB = {
     localStorage.removeItem('stockeate_remitos');
     localStorage.removeItem('stockeate_remito_items');
     this.initDb();
-  }
+  }, // <-- coma agregada
+
+  // Añadidos para compatibilidad con apply.ts
+  upsertRemito(r: any) {
+    const remitos = getRemitos();
+    const idx = remitos.findIndex((x: any) => x.id === r.id);
+  
+    const remito = {
+      id: r.id,
+      tmp_number: r.tmp_number,
+      official_number: r.official_number ?? null,
+      branch_id: r.branch_id,
+      customer: r.customer ?? null,
+      notes: r.notes ?? null,
+      created_at: r.created_at ?? now(),
+      synced: 1,
+      pdf_path: null,
+    };
+  
+    if (idx >= 0) {
+      remitos[idx] = { ...remitos[idx], ...remito };
+    } else {
+      remitos.push(remito);
+    }
+    setRemitos(remitos);
+  },
+
+  upsertRemitoItem(item: any) {
+    const items = getRemitoItems();
+    const idx = items.findIndex((x: any) => x.id === item.id);
+  
+    const normalized = {
+      id: item.id,
+      remito_id: item.remito_id,
+      product_id: item.product_id,
+      qty: item.qty,
+      unit_price: item.unit_price ?? 0,
+    };
+  
+    if (idx >= 0) {
+      items[idx] = { ...items[idx], ...normalized };
+    } else {
+      items.push(normalized);
+    }
+    setRemitoItems(items);
+  },
+
+  // Listar todos los remitos (web) para el historial
+  listAllRemitos() {
+    return getRemitos();
+  },
 };
