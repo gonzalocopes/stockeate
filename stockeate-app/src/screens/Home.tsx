@@ -30,7 +30,7 @@ export default function Home({ navigation }: any) {
   const [menuVisible, setMenuVisible] = useState(false);
   const branchId = useBranch((s) => s.id);
   const isBranchHydrated = useBranch((s) => s.isHydrated);
-  
+
   // 1. Obtenemos el estado de foco de la pantalla
   const isFocused = useIsFocused();
 
@@ -52,7 +52,9 @@ export default function Home({ navigation }: any) {
     let count = 0;
     for (const p of list) {
       const s = Number(p.stock ?? 0);
-      if (INCLUDE_ZERO_IN_LOW ? s < LOW_THRESHOLD : s > 0 && s < LOW_THRESHOLD) {
+      if (
+        INCLUDE_ZERO_IN_LOW ? s < LOW_THRESHOLD : s > 0 && s < LOW_THRESHOLD
+      ) {
         count++;
       }
     }
@@ -108,8 +110,14 @@ export default function Home({ navigation }: any) {
   // -------- Menú hamburguesa ----------
   const menuItems = useMemo(
     () => [
-      { label: mode === "light" ? "Tema Oscuro" : "Tema Claro", onPress: toggleTheme },
-      { label: "Configuración", onPress: () => navigation.navigate("Settings") },
+      {
+        label: mode === "light" ? "Tema Oscuro" : "Tema Claro",
+        onPress: toggleTheme,
+      },
+      {
+        label: "Configuración",
+        onPress: () => navigation.navigate("Settings"),
+      },
       { label: "Cerrar sesión", onPress: logout, isDestructive: true },
     ],
     [mode, toggleTheme, logout, navigation]
@@ -117,13 +125,24 @@ export default function Home({ navigation }: any) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.contentContainer}>
-        
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.contentContainer}
+      >
         {/* Título y Botón de Información */}
         <View style={styles.titleContainer}>
-          <Text style={[styles.mainTitle, { color: theme.colors.text }]}>Menú Principal</Text>
-          <TouchableOpacity onPress={() => setInfoVisible(true)} style={styles.infoButton}>
-            <Ionicons name="information-circle-outline" size={24} color={theme.colors.primary} />
+          <Text style={[styles.mainTitle, { color: theme.colors.text }]}>
+            Menú Principal
+          </Text>
+          <TouchableOpacity
+            onPress={() => setInfoVisible(true)}
+            style={styles.infoButton}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={24}
+              color={theme.colors.primary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -141,7 +160,8 @@ export default function Home({ navigation }: any) {
             <View>
               <Text style={styles.alertTitle}>Atención</Text>
               <Text style={styles.alertSubtitle}>
-                Productos con stock bajo {INCLUDE_ZERO_IN_LOW ? "(incluye 0)" : ""}
+                Productos con stock bajo{" "}
+                {INCLUDE_ZERO_IN_LOW ? "(incluye 0)" : ""}
               </Text>
             </View>
           </View>
@@ -179,15 +199,20 @@ export default function Home({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Footer (Fijo) */}
-      <View
-        style={[
-          styles.footer,
-          { backgroundColor: theme.colors.inputBackground, borderTopColor: theme.colors.border },
-        ]}
-      >
-        {/* ... (contenido del footer si lo necesitas) ... */}
-      </View>
+      {/* Footer */}
+      {/*     <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 70, // Altura de la barra
+        backgroundColor: theme.colors.inputBackground, // Color de fondo
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+      }}
+    />
+*/}
 
       <HamburgerMenu
         visible={menuVisible}
@@ -204,9 +229,16 @@ export default function Home({ navigation }: any) {
         onRequestClose={() => setInfoVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.card },
+            ]}
+          >
             <ScrollView>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>¿Qué hace cada botón?</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                ¿Qué hace cada botón?
+              </Text>
               <InfoItem
                 icon="scan-outline"
                 title="Escanear"
@@ -226,8 +258,11 @@ export default function Home({ navigation }: any) {
                 theme={theme}
               />
             </ScrollView>
-            <TouchableOpacity 
-              style={[styles.modalCloseButton, {backgroundColor: theme.colors.primary}]} 
+            <TouchableOpacity
+              style={[
+                styles.modalCloseButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={() => setInfoVisible(false)}
             >
               <Text style={styles.modalCloseButtonText}>Entendido</Text>
@@ -249,13 +284,22 @@ type FullButtonProps = {
   isFocused: boolean; // <-- Recibe el prop
 };
 
-function FullButton({ title, subtitle, icon, gradient, onPress, isFocused }: FullButtonProps) {
+function FullButton({
+  title,
+  subtitle,
+  icon,
+  gradient,
+  onPress,
+  isFocused,
+}: FullButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const [size, setSize] = useState({ w: 0, h: 0 });
   const tx = useRef(new Animated.Value(0)).current;
 
-  const pressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start();
-  const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+  const pressIn = () =>
+    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start();
+  const pressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
 
   // --- LÓGICA DE ANIMACIÓN CORREGIDA ---
   useEffect(() => {
@@ -284,7 +328,12 @@ function FullButton({ title, subtitle, icon, gradient, onPress, isFocused }: Ful
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressOut} style={styles.fullButtonWrapper}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+        style={styles.fullButtonWrapper}
+      >
         <LinearGradient
           colors={gradient}
           start={{ x: 0, y: 0 }}
@@ -299,15 +348,25 @@ function FullButton({ title, subtitle, icon, gradient, onPress, isFocused }: Ful
             <Animated.View
               pointerEvents="none"
               style={{
-                position: "absolute", top: -12, height: size.h + 24, width: stripeW,
+                position: "absolute",
+                top: -12,
+                height: size.h + 24,
+                width: stripeW,
                 transform: [{ translateX: tx }, { rotate: "18deg" }],
               }}
             >
-              <LinearGradient colors={["#ffffff00", "#ffffff40", "#ffffff00"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient
+                colors={["#ffffff00", "#ffffff40", "#ffffff00"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+              />
             </Animated.View>
           )}
           <View style={styles.fullButtonContent}>
-            <View style={styles.fullButtonIcon}><Ionicons name={icon} size={22} color="#fff" /></View>
+            <View style={styles.fullButtonIcon}>
+              <Ionicons name={icon} size={22} color="#fff" />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.fullButtonTitle}>{title}</Text>
               <Text style={styles.fullButtonSubtitle}>{subtitle}</Text>
@@ -324,49 +383,128 @@ function FullButton({ title, subtitle, icon, gradient, onPress, isFocused }: Ful
 function InfoItem({ icon, title, description, theme }: any) {
   return (
     <View style={styles.infoItem}>
-      <Ionicons name={icon} size={28} color={theme.colors.primary} style={styles.infoIcon} />
+      <Ionicons
+        name={icon}
+        size={28}
+        color={theme.colors.primary}
+        style={styles.infoIcon}
+      />
       <View style={styles.infoTextContainer}>
-        <Text style={[styles.infoTitle, { color: theme.colors.text }]}>{title}</Text>
-        <Text style={[styles.infoDescription, { color: theme.colors.textSecondary }]}>{description}</Text>
+        <Text style={[styles.infoTitle, { color: theme.colors.text }]}>
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.infoDescription,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
+          {description}
+        </Text>
       </View>
     </View>
-  )
+  );
 }
 
 /* ───────────── ESTILOS ───────────── */
 const styles = StyleSheet.create({
   contentContainer: { padding: 16, paddingBottom: 90 },
   footer: {
-    position: "absolute", left: 0, right: 0, bottom: 0, height: 70, borderTopWidth: 1,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 70,
+    borderTopWidth: 1,
   },
-  titleContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  mainTitle: { fontSize: 24, fontWeight: '800' },
+  titleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  mainTitle: { fontSize: 24, fontWeight: "800" },
   infoButton: { padding: 8 },
   alertCard: {
-    borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   alertLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  alertIcon: { backgroundColor: "rgba(255,255,255,0.6)", borderRadius: 10, padding: 6 },
+  alertIcon: {
+    backgroundColor: "rgba(255,255,255,0.6)",
+    borderRadius: 10,
+    padding: 6,
+  },
   alertTitle: { color: "#78350f", fontSize: 14, fontWeight: "800" },
   alertSubtitle: { color: "#854d0e", fontSize: 13, fontWeight: "500" },
   alertCountOnly: { color: "#111827", fontWeight: "900", fontSize: 20 },
   fullButtonWrapper: { borderRadius: 16, overflow: "hidden" },
-  fullButtonBg: { paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16, position: "relative" },
+  fullButtonBg: {
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    position: "relative",
+  },
   fullButtonContent: { flexDirection: "row", alignItems: "center", gap: 12 },
   fullButtonIcon: {
-    backgroundColor: "rgba(255,255,255,0.2)", width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  fullButtonTitle: { color: "#fff", fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
-  fullButtonSubtitle: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: "500" },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
-  modalContent: { maxHeight: '80%', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 30 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
-  infoItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 24 },
+  fullButtonTitle: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  fullButtonSubtitle: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  modalContent: {
+    maxHeight: "80%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 30,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 24,
+  },
   infoIcon: { marginRight: 16, marginTop: 2 },
   infoTextContainer: { flex: 1 },
-  infoTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 4 },
+  infoTitle: { fontSize: 17, fontWeight: "bold", marginBottom: 4 },
   infoDescription: { fontSize: 15, lineHeight: 22 },
-  modalCloseButton: { marginTop: 20, borderRadius: 14, padding: 14, alignItems: 'center' },
-  modalCloseButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  modalCloseButton: {
+    marginTop: 20,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+  },
+  modalCloseButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
 });

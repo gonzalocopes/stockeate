@@ -52,25 +52,57 @@ export function initDb() {
   `);
 }
 
-
-
 const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export const DB = {
   // ... (getProductByCode, upsertProduct, incrementStock, insertRemito, insertRemitoItem, insertStockMove se mantienen igual) ...
   getProductByCode(code: string) {
-    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
+    return (
+      db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ??
+      null
+    );
   },
 
   upsertProduct(p: any) {
+    const incomingVersion = p.version ?? 0;
+
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=excluded.archived`,
-      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+       ON CONFLICT(code) DO UPDATE SET
+         -- Solo actualiza nombre/precio si la versión entrante es MAYOR
+         name = CASE WHEN excluded.version > products.version THEN excluded.name ELSE products.name END,
+         price = CASE WHEN excluded.version > products.version THEN excluded.price ELSE products.price END,
+         
+         -- El stock SOLO se actualiza si la versión entrante es MAYOR o IGUAL
+         -- y si el stock entrante NO es NULL (para respetar la lógica del applyPull)
+         stock = CASE WHEN excluded.version >= products.version AND excluded.stock IS NOT NULL THEN excluded.stock ELSE products.stock END,
+         
+         -- La versión SIEMPRE se actualiza a la versión más reciente
+         version = CASE WHEN excluded.version > products.version THEN excluded.version ELSE products.version END,
+
+         updated_at = excluded.updated_at,
+         archived = excluded.archived
+       WHERE products.code = excluded.code`,
+      // Nota: El valor 'p.stock' debe ser null (o undefined) si no se pasa,
+      // pero en este caso, al ser un snapshot, asumimos que viene un número.
+      // Aquí estamos forzando 'p.stock ?? null' para que COALESCE trabaje mejor.
+      [
+        p.id ?? uid(),
+        p.code,
+        p.name ?? p.code,
+        p.price ?? 0,
+        p.stock ?? null,
+        incomingVersion,
+        p.branch_id,
+        now(),
+        p.archived ?? 0,
+      ]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [
+      p.code,
+    ]);
   },
 
   incrementStock(productId: string, qty: number) {
@@ -85,7 +117,17 @@ export const DB = {
     db.runSync(
       `INSERT INTO remitos(id,tmp_number,official_number,branch_id,customer,notes,created_at,synced,pdf_path)
        VALUES(?,?,?,?,?,?,?,?,?)`,
-      [id, data.tmp_number, data.official_number ?? null, data.branch_id, data.customer ?? null, data.notes ?? null, now(), 0, data.pdf_path ?? null]
+      [
+        id,
+        data.tmp_number,
+        data.official_number ?? null,
+        data.branch_id,
+        data.customer ?? null,
+        data.notes ?? null,
+        now(),
+        0,
+        data.pdf_path ?? null,
+      ]
     );
     return id;
   },
@@ -100,7 +142,15 @@ export const DB = {
   insertStockMove(data: any) {
     db.runSync(
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
-      [uid(), data.product_id, data.branch_id, data.qty, data.type, data.ref ?? null, now()]
+      [
+        uid(),
+        data.product_id,
+        data.branch_id,
+        data.qty,
+        data.type,
+        data.ref ?? null,
+        now(),
+      ]
     );
   },
 
@@ -108,7 +158,10 @@ export const DB = {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
   getRemitoById(remitoId: string) {
-    return db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ?? null;
+    return (
+      db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ??
+      null
+    );
   },
   getRemitoItems(remitoId: string) {
     return db.getAllSync<any>(
@@ -119,7 +172,12 @@ export const DB = {
     );
   },
 
-  listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+  listProductsByBranch(
+    branchId: string,
+    search: string = "",
+    limit = 200,
+    offset = 0
+  ) {
     const q = `%${search.trim()}%`;
     if (search.trim()) {
       return db.getAllSync<any>(
@@ -139,7 +197,12 @@ export const DB = {
     );
   },
 
-  listArchivedByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+  listArchivedByBranch(
+    branchId: string,
+    search: string = "",
+    limit = 200,
+    offset = 0
+  ) {
     const q = `%${search.trim()}%`;
     if (search.trim()) {
       return db.getAllSync<any>(
@@ -164,10 +227,17 @@ export const DB = {
       `UPDATE products SET name=?, price=?, version=version+1, updated_at=? WHERE id=?`,
       [name, price, now(), productId]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [
+      productId,
+    ]);
   },
 
-  adjustStock(productId: string, branchId: string, delta: number, reason: string = "Ajuste inventario") {
+  adjustStock(
+    productId: string,
+    branchId: string,
+    delta: number,
+    reason: string = "Ajuste inventario"
+  ) {
     db.runSync(
       "UPDATE products SET stock = stock + ?, version = version + 1, updated_at=? WHERE id=?",
       [delta, now(), productId]
@@ -176,11 +246,20 @@ export const DB = {
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
       [uid(), productId, branchId, delta, "adjust", reason, now()]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [
+      productId,
+    ]);
   },
 
-  setStockExact(productId: string, branchId: string, target: number, reason = "Fijar stock") {
-    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
+  setStockExact(
+    productId: string,
+    branchId: string,
+    target: number,
+    reason = "Fijar stock"
+  ) {
+    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [
+      productId,
+    ]);
     const current = Number(cur?.stock ?? 0);
     const delta = target - current;
     db.runSync(
@@ -191,11 +270,16 @@ export const DB = {
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
       [uid(), productId, branchId, delta, "set", reason, now()]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [
+      productId,
+    ]);
   },
 
   canDeleteProduct(productId: string): boolean {
-    const r = db.getFirstSync<any>(`SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`, [productId]);
+    const r = db.getFirstSync<any>(
+      `SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`,
+      [productId]
+    );
     return Number(r?.cnt ?? 0) === 0;
   },
 
@@ -205,10 +289,16 @@ export const DB = {
   },
 
   archiveProduct(productId: string) {
-    db.runSync(`UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+    db.runSync(
+      `UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`,
+      [now(), productId]
+    );
   },
   unarchiveProduct(productId: string) {
-    db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+    db.runSync(
+      `UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`,
+      [now(), productId]
+    );
   },
 
   pruneProductsNotIn(branchId: string, keepCodes: string[]) {
@@ -220,16 +310,19 @@ export const DB = {
         [branchId, ...keepCodes]
       );
     } else {
-      rows = db.getAllSync<any>(
-        `SELECT id FROM products WHERE branch_id=?`,
-        [branchId]
-      );
+      rows = db.getAllSync<any>(`SELECT id FROM products WHERE branch_id=?`, [
+        branchId,
+      ]);
     }
     const ids = rows.map((r) => r.id);
     if (ids.length === 0) return;
     const ph = ids.map(() => "?").join(",");
-    try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
-    try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
+    try {
+      db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids);
+    } catch {}
+    try {
+      db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids);
+    } catch {}
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
 
@@ -248,9 +341,9 @@ export const DB = {
           r.id,
           r.tmp_number,
           r.customer ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
-          r.notes ?? null,    // 👈 CORREGIDO: Asegura que no sea 'undefined'
+          r.notes ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
           r.created_at,
-          r.branch_id
+          r.branch_id,
         ]
       );
     } catch (e) {
@@ -271,7 +364,7 @@ export const DB = {
           item.remito_id,
           item.product_id,
           item.qty,
-          item.unit_price ?? 0 // <-- Ya estaba bien, pero lo confirmamos
+          item.unit_price ?? 0, // <-- Ya estaba bien, pero lo confirmamos
         ]
       );
     } catch (e) {

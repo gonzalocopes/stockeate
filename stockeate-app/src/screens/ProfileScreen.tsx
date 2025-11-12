@@ -20,6 +20,9 @@ export default function ProfileScreen({ navigation }: any) {
   const [tempName, setTempName] = useState(name);
   const [tempEmail, setTempEmail] = useState(email);
 
+  // Helper para manejar placeholderTextColor cuando la variable de color no es una string simple
+  const placeholderColor = theme.colors?.textMuted || '#999';
+
   const handleSave = () => {
     setName(tempName);
     setEmail(tempEmail);
@@ -29,34 +32,34 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleCancel = () => {
     setTempName(name);
-    setTempEmail(email);
+    setTempEmail(tempEmail);
     setIsEditing(false);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors?.background || '#f9f9f9' }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView style={styles.scrollView}>
         {/* Profile Header */}
-        <View style={[styles.profileHeader, { backgroundColor: theme.colors?.card || '#fff' }]}>
-          <View style={styles.profileImageContainer}>
-            <Text style={styles.profileIcon}>👤</Text>
+        <View style={[styles.profileHeader, { backgroundColor: theme.colors.card }]}>
+          <View style={[styles.profileImageContainer, { backgroundColor: theme.colors.inputBorder }]}>
+            <Text style={[styles.profileIcon, { color: theme.colors.textMuted }]}>👤</Text>
           </View>
-          <Text style={[styles.profileTitle, { color: theme.colors?.text || '#000' }]}>
+          <Text style={[styles.profileTitle, { color: theme.colors.text }]}>
             Mi Perfil
           </Text>
         </View>
 
         {/* Profile Fields */}
-        <View style={[styles.fieldsContainer, { backgroundColor: theme.colors?.card || '#fff' }]}>
+        <View style={[styles.fieldsContainer, { backgroundColor: theme.colors.card }]}>
           {/* Name Field */}
           <View style={styles.fieldItem}>
             <View style={styles.fieldHeader}>
               <Ionicons
                 name="person-outline"
                 size={20}
-                color={theme.colors?.primary || '#007AFF'}
+                color={theme.colors.primary}
               />
-              <Text style={[styles.fieldLabel, { color: theme.colors?.text || '#000' }]}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>
                 Nombre
               </Text>
             </View>
@@ -65,18 +68,26 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[
                   styles.textInput,
                   {
-                    backgroundColor: theme.colors?.background || '#f5f5f5',
-                    borderColor: theme.colors?.border || '#e0e0e0',
-                    color: theme.colors?.text || '#000',
+                    backgroundColor: theme.colors.inputBackground,
+                    borderColor: theme.colors.inputBorder,
+                    color: theme.colors.text,
                   }
                 ]}
                 value={tempName}
                 onChangeText={setTempName}
                 placeholder="Ingresa tu nombre"
-                placeholderTextColor={theme.colors?.text + '80' || '#999'}
+                placeholderTextColor={placeholderColor}
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: theme.colors?.text || '#000' }]}>
+              <Text 
+                style={[
+                  styles.fieldValue, 
+                  { 
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.inputBackground, // Fondo para el campo de valor
+                  }
+                ]}
+              >
                 {name}
               </Text>
             )}
@@ -88,9 +99,9 @@ export default function ProfileScreen({ navigation }: any) {
               <Ionicons
                 name="mail-outline"
                 size={20}
-                color={theme.colors?.primary || '#007AFF'}
+                color={theme.colors.primary}
               />
-              <Text style={[styles.fieldLabel, { color: theme.colors?.text || '#000' }]}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.text }]}>
                 Email
               </Text>
             </View>
@@ -99,19 +110,27 @@ export default function ProfileScreen({ navigation }: any) {
                 style={[
                   styles.textInput,
                   {
-                    backgroundColor: theme.colors?.background || '#f5f5f5',
-                    borderColor: theme.colors?.border || '#e0e0e0',
-                    color: theme.colors?.text || '#000',
+                    backgroundColor: theme.colors.inputBackground,
+                    borderColor: theme.colors.inputBorder,
+                    color: theme.colors.text,
                   }
                 ]}
                 value={tempEmail}
                 onChangeText={setTempEmail}
                 placeholder="Ingresa tu email"
-                placeholderTextColor={theme.colors?.text + '80' || '#999'}
+                placeholderTextColor={placeholderColor}
                 keyboardType="email-address"
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: theme.colors?.text || '#000' }]}>
+              <Text 
+                style={[
+                  styles.fieldValue, 
+                  { 
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.inputBackground, // Fondo para el campo de valor
+                  }
+                ]}
+              >
                 {email}
               </Text>
             )}
@@ -123,15 +142,23 @@ export default function ProfileScreen({ navigation }: any) {
           {isEditing ? (
             <View style={styles.editButtons}>
               <Pressable
-                style={[styles.button, styles.cancelButton, { borderColor: theme.colors?.border || '#ccc' }]}
+                style={[
+                  styles.button, 
+                  styles.cancelButton, 
+                  { borderColor: theme.colors.border }
+                ]}
                 onPress={handleCancel}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.colors?.text || '#666' }]}>
+                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>
                   Cancelar
                 </Text>
               </Pressable>
               <Pressable
-                style={[styles.button, styles.saveButton, { backgroundColor: theme.colors?.primary || '#007AFF' }]}
+                style={[
+                  styles.button, 
+                  styles.saveButton, 
+                  { backgroundColor: theme.colors.primary }
+                ]}
                 onPress={handleSave}
               >
                 <Text style={styles.saveButtonText}>Guardar</Text>
@@ -139,7 +166,11 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
           ) : (
             <Pressable
-              style={[styles.button, styles.editButton, { backgroundColor: theme.colors?.primary || '#007AFF' }]}
+              style={[
+                styles.button, 
+                styles.editButton, 
+                { backgroundColor: theme.colors.primary }
+              ]}
               onPress={() => setIsEditing(true)}
             >
               <Ionicons name="pencil-outline" size={20} color="#fff" />
@@ -171,14 +202,14 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#f0f0f0",
+    // backgroundColor: theme.colors.inputBorder, aplicado inline
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
   profileIcon: {
     fontSize: 40,
-    color: "#757575",
+    // color: theme.colors.textMuted, aplicado inline
   },
   profileTitle: {
     fontSize: 24,
@@ -206,7 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#f8f9fa",
+    // backgroundColor: theme.colors.inputBackground, aplicado inline
     borderRadius: 8,
   },
   textInput: {
@@ -215,6 +246,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
+    // colores de fondo, borde y texto aplicados inline
   },
   buttonsContainer: {
     paddingHorizontal: '4%',

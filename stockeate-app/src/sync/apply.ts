@@ -46,12 +46,22 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
 export async function applyPull(branchId: string, payload: PullPayload) {
   // 1) upsert de productos (si viene snapshot, fijamos stock)
   for (const p of payload.products) {
-    DB.upsertProduct({
+    
+    // Si viene del servidor, p.version debería estar presente
+    const productData = {
       code: p.code,
       name: p.name ?? p.code,
       price: p.price ?? 0,
       branch_id: branchId,
-      ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
+      updated_at: p.updated_at, // <--- PASAR updated_at
+    };
+
+    // Si es un snapshot completo, incluimos el stock (que el upsert filtrará por versión)
+    const stockUpdate = payload.full && typeof p.stock === "number" ? { stock: p.stock } : {};
+    
+    DB.upsertProduct({
+      ...productData,
+      ...stockUpdate
     });
   }
 
