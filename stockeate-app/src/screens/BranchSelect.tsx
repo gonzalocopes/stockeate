@@ -283,7 +283,18 @@ export default function BranchSelect({ navigation }: any) {
           {syncing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: "white", fontWeight: "600", fontSize: 16, opacity: sel ? 1 : 0.7 }}>
+            <Text
+              numberOfLines={2}
+              ellipsizeMode="tail"
+              style={{
+                color: "white",
+                fontWeight: "600",
+                fontSize: 16,
+                opacity: sel ? 1 : 0.7,
+                textAlign: "center",
+                flexShrink: 1,
+              }}
+            >
               {sel ? `Continuar con ${sel.name}` : "Seleccioná una sucursal"}
             </Text>
           )}
