@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://stockeate.onrender.com"; // <-- Asegúrate que esta URL de ngrok esté activa
+  "https://stockeate.onrender.com"; // <-- API en la nube que funciona
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({

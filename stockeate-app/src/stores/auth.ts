@@ -6,7 +6,7 @@ type AuthState = {
   token: string | null;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, firstName?: string, lastName?: string, dni?: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -39,10 +39,20 @@ export const useAuth = create<AuthState>((set) => ({
     }
   },
 
-register: async (email, password) => {
+register: async (email, password, firstName, lastName, dni) => {
   try {
-    // VERSIÓN SIMPLIFICADA - Solo email y password (como espera Lisandro)
-    const { data } = await api.post('/auth/register', { email, password });
+    // DEBUG: Ver qué datos estamos enviando
+    const requestData = { 
+      email, 
+      password,
+      firstName,
+      lastName,
+      dni
+    };
+    console.log('🚀 Datos enviados al backend:', requestData);
+    
+    // Enviar todos los campos requeridos por el backend de Lisandro
+    const { data } = await api.post('/auth/register', requestData);
     
     // NO auto-login, para que vuelva al login
     // await AsyncStorage.setItem('token', data.access_token);
