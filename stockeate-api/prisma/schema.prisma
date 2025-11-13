@@ -1,51 +1,62 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
-  id        String       @id @default(uuid())
-  email     String       @unique
+  id        String   @id @default(uuid())
+  email     String   @unique
   password  String
-  createdAt DateTime     @default(now())
-  branches  BranchUser[]
+  createdAt DateTime @default(now())
 
-  // ← back-relation requerido para PasswordReset
-  passwordResets PasswordReset[]
-    digitalizedRemitos DigitalizedRemito[]
+  // --- NUEVOS CAMPOS DE PERFIL DE USUARIO ---
+  firstName String? // Nombre
+  lastName  String? // Apellido
+  dni       String? @unique // DNI (debe ser único)
 
+  // --- Relaciones ---
+  branches         BranchUser[]
+  passwordResets   PasswordReset[]
+  digitalizedRemitos DigitalizedRemito[]
 }
 
 model Branch {
-  id       String       @id @default(uuid())
-  name     String
-  location String?
-  users    BranchUser[]
-  products Product[]
-  remitos  Remito[]
+  id               String              @id @default(uuid())
+  name             String
+  location         String?
+  users            BranchUser[]
+  products         Product[]
+  remitos          Remito[]
   digitalizedRemitos DigitalizedRemito[]
+
+  // --- NUEVOS CAMPOS DE PERFIL DE SUCURSAL ---
+  businessName     String? // Razón Social (para el emisor del remito)
+  cuit             String? // CUIT (del emisor)
+  address          String? // Dirección (del emisor)
+  phone            String? // Teléfono (del emisor)
+  taxCondition     String? // Condición de IVA (del emisor)
 }
 
 model BranchUser {
   id       String @id @default(uuid())
-  role     String
+  role     String // <-- Mantenemos el 'String' simple por ahora
   userId   String
   branchId String
   user     User   @relation(fields: [userId], references: [id])
   branch   Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([userId, branchId]) // Buena práctica
 }
 
 model Product {
   id         String       @id @default(uuid())
   branchId   String
-  code       String       @unique // único global para el MVP
+  code       String       @unique
   name       String
   price      Decimal      @default(0)
   stock      Int          @default(0)
@@ -57,19 +68,25 @@ model Product {
 }
 
 model Remito {
-  id             String       @id @default(uuid())
-  branchId       String
-  tmpNumber      String       @unique
-  officialNumber String?      @unique
-  customer       String?
-  notes          String?
-  createdAt      DateTime     @default(now())
-  items          RemitoItem[]
-  branch         Branch       @relation(fields: [branchId], references: [id])
-  @@index([branchId], map: "idx_remito_branchId")
-  @@index([createdAt], map: "idx_remito_createdAt")
+  id                  String             @id @default(uuid())
+  branchId            String
+  tmpNumber           String             @unique
+  officialNumber      String?            @unique
+  customer            String?            // Nombre/Razón Social del Cliente
+  notes               String?
+  createdAt           DateTime           @default(now())
+  items               RemitoItem[]
+  branch              Branch             @relation(fields: [branchId], references: [id])
   digitalizedOrigin   DigitalizedRemito? @relation(fields: [digitalizedOriginId], references: [id])
   digitalizedOriginId String?            @unique
+
+  // --- NUEVOS CAMPOS DE DETALLES DEL CLIENTE ---
+  customerCuit        String?            // CUIT/CUIL del Cliente
+  customerAddress     String?            // Dirección del Cliente
+  customerTaxCondition String?           // Condición de IVA del Cliente
+
+  @@index([branchId], map: "idx_remito_branchId")
+  @@index([createdAt], map: "idx_remito_createdAt")
 }
 
 model RemitoItem {
@@ -78,7 +95,7 @@ model RemitoItem {
   productId String
   qty       Int
   unitPrice Decimal @default(0)
-  remito    Remito  @relation(fields: [remitoId], references: [id])
+  remito    Remito  @relation(fields: [remitoId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 }
 
@@ -106,7 +123,7 @@ model DigitalizedRemito {
   user            User                 @relation(fields: [userId], references: [id])
   branchId        String
   branch          Branch               @relation(fields: [branchId], references: [id])
-  finalRemito     Remito?              // Relación inversa al remito final creado
+  finalRemito     Remito?
 }
 
 enum DigitalizationStatus {
@@ -121,8 +138,9 @@ model PasswordReset {
   userId    String
   token     String   @unique
   expiresAt DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
+
+// --- Los modelos Role y Permission se omiten por ahora ---
