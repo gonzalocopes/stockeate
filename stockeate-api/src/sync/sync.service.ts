@@ -6,16 +6,16 @@ import { Prisma } from '@prisma/client'; // Importar Prisma para TransactionClie
 export class SyncService {
   constructor(private prisma: PrismaService) {}
 
-  // ---------- PULL (ACTUALIZADO) ----------
+  // ---------- PULL (ACTUALIZADO PARA EL HISTORIAL) ----------
   async pull(branchId: string, since?: number) {
     const clock = Date.now();
     const full = !since;
 
-    // --- Productos (Tu lógica existente) ---
+    // --- Productos (Tu lógica de 'main') ---
     let products: any[] = [];
     if (full) {
       const list = await this.prisma.product.findMany({
-        where: { branchId, isActive: true } as any, // Mantenemos tu lógica de 'isActive'
+        where: { branchId, isActive: true } as any, 
         orderBy: { name: 'asc' },
         take: 5000,
       });
@@ -23,17 +23,13 @@ export class SyncService {
         code: p.code, name: p.name, price: p.price ?? 0, stock: p.stock ?? 0,
         branch_id: p.branchId,
         updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
-        archived: p.isActive ? 0 : 1 // Mapeamos isActive a archived para la app
+        archived: p.isActive ? 0 : 1 
       }));
     } else {
       const list = await this.prisma.product.findMany({
         where: {
           branchId,
-          OR: [
-            { updatedAt: { gt: new Date(since!) } },
-            // Tu versión anterior también tenía createdAt, la mantenemos por si acaso
-            { createdAt: { gt: new Date(since!) } }, 
-          ],
+          OR: [{ updatedAt: { gt: new Date(since!) } }, { createdAt: { gt: new Date(since!) } }],
         } as any,
         orderBy: { updatedAt: 'asc' } as any,
         take: 5000,
@@ -46,7 +42,7 @@ export class SyncService {
       }));
     }
 
-    // --- Movimientos de stock (Tu lógica existente) ---
+    // --- Movimientos de stock (Tu lógica de 'main') ---
     let moves: any[] = [];
     try {
       moves = await this.prisma.stockMove.findMany({
@@ -67,40 +63,46 @@ export class SyncService {
       created_at: m.createdAt ? new Date(m.createdAt).getTime() : undefined,
     }));
 
-    // --- 👇 LÓGICA DE REMITOS QUE FALTABA ---
-    
-    // 1. Buscamos los remitos nuevos
+    // --- LÓGICA DE REMITOS (ACTUALIZADA) ---
     const newRemitos = await this.prisma.remito.findMany({
       where: {
         branchId,
         ...(since ? { createdAt: { gt: new Date(since) } } : {}),
       },
+      // 👇 Seleccionamos los nuevos campos para enviarlos a la app
+      select: {
+        id: true,
+        tmpNumber: true,
+        customer: true,
+        customerCuit: true, // <-- NUEVO
+        customerAddress: true, // <-- NUEVO
+        customerTaxCondition: true, // <-- NUEVO
+        notes: true,
+        createdAt: true,
+        branchId: true,
+      },
       orderBy: { createdAt: 'asc' },
       take: 5000,
     });
 
-    // 2. Buscamos los items de esos remitos
     const newRemitoIds = newRemitos.map(r => r.id);
     const newRemitoItems = newRemitoIds.length > 0
       ? await this.prisma.remitoItem.findMany({
           where: { remitoId: { in: newRemitoIds } }
-          // (Si remitoItem tuviera 'createdAt', también filtraríamos por 'since' aquí)
         })
       : [];
     
-    // --- FIN DE LA LÓGICA FALTANTE ---
-
     return {
       clock,
       full,
       products,
       stockMoves,
-      remitos: newRemitos,     // <-- 3. Añadimos los remitos al paquete
-      remitoItems: newRemitoItems, // <-- 3. Añadimos los items al paquete
+      remitos: newRemitos,
+      remitoItems: newRemitoItems,
     };
   }
 
-  // ---------- PUSH (Tu lógica 'process' robusta se mantiene) ----------
+  // ---------- PUSH (ACTUALIZADO) ----------
   async process(dto: any) {
     const branchId = dto.branchId ?? dto.branch_id;
     const products = dto.products ?? [];
@@ -114,14 +116,13 @@ export class SyncService {
     const conflicts: any[] = [];
 
     await this.prisma.$transaction(async (tx) => {
-      // 0) Deletes por code (y branch)
+      // 0) Deletes
       for (const code of deletes) {
         if (!code) continue;
         const prod = await tx.product.findFirst({ where: { code, branchId } });
         if (!prod) continue;
         await tx.remitoItem.deleteMany({ where: { productId: prod.id } }).catch(() => {});
         await tx.stockMove.deleteMany({ where: { productId: prod.id } }).catch(() => {});
-        // Usamos la lógica de tu versión final (desactivar, no borrar)
         await tx.product.updateMany({ where: { id: prod.id }, data: { isActive: false } });
       }
 
@@ -135,12 +136,12 @@ export class SyncService {
             data: {
               branchId, code, name: p.name ?? code, price: p.price ?? 0,
               stock: p.stock ?? 0, version: typeof p.version === 'number' ? p.version : 0,
-              isActive: true, // Asegurarse de crearlo activo
+              isActive: true,
             },
           });
           continue;
         }
-        if (!existing.isActive) { // Reactivar si existe pero está inactivo
+        if (!existing.isActive) {
           await tx.product.update({ where: { id: existing.id }, data: { isActive: true } });
         }
         const incomingVersion = typeof p.version === 'number' ? p.version : existing.version;
@@ -159,18 +160,16 @@ export class SyncService {
 
       // 2) Movimientos de stock
       for (const m of stockMoves) {
-        const productId = m.productId ?? m.product_id;
         const productCode = m.productCode ?? m.product_code;
-        let pid = productId as string | undefined;
+        let pid = m.productId ?? m.product_id;
         if (!pid && productCode) {
-          const found = await tx.product.findUnique({ where: { code: productCode } });
-          pid = found?.id;
+          pid = (await tx.product.findUnique({ where: { code: productCode } }))?.id;
         }
         if (!pid) continue;
         const prod = await tx.product.findUnique({ where: { id: pid } });
         if (!prod) continue;
         let type: 'IN' | 'OUT' = m.type;
-        let qty: number | undefined = m.qty;
+        let qty: number = m.qty;
         if (!type || qty == null) {
           const delta = Number(m.delta ?? 0);
           if (delta === 0) continue;
@@ -188,30 +187,40 @@ export class SyncService {
         patched.push({ entity: 'product', id: updated.id, stock: updated.stock, version: updated.version });
       }
 
-      // 3) Remitos + items
+      // 3) Remitos + items (ACTUALIZADO con nuevos campos)
       for (const r of remitos) {
         const tmpNumber = r.tmpNumber ?? r.tmp_number ?? null;
         if (!tmpNumber) continue;
         const existingRemito = await tx.remito.findUnique({ where: { tmpNumber } });
-        if (existingRemito) continue; // Si ya existe por tmpNumber, no lo creamos de nuevo
+        if (existingRemito) continue; 
 
         const customer = r.customer ?? null;
         const notes = r.notes ?? null;
         const count = await tx.remito.count({ where: { branchId } });
         const official = `A-${String(count + 1).padStart(6, '0')}`;
+        
         const rem = await tx.remito.create({
-          data: { branchId, tmpNumber, officialNumber: official, customer, notes },
+          data: {
+            branchId,
+            tmpNumber,
+            officialNumber: official,
+            customer,
+            notes,
+            // --- 👇 CAMPOS NUEVOS AÑADIDOS AL 'create' ---
+            customerCuit: r.customerCuit ?? null,
+            customerAddress: r.customerAddress ?? null,
+            customerTaxCondition: r.customerTaxCondition ?? null,
+          },
         });
+
         if (tmpNumber) mapping[tmpNumber] = official;
         const rId = r.id ?? r.remito_id;
         const items = remitoItems.filter((ri: any) => (ri.remitoId ?? ri.remito_id) === rId);
         for (const it of items) {
-          const productId = it.productId ?? it.product_id;
-          const productCode = it.productCode ?? it.product_code; // Si la app envía código en lugar de ID
-          let pid = productId as string | undefined;
+          const productCode = it.productCode ?? it.product_code;
+          let pid = it.productId ?? it.product_id;
           if (!pid && productCode) {
-              const found = await tx.product.findUnique({ where: { code: productCode } });
-              pid = found?.id;
+              pid = (await tx.product.findUnique({ where: { code: productCode } }))?.id;
           }
           if (!pid) continue;
           await tx.remitoItem.create({

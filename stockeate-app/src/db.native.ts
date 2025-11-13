@@ -76,7 +76,6 @@ export const DB = {
     );
   },
 
-  // 👇 ACTUALIZADO CON NUEVOS CAMPOS
   insertRemito(data: any) {
     const id = uid();
     db.runSync(
@@ -88,9 +87,9 @@ export const DB = {
         data.official_number ?? null,
         data.branch_id,
         data.customer ?? null,
-        data.customer_cuit ?? null,         // Nuevo
-        data.customer_address ?? null,      // Nuevo
-        data.customer_tax_condition ?? null,// Nuevo
+        data.customer_cuit ?? null,
+        data.customer_address ?? null,
+        data.customer_tax_condition ?? null,
         data.notes ?? null,
         now(),
         0,
@@ -243,7 +242,7 @@ export const DB = {
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
 
-  // --- 👇 FUNCIONES DE SINCRONIZACIÓN RESTAURADAS Y ACTUALIZADAS ---
+  // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAUTADAS Y CORREGIDAS) ---
   
   upsertRemito(r: any) {
     try {
@@ -261,9 +260,9 @@ export const DB = {
           r.id,
           r.tmp_number,
           r.customer ?? null,
-          r.customerCuit ?? null,         // Mapeo de camelCase (API) a la columna
-          r.customerAddress ?? null,
-          r.customerTaxCondition ?? null,
+          r.customerCuit ?? null,         // 👈 CORRECCIÓN
+          r.customerAddress ?? null,      // 👈 CORRECCIÓN
+          r.customerTaxCondition ?? null, // 👈 CORRECCIÓN
           r.notes ?? null,
           r.created_at,
           r.branch_id
@@ -282,7 +281,13 @@ export const DB = {
          ON CONFLICT(id) DO UPDATE SET
            qty=excluded.qty,
            unit_price=excluded.unit_price`,
-        [item.id, item.remito_id, item.product_id, item.qty, item.unit_price ?? 0]
+        [
+          item.id,
+          item.remito_id,
+          item.product_id,
+          item.qty,
+          item.unit_price ?? 0 // 👈 CORRECCIÓN
+        ]
       );
     } catch (e) {
       console.error(`Error guardando item ${item.id}:`, e);
