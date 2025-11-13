@@ -1,11 +1,35 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsNotEmpty,
+  Length,
+  Matches,
+} from 'class-validator';
 import { ApiTags } from '@nestjs/swagger';
 
 class RegisterDto {
-  @IsEmail() email: string;
-  @IsString() @MinLength(6) password: string;
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @IsString()
+  @Length(2, 50)
+  firstName: string;
+
+  @IsString()
+  @Length(2, 50)
+  lastName: string;
+
+  @IsString()
+  @Length(7, 8)
+  @Matches(/^[1-9]\d{6,7}$/)
+  dni: string;
 }
 class LoginDto {
   @IsEmail() email: string;
@@ -28,7 +52,13 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    const token = await this.auth.register(dto.email, dto.password);
+    const token = await this.auth.register(
+      dto.email,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+      dto.dni,
+    );
     return { access_token: token };
   }
 
