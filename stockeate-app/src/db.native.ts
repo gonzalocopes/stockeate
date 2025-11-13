@@ -63,12 +63,31 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
-  upsertProduct(p: any) {
+upsertProduct(p: any) {
+    const incomingVersion = p.version ?? 0;
+    
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=excluded.archived`,
-      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+       ON CONFLICT(code) DO UPDATE SET
+         -- Solo actualiza nombre/precio si la versión entrante es MAYOR
+         name = CASE WHEN excluded.version > products.version THEN excluded.name ELSE products.name END,
+         price = CASE WHEN excluded.version > products.version THEN excluded.price ELSE products.price END,
+         
+         -- El stock SOLO se actualiza si la versión entrante es MAYOR o IGUAL
+         -- y si el stock entrante NO es NULL (para respetar la lógica del applyPull)
+         stock = CASE WHEN excluded.version >= products.version AND excluded.stock IS NOT NULL THEN excluded.stock ELSE products.stock END,
+         
+         -- La versión SIEMPRE se actualiza a la versión más reciente
+         version = CASE WHEN excluded.version > products.version THEN excluded.version ELSE products.version END,
+
+         updated_at = excluded.updated_at,
+         archived = excluded.archived
+       WHERE products.code = excluded.code`,
+      // Nota: El valor 'p.stock' debe ser null (o undefined) si no se pasa,
+      // pero en este caso, al ser un snapshot, asumimos que viene un número.
+      // Aquí estamos forzando 'p.stock ?? null' para que COALESCE trabaje mejor.
+      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? null, incomingVersion, p.branch_id, now(), p.archived ?? 0]
     );
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
   },

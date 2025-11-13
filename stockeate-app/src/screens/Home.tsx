@@ -178,15 +178,20 @@ export default function Home({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Footer (Fijo) */}
-      <View
-        style={[
-          styles.footer,
-          { backgroundColor: theme.colors.inputBackground, borderTopColor: theme.colors.border },
-        ]}
-      >
-        {/* ... (contenido del footer si lo necesitas) ... */}
-      </View>
+{/* Footer */}
+{/*     <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 70, // Altura de la barra
+        backgroundColor: theme.colors.inputBackground, // Color de fondo
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+      }}
+    />
+*/}
 
       <HamburgerMenu
         visible={menuVisible}
