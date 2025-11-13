@@ -9,7 +9,7 @@ import {
   Alert,
   Modal,
   KeyboardAvoidingView,
-  TouchableWithoutFeedback,
+  Pressable,
   Keyboard,
   Platform,
   ActivityIndicator,
@@ -407,20 +407,21 @@ export default function BranchProducts({ navigation }: any) {
 
       {/* -------- Modal EDITAR (con ARCHIVAR) -------- */}
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : undefined}
               keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
             >
-              <View
-                style={{
-                  backgroundColor: theme.colors.card,
-                  padding: 16,
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                }}
-              >
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <View
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    padding: 16,
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                  }}
+                >
                 <View style={{ alignItems: "center", marginBottom: 8 }}>
                   <View style={{ width: 40, height: 4, backgroundColor: theme.colors.border, borderRadius: 2 }} />
                 </View>
@@ -553,10 +554,11 @@ export default function BranchProducts({ navigation }: any) {
                 >
                   <Text style={{ color: "#fff", fontWeight: "800" }}>Archivar producto</Text>
                 </TouchableOpacity>
-              </View>
+                </View>
+              </Pressable>
             </KeyboardAvoidingView>
           </View>
-        </TouchableWithoutFeedback>
+        </Pressable>
       </Modal>
     </View>
   );
