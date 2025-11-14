@@ -11,29 +11,33 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 
 class RegisterDto {
-  @IsEmail()
+  @IsEmail({}, { message: 'Formato de email incorrecto' })
   email: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(6, { message: 'Mínimo 6 caracteres' })
   password: string;
 
   @IsString()
-  @Length(2, 50)
+  @Length(2, 50, { message: 'El nombre debe tener entre 2 y 50 caracteres' })
   firstName: string;
 
   @IsString()
-  @Length(2, 50)
+  @Length(2, 50, { message: 'El nombre debe tener entre 2 y 50 caracteres' })
   lastName: string;
 
   @IsString()
-  @Length(7, 8)
-  @Matches(/^[1-9]\d{6,7}$/)
+  @Length(7, 8, { message: 'Formato de DNI incorrecto' })
+  @Matches(/^[1-9]\d{6,7}$/, { message: 'Formato de DNI incorrecto' })
   dni: string;
 }
 class LoginDto {
-  @IsEmail() email: string;
-  @IsString() @MinLength(6) password: string;
+  @IsEmail({}, { message: 'Formato de email incorrecto' })
+  email: string;
+
+  @IsString()
+  @MinLength(6, { message: 'Mínimo 6 caracteres' })
+  password: string;
 }
 
 class ForgotDto {
