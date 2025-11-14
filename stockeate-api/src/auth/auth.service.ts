@@ -18,13 +18,28 @@ export class AuthService {
     private email: EmailService,
   ) {}
 
-  async register(email: string, password: string): Promise<string> {
-    const exists = await this.prisma.user.findUnique({ where: { email } });
-    if (exists) throw new BadRequestException('El email ya está registrado');
+  async register(
+    email: string,
+    password: string,
+    firstName?: string,
+    lastName?: string,
+    dni?: string,
+  ): Promise<string> {
+    const existsEmail = await this.prisma.user.findUnique({ where: { email } });
+    if (existsEmail)
+      throw new BadRequestException('El email ya está registrado');
+    const existsDni = await this.prisma.user.findUnique({ where: { dni } });
+    if (existsDni) throw new BadRequestException('El DNI ya está registrado');
 
     const hash = await bcrypt.hash(password, 10);
     const user = await this.prisma.user.create({
-      data: { email, password: hash },
+      data: {
+        email,
+        password: hash,
+        firstName: firstName,
+        lastName: lastName,
+        dni: dni,
+      },
     });
     return this.sign(user.id, user.email);
   }

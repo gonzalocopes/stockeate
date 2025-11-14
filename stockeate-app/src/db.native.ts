@@ -1,12 +1,9 @@
 ﻿import * as SQLite from "expo-sqlite";
 const db = SQLite.openDatabaseSync("stockeate.db");
 
-// En: src/db.native.ts
-
 export function initDb() {
   db.execSync(`
     PRAGMA journal_mode = WAL;
-    
     CREATE TABLE IF NOT EXISTS products(
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
@@ -18,7 +15,6 @@ export function initDb() {
       updated_at TEXT,
       archived INTEGER DEFAULT 0
     );
-    
     CREATE TABLE IF NOT EXISTS stock_moves(
       id TEXT PRIMARY KEY,
       product_id TEXT NOT NULL,
@@ -29,19 +25,22 @@ export function initDb() {
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0
     );
-    
     CREATE TABLE IF NOT EXISTS remitos(
       id TEXT PRIMARY KEY,
       tmp_number TEXT UNIQUE,
       official_number TEXT,
       branch_id TEXT NOT NULL,
       customer TEXT,
+      -- 👇 CAMPOS NUEVOS AÑADIDOS
+      customer_cuit TEXT,
+      customer_address TEXT,
+      customer_tax_condition TEXT,
+      -- 👆 FIN CAMPOS NUEVOS
       notes TEXT,
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0,
       pdf_path TEXT
     );
-    
     CREATE TABLE IF NOT EXISTS remito_items(
       id TEXT PRIMARY KEY,
       remito_id TEXT NOT NULL,
@@ -56,7 +55,6 @@ const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export const DB = {
-  // ... (getProductByCode, upsertProduct, incrementStock, insertRemito, insertRemitoItem, insertStockMove se mantienen igual) ...
   getProductByCode(code: string) {
     return (
       db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ??
@@ -70,6 +68,7 @@ export const DB = {
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
+<<<<<<< HEAD
        ON CONFLICT(code) DO UPDATE SET
          -- Solo actualiza nombre/precio si la versión entrante es MAYOR
          name = CASE WHEN excluded.version > products.version THEN excluded.name ELSE products.name END,
@@ -99,6 +98,10 @@ export const DB = {
         now(),
         p.archived ?? 0,
       ]
+=======
+       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=COALESCE(excluded.archived, products.archived)`,
+      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+>>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
     );
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [
       p.code,
@@ -115,18 +118,33 @@ export const DB = {
   insertRemito(data: any) {
     const id = uid();
     db.runSync(
+<<<<<<< HEAD
       `INSERT INTO remitos(id,tmp_number,official_number,branch_id,customer,notes,created_at,synced,pdf_path)
        VALUES(?,?,?,?,?,?,?,?,?)`,
+=======
+      `INSERT INTO remitos(id, tmp_number, official_number, branch_id, customer, customer_cuit, customer_address, customer_tax_condition, notes, created_at, synced, pdf_path)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+>>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
       [
         id,
         data.tmp_number,
         data.official_number ?? null,
         data.branch_id,
         data.customer ?? null,
+<<<<<<< HEAD
         data.notes ?? null,
         now(),
         0,
         data.pdf_path ?? null,
+=======
+        data.customer_cuit ?? null,
+        data.customer_address ?? null,
+        data.customer_tax_condition ?? null,
+        data.notes ?? null,
+        now(),
+        0,
+        data.pdf_path ?? null
+>>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
       ]
     );
     return id;
@@ -326,22 +344,33 @@ export const DB = {
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
 
-  // --- 👇 CORRECCIÓN AÑADIDA AQUÍ ---
-
+  // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAUTADAS Y CORREGIDAS) ---
+  
   upsertRemito(r: any) {
     try {
       db.runSync(
-        `INSERT INTO remitos(id, tmp_number, customer, notes, created_at, branch_id)
-         VALUES(?, ?, ?, ?, ?, ?)
+        `INSERT INTO remitos(id, tmp_number, customer, customer_cuit, customer_address, customer_tax_condition, notes, created_at, branch_id)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            tmp_number=excluded.tmp_number,
            customer=excluded.customer,
+           customer_cuit=excluded.customer_cuit,
+           customer_address=excluded.customer_address,
+           customer_tax_condition=excluded.customer_tax_condition,
            notes=excluded.notes`,
         [
           r.id,
           r.tmp_number,
+<<<<<<< HEAD
           r.customer ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
           r.notes ?? null, // 👈 CORREGIDO: Asegura que no sea 'undefined'
+=======
+          r.customer ?? null,
+          r.customerCuit ?? null,         // 👈 CORRECCIÓN
+          r.customerAddress ?? null,      // 👈 CORRECCIÓN
+          r.customerTaxCondition ?? null, // 👈 CORRECCIÓN
+          r.notes ?? null,
+>>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
           r.created_at,
           r.branch_id,
         ]
@@ -364,7 +393,11 @@ export const DB = {
           item.remito_id,
           item.product_id,
           item.qty,
+<<<<<<< HEAD
           item.unit_price ?? 0, // <-- Ya estaba bien, pero lo confirmamos
+=======
+          item.unit_price ?? 0 // 👈 CORRECCIÓN
+>>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
         ]
       );
     } catch (e) {
