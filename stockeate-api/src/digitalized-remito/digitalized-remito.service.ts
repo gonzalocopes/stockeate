@@ -28,16 +28,21 @@ export class DigitalizedRemitoService {
   private async processOcr(remitoId: string, filePath: string) {
     console.log(`[OCR] Iniciando procesamiento para el remito: ${remitoId}`);
     try {
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // TODO: Implementar OCR real aquí
+      // Por ahora, simulamos extracción de datos realistas
       const parsedData = {
-        provider: 'Proveedor Ejemplo S.A.',
+        provider: 'Distribuidora ABC S.A.',
         date: new Date().toISOString().split('T')[0],
         items: [
-          { detectedCode: '7790010001234', detectedName: 'Coca Cola 500ml', qty: 10, unit_price: 850.00 },
-          { detectedCode: '7790010005678', detectedName: 'Pepsi 500ml', qty: 5, unit_price: 780.50 },
-          { detectedCode: '7790010009876', detectedName: 'Sprite 500ml', qty: 8, unit_price: 720.25 },
+          { detectedCode: 'PROD001', detectedName: 'Producto Extraído 1', qty: 2, unit_price: 1250.00 },
+          { detectedCode: 'PROD002', detectedName: 'Producto Extraído 2', qty: 1, unit_price: 890.50 },
+          { detectedCode: 'PROD003', detectedName: 'Producto Extraído 3', qty: 5, unit_price: 450.75 },
+          { detectedCode: 'PROD004', detectedName: 'Producto Extraído 4', qty: 3, unit_price: 2100.00 },
         ],
       };
+      
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
