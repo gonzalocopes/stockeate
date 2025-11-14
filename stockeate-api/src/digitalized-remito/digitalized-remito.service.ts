@@ -31,10 +31,11 @@ export class DigitalizedRemitoService {
       await new Promise(resolve => setTimeout(resolve, 5000));
       const parsedData = {
         provider: 'Proveedor Ejemplo S.A.',
-        date: '2025-10-16',
+        date: new Date().toISOString().split('T')[0],
         items: [
-          { detectedCode: '7790010001234', detectedName: 'Producto A', qty: 10, unit_price: 15.50 },
-          { detectedCode: '7790010005678', detectedName: 'Producto B', qty: 5, unit_price: 22.75 },
+          { detectedCode: '7790010001234', detectedName: 'Coca Cola 500ml', qty: 10, unit_price: 850.00 },
+          { detectedCode: '7790010005678', detectedName: 'Pepsi 500ml', qty: 5, unit_price: 780.50 },
+          { detectedCode: '7790010009876', detectedName: 'Sprite 500ml', qty: 8, unit_price: 720.25 },
         ],
       };
       await this.prisma.digitalizedRemito.update({

@@ -204,6 +204,9 @@ export default function RemitosHistory({ navigation }: any) {
     
     // Obtener los items del remito para mostrar detalles
     const remitoItems = DB.getRemitoItems(item.id) || [];
+    
+    // Verificar si el remito tiene precios válidos
+    const hasValidPrices = remitoItems.some(ri => (Number(ri.unit_price) || 0) > 0);
 
     return (
       <View style={[styles.itemContainer, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
@@ -240,18 +243,26 @@ export default function RemitosHistory({ navigation }: any) {
             {remitoItems.slice(0, 3).map((rItem, index) => (
               <View key={rItem.id} style={styles.itemRow}>
                 <Text style={[styles.itemName, { color: theme.colors.text }]} numberOfLines={1}>
-                  • {rItem.name}
+                  • {rItem.name || `Producto ${index + 1}`}
                 </Text>
                 <View style={styles.itemDetails}>
                   <Text style={[styles.itemQty, { color: theme.colors.textSecondary }]}>
                     {Number(rItem.qty) || 0} unid.
                   </Text>
-                  <Text style={[styles.itemPrice, { color: theme.colors.textSecondary }]}>
-                    ${(Number(rItem.unit_price) || 0).toFixed(2)} c/u
-                  </Text>
-                  <Text style={[styles.itemTotal, { color: theme.colors.text }]}>
-                    ${((Number(rItem.qty) || 0) * (Number(rItem.unit_price) || 0)).toFixed(2)}
-                  </Text>
+                  {hasValidPrices ? (
+                    <>
+                      <Text style={[styles.itemPrice, { color: theme.colors.textSecondary }]}>
+                        ${(Number(rItem.unit_price) || 0).toFixed(2)} c/u
+                      </Text>
+                      <Text style={[styles.itemTotal, { color: theme.colors.text }]}>
+                        ${((Number(rItem.qty) || 0) * (Number(rItem.unit_price) || 0)).toFixed(2)}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={[styles.itemPrice, { color: theme.colors.textMuted, fontStyle: 'italic' }]}>
+                      Sin precio
+                    </Text>
+                  )}
                 </View>
               </View>
             ))}
@@ -266,7 +277,11 @@ export default function RemitosHistory({ navigation }: any) {
         {/* Total */}
         <View style={styles.totalContainer}>
           <Text style={[styles.totalText, { color: theme.colors.text }]}>
-            💰 Total: ${item.total_amount.toFixed(2)} ({item.total_qty} unidades)
+            {hasValidPrices ? (
+              `💰 Total: $${item.total_amount.toFixed(2)} (${item.total_qty} unidades)`
+            ) : (
+              `📦 ${item.total_qty} unidades (remito sin precios)`
+            )}
           </Text>
         </View>
         
