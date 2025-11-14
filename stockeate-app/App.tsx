@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+// 👇 1. IMPORTAMOS SafeAreaView
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useAuth } from "./src/stores/auth";
@@ -44,103 +45,108 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={mode === "dark" ? DarkTheme : DefaultTheme}>
-        {!token ? (
-          <Stack.Navigator>
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Register"
-              component={RegisterScreen}
-              options={{ title: "Registro" }}
-            />
-          </Stack.Navigator>
-        ) : (
-          <Stack.Navigator>
-            <Stack.Screen
-              name="BranchSelect"
-              component={BranchSelect}
-              options={{
-                title: "Elegir sucursal",
-                headerBackVisible: false,
-              }}
-            />
-            <Stack.Screen
-              name="Home"
-              component={Home}
-              options={{ title: "Menú" }}
-            />
-            <Stack.Screen
-              name="RemitosHub"
-              component={RemitosHub}
-              options={{ title: "Remitos" }}
-            />
-            <Stack.Screen
-              name="ScanAdd"
-              component={ScanAdd}
-              options={{ title: "Escanear / Agregar" }}
-            />
-            <Stack.Screen
-              name="RemitoForm"
-              component={RemitoForm}
-              options={{ title: "Formar remito" }}
-            />
-            <Stack.Screen
-              name="RemitoIngreso"
-              component={RemitoIngreso}
-              options={{ title: "Remito de entrada" }}
-            />
-            <Stack.Screen
-              name="RemitosHistory"
-              component={RemitosHistory}
-              options={{ title: "Historial de remitos" }}
-            />
-            <Stack.Screen
-              name="RemitoDetail"
-              component={RemitoDetail}
-              options={{ title: "Remito" }}
-            />
-            <Stack.Screen
-              name="RemitoResult"
-              component={RemitoResult}
-              options={{ title: "Remito generado" }}
-            />
-            <Stack.Screen
-              name="BranchProducts"
-              component={BranchProducts}
-              options={{ title: "Productos de la sucursal" }}
-            />
-            <Stack.Screen
-              name="BranchArchived"
-              component={BranchArchived}
-              options={{ title: "Archivados" }}
-            />
-            <Stack.Screen
-              name="ExternalRemitoResult"
-              component={ExternalRemitoResult}
-              options={{ title: "Remito Procesado" }}
-            />
-            <Stack.Screen
-              name="UploadRemito"
-              component={UploadRemitoScreen}
-              options={{ title: "Digitalizar Remito" }}
-            />
-            <Stack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ title: "Configuración" }}
-            />
-            <Stack.Screen
-              name="Profile"
-              component={ProfileScreen}
-              options={{ title: "Mi Perfil" }}
-            />
-          </Stack.Navigator>
-        )}
-      </NavigationContainer>
+      {/* 👇 2. ENVOLVEMOS EL NAVEGADOR CON SafeAreaView */}
+      {/* Usamos 'edges' para aplicar padding solo abajo y a los costados */}
+      <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
+        <NavigationContainer theme={mode === "dark" ? DarkTheme : DefaultTheme}>
+          {!token ? (
+            <Stack.Navigator>
+              <Stack.Screen
+                name="Login"
+                component={LoginScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Register"
+                component={RegisterScreen}
+                options={{ title: "Registro" }}
+              />
+            </Stack.Navigator>
+          ) : (
+            <Stack.Navigator>
+              <Stack.Screen
+                name="BranchSelect"
+                component={BranchSelect}
+                options={{
+                  title: "Elegir sucursal",
+                  headerBackVisible: false,
+                }}
+              />
+              <Stack.Screen
+                name="Home"
+                component={Home}
+                options={{ title: "Menú" }}
+              />
+              <Stack.Screen
+                name="RemitosHub"
+                component={RemitosHub}
+                options={{ title: "Remitos" }}
+              />
+              <Stack.Screen
+                name="ScanAdd"
+                component={ScanAdd}
+                options={{ title: "Escanear / Agregar" }}
+              />
+              <Stack.Screen
+                name="RemitoForm"
+                component={RemitoForm}
+                options={{ title: "Formar remito" }}
+              />
+              <Stack.Screen
+                name="RemitoIngreso"
+                component={RemitoIngreso}
+                options={{ title: "Remito de entrada" }}
+              />
+              <Stack.Screen
+                name="RemitosHistory"
+                component={RemitosHistory}
+                options={{ title: "Historial de remitos" }}
+              />
+              <Stack.Screen
+                name="RemitoDetail"
+                component={RemitoDetail}
+                options={{ title: "Remito" }}
+              />
+              <Stack.Screen
+                name="RemitoResult"
+                component={RemitoResult}
+                options={{ title: "Remito generado" }}
+              />
+              <Stack.Screen
+                name="BranchProducts"
+                component={BranchProducts}
+                options={{ title: "Productos de la sucursal" }}
+              />
+              <Stack.Screen
+                name="BranchArchived"
+                component={BranchArchived}
+                options={{ title: "Archivados" }}
+              />
+              <Stack.Screen
+                name="ExternalRemitoResult"
+                component={ExternalRemitoResult}
+                options={{ title: "Remito Procesado" }}
+              />
+              <Stack.Screen
+                name="UploadRemito"
+                component={UploadRemitoScreen}
+                options={{ title: "Digitalizar Remito" }}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: "Configuración" }}
+              />
+              <Stack.Screen
+                name="Profile"
+                component={ProfileScreen}
+                options={{ title: "Mi Perfil" }}
+              />
+            </Stack.Navigator>
+          )}
+        </NavigationContainer>
+      </SafeAreaView> 
+      {/* 👆 3. CERRAMOS EL SafeAreaView */}
     </SafeAreaProvider>
   );
 }
