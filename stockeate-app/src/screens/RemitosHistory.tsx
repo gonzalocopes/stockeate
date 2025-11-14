@@ -8,7 +8,9 @@ import {
   FlatList,
   ActivityIndicator,
   Platform,
-  StyleSheet, // <-- Importamos StyleSheet
+  StyleSheet,
+  SafeAreaView,         // FIX: importar SafeAreaView
+  useWindowDimensions,  // FIX: ya lo usás; aseguramos import
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useBranch } from "../stores/branch";
@@ -22,6 +24,8 @@ import * as SQLite from "expo-sqlite";
 // 👇 imports menú
 import { useAuth } from "../stores/auth";
 import HamburgerMenu from "../components/HamburgerMenu";
+
+import { DB } from "../db";
 
 type Row = {
   id: string;
@@ -40,7 +44,46 @@ type Row = {
 // 👇 2. Función de BBDD con la consulta SQL corregida
 const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string): Row[] => {
   if (Platform.OS === "web") {
-    return [];
+    const qTrim = q.trim().toLowerCase();
+    const all = (DB as any).listAllRemitos?.() ?? [];
+    const byBranch = all.filter((r: any) => r.branch_id === branchId);
+
+    const withComputed = byBranch.map((r: any) => {
+      const items = DB.getRemitoItems(r.id) || [];
+      const total_qty = items.reduce((acc: number, it: any) => acc + Number(it.qty || 0), 0);
+      const total_amount = items.reduce((acc: number, it: any) => acc + Number((it.qty || 0) * (it.unit_price || 0)), 0);
+      const inferredDir = r.tmp_number?.startsWith("ENT-") ? "IN" : null;
+      return {
+        id: r.id,
+        tmp_number: r.tmp_number ?? null,
+        official_number: r.official_number ?? null,
+        branch_id: r.branch_id,
+        customer: r.customer ?? null,
+        notes: r.notes ?? null,
+        created_at: r.created_at,
+        pdf_path: r.pdf_path ?? null,
+        dir: inferredDir,
+        total_qty,
+        total_amount,
+      } as Row;
+    });
+
+    const filtered = withComputed.filter((row) => {
+      if (dir !== "ALL" && row.dir !== dir) return false;
+      if (!qTrim) return true;
+      const matchesHeader =
+        (row.tmp_number ?? "").toLowerCase().includes(qTrim) ||
+        (row.customer ?? "").toLowerCase().includes(qTrim);
+      if (matchesHeader) return true;
+
+      const items = DB.getRemitoItems(row.id) || [];
+      return items.some((it: any) =>
+        (it.code ?? "").toLowerCase().includes(qTrim) ||
+        (it.name ?? "").toLowerCase().includes(qTrim)
+      );
+    });
+
+    return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
   const db = SQLite.openDatabaseSync("stockeate.db");
 
@@ -80,6 +123,7 @@ const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string):
 export default function RemitosHistory({ navigation }: any) {
   const { mode, theme, toggleTheme } = useThemeStore();
   const branchId = useBranch((s) => s.id);
+  const { height, width } = useWindowDimensions();
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"ALL" | "IN" | "OUT">("ALL");
   const [rows, setRows] = useState<Row[]>([]);
@@ -206,11 +250,9 @@ export default function RemitosHistory({ navigation }: any) {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Historial de remitos</Text>
-
-      {/* Filtros */}
-      <View style={styles.filtersContainer}>
+    <SafeAreaView style={{ flex: 1 }}>
+      <View style={[styles.screen, { maxWidth: 1000, alignSelf: 'center', width: '100%' }]}>
+        {/* Encabezado, búsqueda y filtros */}
         <TextInput
           value={q}
           onChangeText={setQ}
@@ -225,6 +267,7 @@ export default function RemitosHistory({ navigation }: any) {
             }
           ]}
         />
+
         <View style={styles.filterButtons}>
           <TouchableOpacity 
             onPress={() => setDir("ALL")} 
@@ -263,32 +306,24 @@ export default function RemitosHistory({ navigation }: any) {
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>
 
-      {loading ? (
-        <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }}/>
-      ) : (
         <FlatList
           data={rows}
-          keyExtractor={(x) => x.id}
+          keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<Text style={[styles.emptyText, {color: theme.colors.textMuted}]}>No se encontraron remitos.</Text>}
-          onRefresh={load} 
-          refreshing={loading}
+          contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 4, minHeight: height }}
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
+            ) : (
+              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>No hay remitos</Text>
+            )
+          }
         />
-      )}
-
-       <HamburgerMenu
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-        items={menuItems}
-        navigation={navigation}
-      />
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

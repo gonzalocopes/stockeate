@@ -1,10 +1,11 @@
-﻿import axios, { AxiosRequestHeaders } from "axios"; // Importar AxiosRequestHeaders
+﻿// src/api.ts
+import axios, { AxiosRequestHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://stockeate.onrender.com"; // <-- Asegúrate que esta URL de ngrok esté activa
+  "https://stockeate.onrender.com"; // <-- URL de producción (o tu ngrok para pruebas)
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({
@@ -12,23 +13,21 @@ export const api = axios.create({
   timeout: 30000,
 });
 
-// --- 👇 INTERCEPTOR DE DEBUG "RAYOS X" ---
-// Esto imprimirá CADA petición que salga de la app
+// Interceptor de Debug "Rayos X"
 api.interceptors.request.use(request => {
   console.log(`🚀 [AXIOS RAY-X] Petición: ${request.method?.toUpperCase()} ${request.baseURL}${request.url}`);
   return request;
 });
-// --- FIN DEL INTERCEPTOR DE DEBUG ---
 
+// Interceptor de Token
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("token");
     if (token && config.headers) {
-      // Asignación correcta para tipos de Axios 1.x
       (config.headers as AxiosRequestHeaders).set("Authorization", `Bearer ${token}`);
     }
   } catch (e) {
-      console.error("Error reading token from AsyncStorage", e);
+    console.error("Error reading token from AsyncStorage", e);
   }
   return config;
 });
@@ -62,11 +61,16 @@ export type PullMove = {
   created_at?: number;
 };
 
-// --- 👇 TIPOS FALTANTES PARA DIGITALIZACIÓN ---
+// --- 👇 TIPO ACTUALIZADO CON NUEVOS CAMPOS ---
 export type PullRemito = {
   id: string;
   tmpNumber: string;
   customer?: string;
+  // --- CAMPOS NUEVOS AÑADIDOS ---
+  customerCuit?: string;
+  customerAddress?: string;
+  customerTaxCondition?: string;
+  // --- FIN CAMPOS NUEVOS ---
   notes?: string;
   createdAt: string; // O Date
   branchId: string;
@@ -80,26 +84,25 @@ export type PullRemitoItem = {
   unitPrice: number;
 };
 
-// --- 👇 PullPayload ACTUALIZADO ---
+// --- PullPayload (ya estaba correcto) ---
 export type PullPayload = {
   clock: number;
   full: boolean;
   products: PullProduct[];
   stockMoves: PullMove[];
-  remitos: PullRemito[]; // <-- Añadido
-  remitoItems: PullRemitoItem[]; // <-- Añadido
+  remitos: PullRemito[];
+  remitoItems: PullRemitoItem[];
 };
 
 export async function pullFromServer(branchId: string, since?: number): Promise<PullPayload> {
   const { data } = await api.get<PullPayload>("/sync/pull", {
     params: { branchId, since },
   });
-  // El log que ya tenías (puedes comentarlo si quieres)
-  // console.log("DATOS RECIBIDOS DEL SERVIDOR (PULL):", JSON.stringify(data, null, 2));
+  // console.log("DATOS RECIBIDOS (PULL):", JSON.stringify(data, null, 2));
   return data;
 }
 
-// --- 👇 FUNCIÓN FALTANTE PARA SUBIR ARCHIVOS ---
+// --- 👇 FUNCIÓN 'uploadRemitoFile' REAL RESTAURADA ---
 export async function uploadRemitoFile(file: { uri: string; name: string; type?: string; }, branchId: string) {
   const formData = new FormData();
   formData.append('file', {
@@ -109,10 +112,11 @@ export async function uploadRemitoFile(file: { uri: string; name: string; type?:
   } as any);
   formData.append('branchId', branchId);
 
+  // Usamos la instancia 'api' global
   const { data } = await api.post('/digitalized-remito/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
-      'ngrok-skip-browser-warning': 'true', // Cabecera para ngrok
+      'ngrok-skip-browser-warning': 'true', // Útil para pruebas con ngrok
     },
   });
   return data;

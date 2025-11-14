@@ -1,7 +1,6 @@
-// src/sync/apply.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PullPayload } from "../api";
-import { DB } from "../db";
+import { DB } from "../db"; // Asegúrate que la ruta sea correcta (ej: ../db.native)
 
 // (dedupe de movimientos por ID)
 async function loadAppliedMoveIds(branchId: string): Promise<Set<string>> {
@@ -44,82 +43,86 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
 }
 
 export async function applyPull(branchId: string, payload: PullPayload) {
-  // 1) upsert de productos (si viene snapshot, fijamos stock)
-  for (const p of payload.products) {
-    
-    // Si viene del servidor, p.version debería estar presente
-    const productData = {
-      code: p.code,
-      name: p.name ?? p.code,
-      price: p.price ?? 0,
-      branch_id: branchId,
-      updated_at: p.updated_at, // <--- PASAR updated_at
-    };
-
-    // Si es un snapshot completo, incluimos el stock (que el upsert filtrará por versión)
-    const stockUpdate = payload.full && typeof p.stock === "number" ? { stock: p.stock } : {};
-    
-    DB.upsertProduct({
-      ...productData,
-      ...stockUpdate
-    });
-  }
-
-  // 2) movimientos (dedupe por id)
-  const applied = await loadAppliedMoveIds(branchId);
-  let newApplied = false;
-
-  for (const mv of payload.stockMoves) {
-    if (mv.branchId !== branchId) continue;
-    if (!mv.id || applied.has(mv.id)) continue;
-
-    let p = DB.getProductByCode(mv.productCode);
-    if (!p) {
-      p = DB.upsertProduct({
-        code: mv.productCode,
-        name: mv.productCode,
-        price: 0,
+  // 1) upsert de productos
+  if (payload.products) {
+    for (const p of payload.products) {
+      DB.upsertProduct({
+        code: p.code,
+        name: p.name ?? p.code,
+        price: p.price ?? 0,
         branch_id: branchId,
-        stock: 0,
+        ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
+        // Aquí asumimos que upsertProduct también maneja 'archived'
       });
     }
-
-    applyStockDelta(p.id, mv.delta, branchId, mv.reason || "Sync");
-    applied.add(mv.id);
-    newApplied = true;
   }
 
-  if (newApplied) {
-    await saveAppliedMoveIds(branchId, applied);
+  // 2) movimientos
+  if (payload.stockMoves) {
+    const applied = await loadAppliedMoveIds(branchId);
+    let newApplied = false;
+
+    for (const mv of payload.stockMoves) {
+      if (mv.branchId !== branchId) continue;
+      if (!mv.id || applied.has(mv.id)) continue;
+
+      let p = DB.getProductByCode(mv.productCode);
+      if (!p) {
+        p = DB.upsertProduct({
+          code: mv.productCode,
+          name: mv.productCode,
+          price: 0,
+          branch_id: branchId,
+          stock: 0,
+        });
+      }
+
+      applyStockDelta(p.id, mv.delta, branchId, mv.reason || "Sync");
+      applied.add(mv.id);
+      newApplied = true;
+    }
+
+    if (newApplied) {
+      await saveAppliedMoveIds(branchId, applied);
+    }
   }
 
-  // 3) 👇 PODA local cuando el payload es snapshot completo
-  if (payload.full) {
+  // 3) PODA local
+  if (payload.full && payload.products) {
     const keepCodes = payload.products.map((p) => p.code);
     DB.pruneProductsNotIn(branchId, keepCodes);
   }
-console.log(`[Sync] Recibidos ${payload.remitos.length} remitos para guardar.`);
-  for (const remito of payload.remitos) {
-    DB.upsertRemito({
-      id: remito.id,
-      tmp_number: remito.tmpNumber,
-      customer: remito.customer,
-      notes: remito.notes,
-      created_at: remito.createdAt,
-      branch_id: remito.branchId,
-      // (Aquí añadiremos los nuevos campos de CUIT, etc. en el futuro)
-    });
+
+  // --- 👇 4. GUARDADO DE REMITOS (ACTUALIZADO) ---
+  if (payload.remitos) {
+    console.log(`[Sync] Recibidos ${payload.remitos.length} remitos para guardar.`);
+    for (const remito of payload.remitos) {
+      // Pasamos todos los campos nuevos a la BD local
+      DB.upsertRemito({
+        id: remito.id,
+        tmp_number: remito.tmpNumber,
+        customer: remito.customer,
+        customerCuit: remito.customerCuit, // <-- NUEVO
+        customerAddress: remito.customerAddress, // <-- NUEVO
+        customerTaxCondition: remito.customerTaxCondition, // <-- NUEVO
+        notes: remito.notes,
+        created_at: remito.createdAt,
+        branch_id: remito.branchId,
+      });
+    }
   }
 
-  // 5. Guardar los ítems de los remitos
-  console.log(`[Sync] Recibidos ${payload.remitoItems.length} items de remito para guardar.`);
-  for (const item of payload.remitoItems) {
-    DB.upsertRemitoItem({
-      id: item.id,
-      remito_id: item.remitoId,
-      product_id: item.productId,
-      qty: item.qty,
-      unit_price: item.unitPrice,
-    });
+  // --- 👇 5. GUARDADO DE ITEMS (YA ESTABA BIEN) ---
+  if (payload.remitoItems) {
+    console.log(`[Sync] Recibidos ${payload.remitoItems.length} items de remito para guardar.`);
+    for (const item of payload.remitoItems) {
+      DB.upsertRemitoItem({
+        id: item.id,
+        remito_id: item.remitoId,
+        product_id: item.productId,
+        qty: item.qty,
+        unit_price: item.unitPrice,
+      });
+    }
   }
 }
