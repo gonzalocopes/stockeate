@@ -195,12 +195,15 @@ export default function RemitosHistory({ navigation }: any) {
     }
   };
 
-  // 👇 4. 'renderItem' ACTUALIZADO con etiqueta de digitalización
+  // 👇 4. 'renderItem' ACTUALIZADO con items detallados
   const renderItem = ({ item }: { item: Row }) => {
     const created = new Date(item.created_at).toLocaleString();
     const isIN = item.dir === "IN";
     const badgeBg = isIN ? theme.colors.success : theme.colors.danger;
     const isDigitalized = item.notes?.startsWith("Ingreso por digitalización");
+    
+    // Obtener los items del remito para mostrar detalles
+    const remitoItems = DB.getRemitoItems(item.id) || [];
 
     return (
       <View style={[styles.itemContainer, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
@@ -216,25 +219,64 @@ export default function RemitosHistory({ navigation }: any) {
             </View>
           )}
         </View>
+        
         <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>
           {created}
           {item.customer ? ` — ${isIN ? "Proveedor" : "Cliente"}: ${item.customer}` : ""}
         </Text>
-        <Text style={[styles.detailsText, { color: theme.colors.textSecondary }]}>
-          Items: {item.total_qty} — Total: ${item.total_amount.toFixed(2)}
-        </Text>
+        
         {isDigitalized && (
           <Text style={styles.digitalizedTag}>
             ✔️ Ingresado por digitalización
           </Text>
         )}
+        
+        {/* Items detallados */}
+        {remitoItems.length > 0 && (
+          <View style={styles.itemsContainer}>
+            <Text style={[styles.itemsHeader, { color: theme.colors.text }]}>
+              📦 Productos ({remitoItems.length} items):
+            </Text>
+            {remitoItems.slice(0, 3).map((rItem, index) => (
+              <View key={rItem.id} style={styles.itemRow}>
+                <Text style={[styles.itemName, { color: theme.colors.text }]} numberOfLines={1}>
+                  • {rItem.name}
+                </Text>
+                <View style={styles.itemDetails}>
+                  <Text style={[styles.itemQty, { color: theme.colors.textSecondary }]}>
+                    {Number(rItem.qty) || 0} unid.
+                  </Text>
+                  <Text style={[styles.itemPrice, { color: theme.colors.textSecondary }]}>
+                    ${(Number(rItem.unit_price) || 0).toFixed(2)} c/u
+                  </Text>
+                  <Text style={[styles.itemTotal, { color: theme.colors.text }]}>
+                    ${((Number(rItem.qty) || 0) * (Number(rItem.unit_price) || 0)).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            {remitoItems.length > 3 && (
+              <Text style={[styles.moreItems, { color: theme.colors.textMuted }]}>
+                ... y {remitoItems.length - 3} productos más
+              </Text>
+            )}
+          </View>
+        )}
+        
+        {/* Total */}
+        <View style={styles.totalContainer}>
+          <Text style={[styles.totalText, { color: theme.colors.text }]}>
+            💰 Total: ${item.total_amount.toFixed(2)} ({item.total_qty} unidades)
+          </Text>
+        </View>
+        
         <View style={styles.actions}>
           <TouchableOpacity
             onPress={() => navigation.navigate("RemitoDetail", { remitoId: item.id })}
             style={[styles.button, { backgroundColor: theme.colors.primary }]}
             activeOpacity={0.9}
           >
-            <Text style={styles.buttonText}>Ver detalle</Text>
+            <Text style={styles.buttonText}>Ver detalle completo</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -339,7 +381,7 @@ const styles = StyleSheet.create({
   filterButtonText: { fontWeight: "600" },
   subtitle: { fontSize: 12, marginTop: 4 },
   emptyText: { textAlign: 'center', marginTop: 40, fontSize: 16 },
-  itemContainer: { borderBottomWidth: 1, paddingVertical: 12, gap: 4, paddingHorizontal: 4, backgroundColor: 'white', marginBottom: 8, borderRadius: 8, elevation: 1 },
+  itemContainer: { borderBottomWidth: 1, paddingVertical: 12, gap: 8, paddingHorizontal: 12, backgroundColor: 'white', marginBottom: 12, borderRadius: 12, elevation: 2 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   remitoNumber: { fontWeight: "700", fontSize: 16 },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
@@ -347,6 +389,18 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 12 },
   detailsText: { fontSize: 14, fontWeight: '500' },
   digitalizedTag: { fontSize: 11, color: "#059669", fontWeight: 'bold', marginTop: 4 },
+  // Nuevos estilos para items detallados
+  itemsContainer: { marginTop: 8, padding: 8, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  itemsHeader: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  itemName: { flex: 1, fontSize: 12, marginRight: 8 },
+  itemDetails: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  itemQty: { fontSize: 11, minWidth: 45, textAlign: 'center' },
+  itemPrice: { fontSize: 11, minWidth: 55, textAlign: 'center' },
+  itemTotal: { fontSize: 12, fontWeight: '600', minWidth: 50, textAlign: 'right' },
+  moreItems: { fontSize: 11, fontStyle: 'italic', textAlign: 'center', marginTop: 4 },
+  totalContainer: { marginTop: 8, padding: 8, backgroundColor: '#dbeafe', borderRadius: 6 },
+  totalText: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
   actions: { flexDirection: "row", gap: 8, marginTop: 8 },
   button: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   buttonText: { color: "white", fontWeight: "600" },

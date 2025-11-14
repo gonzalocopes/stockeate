@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   FlatList,
   Alert,
   Modal,
@@ -45,14 +46,15 @@ type LoteItem = {
 
 const LOW_THRESHOLD = 20; // umbral local para "bajo stock"
 
-export default function BranchProducts({ navigation, route }: any) { // <-- 2. AÑADIMOS 'route'
+export default function BranchProducts({ navigation, route }: any) {
+  // <-- 2. AÑADIMOS 'route'
   const { theme } = useThemeStore();
   const branchId = useBranch((s) => s.id);
   const isFocused = useIsFocused();
 
   // 👇 3. DETECTAMOS EL MODO "SELECTOR"
   const isPickerMode = route?.params?.mode === "picker";
-  
+
   // 👇 4. OBTENEMOS LA FUNCIÓN PARA AÑADIR AL LOTE
   const { addOrInc: addOrIncToBatch } = useBatch();
 
@@ -133,7 +135,10 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
     const name = editName.trim();
     const price = Number(String(editPrice).replace(",", "."));
-    const target = Math.max(0, Math.floor(Number(String(editStock).replace(",", "."))));
+    const target = Math.max(
+      0,
+      Math.floor(Number(String(editStock).replace(",", ".")))
+    );
 
     if (!name || isNaN(price)) {
       return Alert.alert("Editar producto", "Revisá nombre y precio.");
@@ -149,7 +154,11 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
     setEditing(null);
 
     try {
-      const updatedBase = DB.updateProductNamePrice(editCode ? DB.getProductByCode(editCode)?.id ?? editing.id : editing.id, name, price);
+      const updatedBase = DB.updateProductNamePrice(
+        editCode ? DB.getProductByCode(editCode)?.id ?? editing.id : editing.id,
+        name,
+        price
+      );
       await syncProductOnline({
         code: updatedBase.code,
         name: updatedBase.name,
@@ -163,7 +172,12 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
       if (delta !== 0) {
         try {
-          await pushMoveByCode(branchId, updatedBase.code, delta, "Editar producto");
+          await pushMoveByCode(
+            branchId,
+            updatedBase.code,
+            delta,
+            "Editar producto"
+          );
         } catch (e) {
           console.log("pushMoveByCode fail", e);
         }
@@ -237,8 +251,12 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
   if (!branchId) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
-        <Text style={{ color: theme.colors.text }}>Primero seleccioná una sucursal.</Text>
+      <View
+        style={[styles.centered, { backgroundColor: theme.colors.background }]}
+      >
+        <Text style={{ color: theme.colors.text }}>
+          Primero seleccioná una sucursal.
+        </Text>
       </View>
     );
   }
@@ -260,10 +278,10 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
       unit_price: item.price,
       qty: 1, // Añadimos 1 por defecto
     };
-    
+
     // 2. Usamos la función del store 'useBatch' para añadirlo
     addOrIncToBatch(itemToAdd, 1);
-    
+
     // 3. Volvemos a la pantalla anterior (RemitoForm)
     navigation.goBack();
   };
@@ -273,20 +291,52 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
     const badge = getStockBadge(displayStock);
 
     return (
-      <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: "#000" }]}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
+            shadowColor: "#000",
+          },
+        ]}
+      >
         <View style={{ flex: 1, paddingRight: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={[styles.name, { color: theme.colors.text }]} numberOfLines={2}>
+            <Text
+              style={[styles.name, { color: theme.colors.text }]}
+              numberOfLines={2}
+            >
               {item.name}
             </Text>
-            <View style={[styles.pricePill, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
-              <Text style={[styles.priceText, { color: theme.colors.text }]}>${item.price ?? 0}</Text>
+            <View
+              style={[
+                styles.pricePill,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.priceText, { color: theme.colors.text }]}>
+                ${item.price ?? 0}
+              </Text>
             </View>
           </View>
-          <Text style={[styles.code, { color: theme.colors.textMuted }]} numberOfLines={1}>
+          <Text
+            style={[styles.code, { color: theme.colors.textMuted }]}
+            numberOfLines={1}
+          >
             {item.code}
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 6,
+            }}
+          >
             <View style={[styles.stockBadge, { backgroundColor: badge.bg }]}>
               <Text style={styles.stockBadgeText}>{badge.label}</Text>
             </View>
@@ -299,7 +349,10 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
             // MODO SELECTOR: Mostrar botón de AÑADIR
             <TouchableOpacity
               onPress={() => handleSelectProduct(item)}
-              style={[styles.iconBtn, { backgroundColor: theme.colors.success }]} // Botón verde
+              style={[
+                styles.iconBtn,
+                { backgroundColor: theme.colors.success },
+              ]} // Botón verde
               activeOpacity={0.85}
             >
               <Ionicons name="add" size={24} color="white" />
@@ -309,14 +362,20 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
             <>
               <TouchableOpacity
                 onPress={() => openEdit(item)}
-                style={[styles.iconBtn, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.iconBtn,
+                  { backgroundColor: theme.colors.primary },
+                ]}
                 activeOpacity={0.85}
               >
                 <Text style={styles.iconEmoji}>✏️</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => confirmDelete(item)}
-                style={[styles.iconBtn, { backgroundColor: theme.colors.danger }]}
+                style={[
+                  styles.iconBtn,
+                  { backgroundColor: theme.colors.danger },
+                ]}
                 activeOpacity={0.85}
               >
                 <Text style={styles.iconEmoji}>🗑️</Text>
@@ -329,8 +388,17 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
   };
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, backgroundColor: theme.colors.background }}>
-      <Text style={{ fontSize: 18, fontWeight: "800", color: theme.colors.text }}>
+    <View
+      style={{
+        flex: 1,
+        padding: 16,
+        gap: 12,
+        backgroundColor: theme.colors.background,
+      }}
+    >
+      <Text
+        style={{ fontSize: 18, fontWeight: "800", color: theme.colors.text }}
+      >
         {/* 👇 7. TÍTULO CONDICIONAL */}
         {isPickerMode ? "Seleccionar Producto" : "Productos de la sucursal"}
       </Text>
@@ -344,7 +412,9 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
           style={[
             styles.searchInput,
             {
-              borderColor: search ? theme.colors.primary : theme.colors.inputBorder,
+              borderColor: search
+                ? theme.colors.primary
+                : theme.colors.inputBorder,
               backgroundColor: theme.colors.inputBackground,
               color: theme.colors.text,
             },
@@ -356,15 +426,27 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
           <View style={styles.buttonRow}>
             <TouchableOpacity
               onPress={pullThenLoad}
-              style={[styles.actionButton, { backgroundColor: theme.colors.primary, flex: 1 }, isSmallScreen && styles.actionButtonSmall]}
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.primary, flex: 1 },
+                isSmallScreen && styles.actionButtonSmall,
+              ]}
               activeOpacity={0.9}
               disabled={loading}
             >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Refrescar</Text>}
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Refrescar</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => navigation.navigate("BranchArchived")}
-              style={[styles.actionButton, { backgroundColor: theme.colors.neutral, flex: 1 }, isSmallScreen && styles.actionButtonSmall]}
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.neutral, flex: 1 },
+                isSmallScreen && styles.actionButtonSmall,
+              ]}
               activeOpacity={0.9}
             >
               <Text style={styles.actionButtonText}>Archivados</Text>
@@ -375,17 +457,33 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
       {/* Chips de filtro */}
       <View style={styles.chipsRow}>
-        <Chip label="Todos" active={filter === "ALL"} onPress={() => setFilter("ALL")} theme={theme} />
-        <Chip label="Bajo Stock" active={filter === "LOW"} onPress={() => setFilter("LOW")} theme={theme} />
-        <Chip label="Sin stock" active={filter === "ZERO"} onPress={() => setFilter("ZERO")} theme={theme} />
+        <Chip
+          label="Todos"
+          active={filter === "ALL"}
+          onPress={() => setFilter("ALL")}
+          theme={theme}
+        />
+        <Chip
+          label="Bajo Stock"
+          active={filter === "LOW"}
+          onPress={() => setFilter("LOW")}
+          theme={theme}
+        />
+        <Chip
+          label="Sin stock"
+          active={filter === "ZERO"}
+          onPress={() => setFilter("ZERO")}
+          theme={theme}
+        />
       </View>
 
       <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
         {/* 👇 9. Texto de ayuda condicional */}
-        {isPickerMode 
-          ? "Toca el '+' para añadir un producto al remito" 
-          : `${filtered.length} producto${filtered.length === 1 ? "" : "s"} mostrados`
-        }
+        {isPickerMode
+          ? "Toca el '+' para añadir un producto al remito"
+          : `${filtered.length} producto${
+              filtered.length === 1 ? "" : "s"
+            } mostrados`}
       </Text>
 
       <FlatList
@@ -397,157 +495,27 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
         contentContainerStyle={{ paddingBottom: 24 }}
       />
 
-<<<<<<< HEAD
-      {/* -------- Modal EDITAR (con ARCHIVAR) -------- */}
-      <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
-        <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
-              keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
-            >
-              <Pressable onPress={(e) => e.stopPropagation()}>
-                <View
-                  style={{
-                    backgroundColor: theme.colors.card,
-                    padding: 16,
-                    borderTopLeftRadius: 16,
-                    borderTopRightRadius: 16,
-                  }}
-                >
-                <View style={{ alignItems: "center", marginBottom: 8 }}>
-                  <View style={{ width: 40, height: 4, backgroundColor: theme.colors.border, borderRadius: 2 }} />
-                </View>
-
-                <Text style={{ fontSize: 16, fontWeight: "800", marginBottom: 12, color: theme.colors.text }}>
-                  Editar producto
-                </Text>
-
-                {/* Código (solo lectura) */}
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Código</Text>
-                  <TextInput
-                    value={editCode}
-                    editable={false}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.inputBorder,
-                      borderRadius: 8,
-                      padding: 10,
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.textMuted,
-                    }}
-                  />
-                </View>
-
-                {/* Nombre */}
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Nombre</Text>
-                  <TextInput
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Nombre"
-                    placeholderTextColor={theme.colors.textMuted}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.inputBorder,
-                      borderRadius: 8,
-                      padding: 10,
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                    }}
-                  />
-                </View>
-
-                {/* Precio */}
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Precio</Text>
-                  <TextInput
-                    value={editPrice}
-                    onChangeText={setEditPrice}
-                    keyboardType="decimal-pad"
-                    placeholder="$ 0"
-                    placeholderTextColor={theme.colors.textMuted}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.inputBorder,
-                      borderRadius: 8,
-                      padding: 10,
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                    }}
-                  />
-                </View>
-
-                {/* Stock */}
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Stock (entero)</Text>
-                  <TextInput
-                    value={editStock}
-                    onChangeText={setEditStock}
-                    keyboardType="number-pad"
-                    placeholder="0"
-                    placeholderTextColor={theme.colors.textMuted}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.inputBorder,
-                      borderRadius: 8,
-                      padding: 10,
-                      backgroundColor: theme.colors.inputBackground,
-                      color: theme.colors.text,
-                    }}
-                  />
-                </View>
-
-                {/* Botones: Cancelar / Guardar */}
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditOpen(false);
-                      setEditing(null);
-                    }}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      backgroundColor: theme.colors.inputBorder,
-                      alignItems: "center",
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Cancelar</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={onSaveEdit}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      backgroundColor: theme.colors.primary,
-                      alignItems: "center",
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "800" }}>Guardar</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Archivar */}
-                <TouchableOpacity
-                  onPress={archiveFromEdit}
-=======
       {/* --- 👇 10. MODAL CONDICIONAL (no se abre en modo picker) --- */}
       {!isPickerMode && (
-        <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
+        <Modal
+          visible={editOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setEditOpen(false)}
+        >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.4)",
+                justifyContent: "flex-end",
+              }}
+            >
               <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
               >
                 <View
->>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
                   style={{
                     backgroundColor: theme.colors.card,
                     padding: 16,
@@ -555,27 +523,39 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                     borderTopRightRadius: 16,
                   }}
                 >
-<<<<<<< HEAD
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>Archivar producto</Text>
-                </TouchableOpacity>
-                </View>
-              </Pressable>
-            </KeyboardAvoidingView>
-          </View>
-        </Pressable>
-      </Modal>
-=======
                   <View style={{ alignItems: "center", marginBottom: 8 }}>
-                    <View style={{ width: 40, height: 4, backgroundColor: theme.colors.border, borderRadius: 2 }} />
+                    <View
+                      style={{
+                        width: 40,
+                        height: 4,
+                        backgroundColor: theme.colors.border,
+                        borderRadius: 2,
+                      }}
+                    />
                   </View>
 
-                  <Text style={{ fontSize: 16, fontWeight: "800", marginBottom: 12, color: theme.colors.text }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "800",
+                      marginBottom: 12,
+                      color: theme.colors.text,
+                    }}
+                  >
                     Editar producto
                   </Text>
 
                   {/* Código (solo lectura) */}
                   <View style={{ marginBottom: 10 }}>
-                    <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Código</Text>
+                    <Text
+                      style={{
+                        fontWeight: "600",
+                        marginBottom: 6,
+                        color: theme.colors.text,
+                      }}
+                    >
+                      Código
+                    </Text>
                     <TextInput
                       value={editCode}
                       editable={false}
@@ -592,7 +572,15 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
                   {/* Nombre */}
                   <View style={{ marginBottom: 10 }}>
-                    <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Nombre</Text>
+                    <Text
+                      style={{
+                        fontWeight: "600",
+                        marginBottom: 6,
+                        color: theme.colors.text,
+                      }}
+                    >
+                      Nombre
+                    </Text>
                     <TextInput
                       value={editName}
                       onChangeText={setEditName}
@@ -611,7 +599,15 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
                   {/* Precio */}
                   <View style={{ marginBottom: 10 }}>
-                    <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Precio</Text>
+                    <Text
+                      style={{
+                        fontWeight: "600",
+                        marginBottom: 6,
+                        color: theme.colors.text,
+                      }}
+                    >
+                      Precio
+                    </Text>
                     <TextInput
                       value={editPrice}
                       onChangeText={setEditPrice}
@@ -631,7 +627,15 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
                   {/* Stock */}
                   <View style={{ marginBottom: 14 }}>
-                    <Text style={{ fontWeight: "600", marginBottom: 6, color: theme.colors.text }}>Stock (entero)</Text>
+                    <Text
+                      style={{
+                        fontWeight: "600",
+                        marginBottom: 6,
+                        color: theme.colors.text,
+                      }}
+                    >
+                      Stock (entero)
+                    </Text>
                     <TextInput
                       value={editStock}
                       onChangeText={setEditStock}
@@ -665,7 +669,11 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                       }}
                       activeOpacity={0.9}
                     >
-                      <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Cancelar</Text>
+                      <Text
+                        style={{ color: theme.colors.text, fontWeight: "800" }}
+                      >
+                        Cancelar
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -679,7 +687,9 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                       }}
                       activeOpacity={0.9}
                     >
-                      <Text style={{ color: "#fff", fontWeight: "800" }}>Guardar</Text>
+                      <Text style={{ color: "#fff", fontWeight: "800" }}>
+                        Guardar
+                      </Text>
                     </TouchableOpacity>
                   </View>
 
@@ -695,7 +705,9 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                     }}
                     activeOpacity={0.9}
                   >
-                    <Text style={{ color: "#fff", fontWeight: "800" }}>Archivar producto</Text>
+                    <Text style={{ color: "#fff", fontWeight: "800" }}>
+                      Archivar producto
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </KeyboardAvoidingView>
@@ -703,7 +715,6 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
           </TouchableWithoutFeedback>
         </Modal>
       )}
->>>>>>> 4e47c6862cc6f05c9425b24af430161d22cec10d
     </View>
   );
 }
@@ -727,7 +738,9 @@ function Chip({
       style={[
         styles.chip,
         {
-          backgroundColor: active ? theme.colors.primary : theme.colors.inputBackground,
+          backgroundColor: active
+            ? theme.colors.primary
+            : theme.colors.inputBackground,
           borderColor: active ? theme.colors.primary : theme.colors.inputBorder,
         },
       ]}
@@ -746,7 +759,12 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, padding: 16, alignItems: "center", justifyContent: "center" },
+  centered: {
+    flex: 1,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchContainer: { gap: 8 },
   searchInput: {
     borderWidth: 1,
@@ -764,9 +782,18 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   actionButtonText: { color: "white", fontWeight: "800", fontSize: 14 },
-  actionButtonSmall: { paddingHorizontal: 8, paddingVertical: 8, minHeight: 36 },
+  actionButtonSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    minHeight: 36,
+  },
   chipsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 4 }, // Margen añadido
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
   card: {
     borderRadius: 14,
     borderWidth: 1,
@@ -783,11 +810,28 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 15.5, fontWeight: "800", flexShrink: 1 },
   code: { fontSize: 12, marginTop: 2 },
-  pricePill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start' },
+  pricePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
   priceText: { fontSize: 12, fontWeight: "800" },
   stockBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   stockBadgeText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   actions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  iconBtn: { width: 44, height: 44, borderRadius: 10, justifyContent: "center", alignItems: "center" },
-  iconEmoji: { color: "#fff", fontWeight: "700", fontSize: 16, textAlign: "center" },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconEmoji: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+    textAlign: "center",
+  },
 });

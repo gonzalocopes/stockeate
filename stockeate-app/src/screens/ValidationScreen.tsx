@@ -24,6 +24,7 @@ type ItemData = {
   detectedCode: string;
   detectedName: string;
   qty: number;
+  unit_price: number;
 };
 
 // Tipo para los datos del remito que cargamos de la API
@@ -78,12 +79,15 @@ export const ValidationScreen = ({ route, navigation }: NavigationProps) => { //
   }, [remitoId]);
 
   // --- 👇 4. Tipamos los parámetros de la función ---
-  const handleItemChange = (index: number, field: 'detectedName' | 'qty', value: string) => {
+  const handleItemChange = (index: number, field: 'detectedName' | 'qty' | 'unit_price', value: string) => {
     // Copiamos el array de forma segura
     const updatedItems = items.map((item, i) => {
       if (i === index) {
         if (field === 'qty') {
           return { ...item, qty: parseInt(value, 10) || 0 };
+        }
+        if (field === 'unit_price') {
+          return { ...item, unit_price: parseFloat(value) || 0 };
         }
         if (field === 'detectedName') {
           return { ...item, detectedName: value };
@@ -147,17 +151,28 @@ export const ValidationScreen = ({ route, navigation }: NavigationProps) => { //
                   style={styles.itemText}
                   value={item.detectedName}
                   onChangeText={(text) => handleItemChange(index, 'detectedName', text)}
+                  placeholder="Nombre del producto"
                 />
                 <Text style={styles.itemCode}>Código: {item.detectedCode}</Text>
               </View>
-              <TextInput
-                style={styles.quantityInput}
-                value={String(item.qty)}
-                onChangeText={(text) => handleItemChange(index, 'qty', text)}
-                keyboardType="numeric"
-              />
+              <View style={styles.inputsContainer}>
+                <TextInput
+                  style={styles.priceInput}
+                  value={String(item.unit_price || 0)}
+                  onChangeText={(text) => handleItemChange(index, 'unit_price', text)}
+                  keyboardType="decimal-pad"
+                  placeholder="Precio"
+                />
+                <TextInput
+                  style={styles.quantityInput}
+                  value={String(item.qty)}
+                  onChangeText={(text) => handleItemChange(index, 'qty', text)}
+                  keyboardType="numeric"
+                  placeholder="Cant."
+                />
+              </View>
             </View>
-          ))}
+          ))
 
           <View style={{ marginTop: 20 }}>
             <Button 
@@ -193,10 +208,15 @@ const styles = StyleSheet.create({
     padding: 12, marginBottom: 10, borderRadius: 8, elevation: 2,
   },
   itemDetails: { flex: 1 },
-  itemText: { fontSize: 16 },
-  itemCode: { fontSize: 12, color: 'gray', fontStyle: 'italic' },
+  itemText: { fontSize: 16, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 4 },
+  itemCode: { fontSize: 12, color: 'gray', fontStyle: 'italic', marginTop: 4 },
+  inputsContainer: { flexDirection: 'row', gap: 8 },
+  priceInput: {
+    width: 80, height: 40, borderColor: 'gray', borderWidth: 1,
+    borderRadius: 5, textAlign: 'center', fontSize: 14, backgroundColor: 'white',
+  },
   quantityInput: {
     width: 60, height: 40, borderColor: 'gray', borderWidth: 1,
-    borderRadius: 5, textAlign: 'center', fontSize: 16, marginLeft: 10, backgroundColor: 'white',
+    borderRadius: 5, textAlign: 'center', fontSize: 14, backgroundColor: 'white',
   },
 });

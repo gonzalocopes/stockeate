@@ -1,6 +1,6 @@
 // src/digitalized-remito/dto/validation-data.dto.ts
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsNotEmpty, IsNumber, IsString, ValidateNested } from 'class-validator';
 
 class ValidatedItemDto {
   @IsString()
@@ -17,6 +17,9 @@ class ValidatedItemDto {
 
   @IsInt()
   qty: number;
+
+  @IsNumber()
+  unit_price: number;
 }
 
 export class ValidationDataDto {

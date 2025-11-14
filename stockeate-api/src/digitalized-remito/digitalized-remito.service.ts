@@ -33,8 +33,8 @@ export class DigitalizedRemitoService {
         provider: 'Proveedor Ejemplo S.A.',
         date: '2025-10-16',
         items: [
-          { detectedCode: '7790010001234', detectedName: 'Producto A', qty: 10 },
-          { detectedCode: '7790010005678', detectedName: 'Producto B', qty: 5 },
+          { detectedCode: '7790010001234', detectedName: 'Producto A', qty: 10, unit_price: 15.50 },
+          { detectedCode: '7790010005678', detectedName: 'Producto B', qty: 5, unit_price: 22.75 },
         ],
       };
       await this.prisma.digitalizedRemito.update({
@@ -112,6 +112,7 @@ export class DigitalizedRemitoService {
             create: processedItems.map(item => ({
               productId: item.productId,
               qty: item.qty,
+              unitPrice: item.unit_price || 0,
             })),
           },
         },
