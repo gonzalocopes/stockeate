@@ -36,11 +36,12 @@ api.interceptors.request.use(async (config) => {
 // -------- Pull (para sync) --------
 export async function wakeServer() {
   try {
-    await api.get("/health", { timeout: 5000 });
+    // TODO: Implementar health check cuando esté disponible en el backend
+    // await api.get("/health", { timeout: 5000 });
+    await api.get("/branches", { timeout: 8000 });
   } catch {
-    try {
-      await api.get("/branches", { timeout: 8000 });
-    } catch {}
+    // Fallback si falla la primera llamada
+    console.log("Server wake attempt failed");
   }
 }
 

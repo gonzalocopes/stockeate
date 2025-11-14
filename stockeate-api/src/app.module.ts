@@ -13,6 +13,9 @@ import { BranchesModule } from './branches/branches.module';
 import { EmailModule } from './email/email.module';
 import { PrismaService } from './prisma.service';
 import { RemitosModule } from './remitos/remitos.module';
+// TODO: Implementar health check cuando sea necesario para producción
+// import { AppController } from './app.controller';
+// import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -30,7 +33,7 @@ import { RemitosModule } from './remitos/remitos.module';
     RemitosModule,
     DigitalizedRemitoModule,
   ],
-  controllers: [], // Si no usas AppController, déjalo vacío
+  controllers: [], // TODO: Agregar AppController cuando se implemente health check
   providers: [PrismaService],
 })
 export class AppModule {}
