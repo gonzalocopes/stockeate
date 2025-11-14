@@ -1,3 +1,5 @@
+// G:\proyectos\stockeate\stockeate-app\src\screens\RegisterScreen.tsx
+
 import React, { useState } from 'react';
 import {
   View,
@@ -17,6 +19,7 @@ export default function RegisterScreen({ navigation }: any) {
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
+    dni: '', // 👈 AÑADIDO: Campo DNI al estado
     email: '',
     password: '',
     confirmPassword: ''
@@ -39,6 +42,17 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert('Error', 'El apellido es requerido');
       return false;
     }
+    
+    // 👇 AÑADIDO: Validación de DNI
+    if (!formData.dni.trim()) {
+      Alert.alert('Error', 'El DNI es requerido');
+      return false;
+    }
+    if (formData.dni.length < 7 || formData.dni.length > 8) {
+      Alert.alert('Error', 'El DNI debe tener entre 7 y 8 números');
+      return false;
+    }
+    // ---
 
     if (!formData.email.trim()) {
       Alert.alert('Error', 'El email es requerido');
@@ -57,28 +71,25 @@ export default function RegisterScreen({ navigation }: any) {
 
   const handleRegister = async () => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
     try {
-      // VERSIÓN SIMPLIFICADA - Solo email y password (backend de Lisandro)
-      // Los campos nombre/apellido se validan pero no se envían
+      // 👇 MODIFICADO: Enviamos todos los campos al store
       await register(
         formData.email,
-        formData.password
+        formData.password,
+        formData.nombre,
+        formData.apellido,
+        formData.dni
       );
       
       Alert.alert(
         'Registro exitoso',
-        'Tu cuenta ha sido creada correctamente',
-        [
-          {
-            text: 'Iniciar sesión',
-            onPress: () => navigation.navigate('Login')
-          }
-        ]
+        'Tu cuenta ha sido creada. Ahora puedes iniciar sesión.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Error al registrar usuario');
+      Alert.alert('Error en el registro', error.message || 'No se pudo completar el registro');
     } finally {
       setLoading(false);
     }
@@ -87,79 +98,87 @@ export default function RegisterScreen({ navigation }: any) {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.form}>
-        <Text style={styles.title}>Crear cuenta</Text>
-        
+        <Text style={styles.title}>Crear Cuenta</Text>
+
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Nombre *</Text>
+          <Text style={styles.label}>Nombre</Text>
           <TextInput
             style={styles.input}
             value={formData.nombre}
-            onChangeText={(value) => handleInputChange('nombre', value)}
-            placeholder="Ingresa tu nombre"
+            onChangeText={(val) => handleInputChange('nombre', val)}
             autoCapitalize="words"
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Apellido *</Text>
+          <Text style={styles.label}>Apellido</Text>
           <TextInput
             style={styles.input}
             value={formData.apellido}
-            onChangeText={(value) => handleInputChange('apellido', value)}
-            placeholder="Ingresa tu apellido"
+            onChangeText={(val) => handleInputChange('apellido', val)}
             autoCapitalize="words"
           />
         </View>
 
+        {/* 👇 AÑADIDO: Input de DNI */}
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email *</Text>
+          <Text style={styles.label}>DNI</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.dni}
+            onChangeText={(val) => handleInputChange('dni', val)}
+            keyboardType="number-pad"
+            maxLength={8}
+          />
+        </View>
+        {/* --- */}
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
             value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
-            placeholder="ejemplo@correo.com"
+            onChangeText={(val) => handleInputChange('email', val)}
             keyboardType="email-address"
             autoCapitalize="none"
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Contraseña *</Text>
+          <Text style={styles.label}>Contraseña (mín. 6 caracteres)</Text>
           <TextInput
             style={styles.input}
             value={formData.password}
-            onChangeText={(value) => handleInputChange('password', value)}
-            placeholder="Mínimo 6 caracteres"
+            onChangeText={(val) => handleInputChange('password', val)}
             secureTextEntry
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Confirmar contraseña *</Text>
+          <Text style={styles.label}>Confirmar Contraseña</Text>
           <TextInput
             style={styles.input}
             value={formData.confirmPassword}
-            onChangeText={(value) => handleInputChange('confirmPassword', value)}
-            placeholder="Repite tu contraseña"
+            onChangeText={(val) => handleInputChange('confirmPassword', val)}
             secureTextEntry
           />
         </View>
 
-        <TouchableOpacity 
-          style={[styles.registerButton, loading && styles.disabledButton]}
+        <TouchableOpacity
+          style={[styles.registerButton, loading && styles.buttonDisabled]}
           onPress={handleRegister}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.registerButtonText}>Crear cuenta</Text>
+            <Text style={styles.buttonText}>Registrarme</Text>
           )}
         </TouchableOpacity>
 
-        <View style={styles.loginContainer}>
+        <View style={styles.loginLinkContainer}>
           <Text style={styles.loginText}>¿Ya tienes cuenta? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.loginLink}>Inicia sesión</Text>
           </TouchableOpacity>
         </View>
@@ -209,24 +228,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   registerButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#007AFF',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
   },
-  disabledButton: {
-    backgroundColor: '#bdc3c7',
+  buttonDisabled: {
+    backgroundColor: '#a0c8ff',
   },
-  registerButtonText: {
+  buttonText: {
     color: 'white',
+    fontWeight: '700',
     fontSize: 16,
-    fontWeight: 'bold',
   },
-  loginContainer: {
+  loginLinkContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
     marginTop: 20,
   },
   loginText: {
@@ -235,7 +252,7 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 14,
-    color: '#3498db',
+    color: '#007AFF',
     fontWeight: '600',
   },
 });
