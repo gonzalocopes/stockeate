@@ -59,7 +59,9 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
-  upsertProduct(p: any) {
+upsertProduct(p: any) {
+    const incomingVersion = p.version ?? 0;
+    
     db.runSync(
       `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
        VALUES(?,?,?,?,?,?,?,?,?)
