@@ -1,4 +1,3 @@
-// src/screens/RemitoDetail.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from "react-native";
 import { DB } from "../db";
@@ -11,6 +10,10 @@ type Remito = {
   official_number: string | null;
   branch_id: string;
   customer: string | null;
+  // 👇 Añadimos los campos que faltaban en el tipo local
+  customer_cuit: string | null;
+  customer_address: string | null;
+  customer_tax_condition: string | null;
   notes: string | null;
   created_at: string;
   pdf_path: string | null;
@@ -33,14 +36,18 @@ const getRemitoDirection = (tmpNumber: string) => {
   }
   const SQLite = require('expo-sqlite');
   const db = SQLite.openDatabaseSync("stockeate.db");
-  const row = db.getFirstSync<{ type: string }>(
+  
+  // --- 👇 CORRECCIÓN 1: Cambiamos cómo se obtiene el tipo ---
+  const row = db.getFirstSync(
     `SELECT type FROM stock_moves WHERE ref = ? LIMIT 1`,
     [tmpNumber]
-  );
+  ) as { type: string } | null; // <-- Aplicamos el tipo al resultado
+  // --- FIN DE LA CORRECCIÓN ---
+
   return row?.type === "IN" || row?.type === "OUT" ? row.type as "IN" | "OUT" : null;
 };
 
-export default function RemitoDetail({ route }: any) {
+export default function RemitoDetail({ route, navigation }: any) { // Añadido navigation
   const remitoId: string = route?.params?.remitoId;
 
   const [remito, setRemito] = useState<Remito | null>(null);
@@ -55,7 +62,6 @@ export default function RemitoDetail({ route }: any) {
     const it = DB.getRemitoItems(remitoId);
     setItems(it || []);
 
-    // obtener dirección desde stock_moves.ref = tmp_number
     if (r?.tmp_number) {
       const direction = getRemitoDirection(r.tmp_number);
       if (direction) setDir(direction);
@@ -99,8 +105,6 @@ export default function RemitoDetail({ route }: any) {
           : buildHtmlOUT(remito, items, totalAmount);
       const { uri } = await Print.printToFileAsync({ html });
       if (uri) {
-        // opcional: guardar nuevo path
-        // DB.setRemitoPdfPath(remito.id, uri);
         await Sharing.shareAsync(uri);
       }
     } catch (e) {
@@ -121,6 +125,7 @@ export default function RemitoDetail({ route }: any) {
   const isIN = dir === "IN";
   const badgeBg = isIN ? "#DCFCE7" : "#FEE2E2";
   const badgeTx = isIN ? "#166534" : "#991B1B";
+  const isDigitalized = remito.notes?.startsWith("Ingreso por digitalización");
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
@@ -139,9 +144,28 @@ export default function RemitoDetail({ route }: any) {
         {createdAt}
         {remito.customer ? ` — ${isIN ? "Proveedor" : "Cliente"}: ${remito.customer}` : ""}
       </Text>
-      {remito.notes ? (
-        <Text style={{ color: "#334155", fontSize: 12 }}>Notas: {remito.notes}</Text>
+      
+      {/* --- 👇 Mostramos los nuevos campos --- */}
+      {remito.customer_cuit && (
+        <Text style={{ color: "#475569", fontSize: 12 }}>CUIT: {remito.customer_cuit}</Text>
+      )}
+      {remito.customer_address && (
+        <Text style={{ color: "#475569", fontSize: 12 }}>Dirección: {remito.customer_address}</Text>
+      )}
+      {remito.customer_tax_condition && (
+        <Text style={{ color: "#475569", fontSize: 12 }}>Cond. IVA: {remito.customer_tax_condition}</Text>
+      )}
+
+      {remito.notes && !isDigitalized ? ( // No mostramos la nota si es la de digitalización
+        <Text style={{ color: "#334155", fontSize: 12, marginTop: 4 }}>Notas: {remito.notes}</Text>
       ) : null}
+      
+      {isDigitalized && (
+        <Text style={{ color: "#059669", fontSize: 12, fontWeight: 'bold', fontStyle: 'italic', marginTop: 4 }}>
+          ✔️ Ingresado por digitalización
+        </Text>
+      )}
+
 
       <View
         style={{
@@ -150,9 +174,17 @@ export default function RemitoDetail({ route }: any) {
           borderRadius: 10,
           padding: 10,
           gap: 6,
+          marginTop: 8,
         }}
       >
-        <Text style={{ fontWeight: "700" }}>Items</Text>
+        <Text style={{ fontWeight: "700" }}>Items ({totalQty} u.)</Text>
+        
+        {items.length === 0 && (
+          <Text style={{color: '#64748b', textAlign: 'center', paddingVertical: 10}}>
+            No se encontraron ítems para este remito.
+          </Text>
+        )}
+
         {items.map((it) => (
           <View
             key={it.id}
@@ -163,8 +195,9 @@ export default function RemitoDetail({ route }: any) {
               gap: 4,
             }}
           >
-            <Text style={{ fontWeight: "600" }}>{it.name}</Text>
-            <Text style={{ color: "#64748b", fontSize: 12 }}>{it.code}</Text>
+            {/* Si el nombre no existe (porque el producto no se sincronizó), mostramos el ID */}
+            <Text style={{ fontWeight: "600" }}>{it.name || '(Producto no sincronizado)'}</Text>
+            <Text style={{ color: "#64748b", fontSize: 12 }}>{it.code || `(ID: ${it.product_id.slice(0,8)}...)`}</Text>
             <Text style={{ color: "#334155", fontSize: 12 }}>
               Cantidad: {it.qty} — P. Unit.: ${it.unit_price.toFixed(2)} — Importe: ${(it.unit_price * it.qty).toFixed(2)}
             </Text>
@@ -172,12 +205,12 @@ export default function RemitoDetail({ route }: any) {
         ))}
 
         <Text style={{ textAlign: "right", fontWeight: "800", marginTop: 6 }}>
-          Total: ${totalAmount.toFixed(2)} ({totalQty} u.)
+          Total: ${totalAmount.toFixed(2)}
         </Text>
       </View>
 
       {/* Acciones */}
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 'auto' }}>
         <TouchableOpacity
           onPress={openPdf}
           style={{ flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: "#0ea5e9", alignItems: "center" }}
@@ -198,7 +231,20 @@ export default function RemitoDetail({ route }: any) {
   );
 }
 
-/* ===== Helpers PDF ===== */
+// --- 👇 CORRECCIÓN 2: Añadimos tipos a los props del helper ---
+function DetailRow({ label, value, theme }: { label: string, value: string | null | undefined, theme: any }) {
+  if (!value) return null; // No mostrar la fila si no hay valor
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, paddingBottom: 4, borderBottomWidth: 1, borderColor: theme.colors.border }}>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{label}</Text>
+      <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '600' }} selectable>{value}</Text>
+    </View>
+  );
+}
+// --- FIN DE LA CORRECCIÓN ---
+
+
+/* ===== Helpers PDF (ACTUALIZADOS) ===== */
 
 function buildHtmlOUT(remito: Remito, items: Item[], total: number) {
   const rows = items
@@ -206,7 +252,7 @@ function buildHtmlOUT(remito: Remito, items: Item[], total: number) {
       (r) => `
       <tr>
         <td style="padding:6px;border:1px solid #e5e7eb;">${r.code || ""}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name || "")}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name || "(Producto no encontrado)")}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.qty}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.qty).toFixed(2)}</td>
@@ -215,32 +261,37 @@ function buildHtmlOUT(remito: Remito, items: Item[], total: number) {
     .join("");
 
   return `
-  <html>
-    <head><meta charset="utf-8"/><title>Remito salida ${remito.tmp_number || ""}</title></head>
-    <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
-      <h2 style="margin:0 0 6px 0;">Remito de salida</h2>
-      <div style="color:#334155;margin-bottom:12px;">
-        <div><strong>N° temporal:</strong> ${remito.tmp_number || ""}</div>
-        ${remito.customer ? `<div><strong>Cliente:</strong> ${escapeHtml(remito.customer)}</div>` : ""}
-        <div><strong>Fecha:</strong> ${new Date(remito.created_at).toLocaleString()}</div>
-      </div>
-      <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
-        <thead>
-          <tr>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${total.toFixed(2)}</strong></div>
-      ${remito.notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(remito.notes)}</div>` : ""}
-      <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remito.id}</div>
-    </body>
-  </html>`;
+    <html>
+      <head><meta charset="utf-8"/><title>Remito salida ${remito.tmp_number || ""}</title></head>
+      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
+        <h2 style="margin:0 0 6px 0;">Remito de salida</h2>
+        <div style="color:#334155;margin-bottom:12px;">
+          <div><strong>N° temporal:</strong> ${remito.tmp_number || ""}</div>
+          <div><strong>Fecha:</strong> ${new Date(remito.created_at).toLocaleString()}</div>
+        </div>
+        <div style="color:#334155;margin-bottom:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+          ${remito.customer ? `<div><strong>Cliente:</strong> ${escapeHtml(remito.customer)}</div>` : ""}
+          ${remito.customer_cuit ? `<div><strong>CUIT:</strong> ${escapeHtml(remito.customer_cuit)}</div>` : ""}
+          ${remito.customer_address ? `<div><strong>Dirección:</strong> ${escapeHtml(remito.customer_address)}</div>` : ""}
+          ${remito.customer_tax_condition ? `<div><strong>Cond. IVA:</strong> ${escapeHtml(remito.customer_tax_condition)}</div>` : ""}
+        </div>
+        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
+          <thead>
+            <tr>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${total.toFixed(2)}</strong></div>
+        ${remito.notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(remito.notes)}</div>` : ""}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remito.id}</div>
+      </body>
+    </html>`;
 }
 
 function buildHtmlIN(remito: Remito, items: Item[], total: number) {
@@ -249,7 +300,7 @@ function buildHtmlIN(remito: Remito, items: Item[], total: number) {
       (r) => `
       <tr>
         <td style="padding:6px;border:1px solid #e5e7eb;">${r.code || ""}</td>
-        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name || "")}</td>
+        <td style="padding:6px;border:1px solid #e5e7eb;">${escapeHtml(r.name || "(Producto no encontrado)")}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">${r.qty}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${(r.unit_price ?? 0).toFixed(2)}</td>
         <td style="padding:6px;border:1px solid #e5e7eb;text-align:right;">$${((r.unit_price ?? 0) * r.qty).toFixed(2)}</td>
@@ -258,32 +309,37 @@ function buildHtmlIN(remito: Remito, items: Item[], total: number) {
     .join("");
 
   return `
-  <html>
-    <head><meta charset="utf-8"/><title>Remito entrada ${remito.tmp_number || ""}</title></head>
-    <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
-      <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
-      <div style="color:#334155;margin-bottom:12px;">
-        <div><strong>N° temporal:</strong> ${remito.tmp_number || ""}</div>
-        ${remito.customer ? `<div><strong>Proveedor:</strong> ${escapeHtml(remito.customer)}</div>` : ""}
-        <div><strong>Fecha:</strong> ${new Date(remito.created_at).toLocaleString()}</div>
-      </div>
-      <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
-        <thead>
-          <tr>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
-            <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${total.toFixed(2)}</strong></div>
-      ${remito.notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(remito.notes)}</div>` : ""}
-      <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remito.id}</div>
-    </body>
-  </html>`;
+    <html>
+      <head><meta charset="utf-8"/><title>Remito entrada ${remito.tmp_number || ""}</title></head>
+      <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
+        <h2 style="margin:0 0 6px 0;">Remito de entrada</h2>
+        <div style="color:#334155;margin-bottom:12px;">
+          <div><strong>N° temporal:</strong> ${remito.tmp_number || ""}</div>
+          <div><strong>Fecha:</strong> ${new Date(remito.created_at).toLocaleString()}</div>
+        </div>
+        <div style="color:#334155;margin-bottom:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+          ${remito.customer ? `<div><strong>Proveedor:</strong> ${escapeHtml(remito.customer)}</div>` : ""}
+          ${remito.customer_cuit ? `<div><strong>CUIT:</strong> ${escapeHtml(remito.customer_cuit)}</div>` : ""}
+          ${remito.customer_address ? `<div><strong>Dirección:</strong> ${escapeHtml(remito.customer_address)}</div>` : ""}
+          ${remito.customer_tax_condition ? `<div><strong>Cond. IVA:</strong> ${escapeHtml(remito.customer_tax_condition)}</div>` : ""}
+        </div>
+        <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
+          <thead>
+            <tr>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Código</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:left;">Producto</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Cantidad</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">P. Unit.</th>
+              <th style="padding:6px;border:1px solid #e5e7eb;background:#f1f5f9;text-align:right;">Importe</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="text-align:right;font-size:14px;margin:8px 0;"><strong>Total: $${total.toFixed(2)}</strong></div>
+        ${remito.notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(remito.notes)}</div>` : ""}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remito.id}</div>
+      </body>
+    </html>`;
 }
 
 function escapeHtml(s: string) {

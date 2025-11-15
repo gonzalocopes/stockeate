@@ -1,44 +1,50 @@
 // src/digitalized-remito/digitalized-remito.controller.ts
-import { Controller, Post, Get, Param, UseInterceptors, UploadedFile, Body, Request } from '@nestjs/common';
+import { 
+  Controller, Post, Get, Param, UseInterceptors, 
+  UploadedFile, Body, Request, UseGuards // <-- 1. Importar Request y UseGuards
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-// Importa tu Guard de autenticación si ya lo tienes, ej: import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // <-- 2. Importar tu Guard de JWT
 import { DigitalizedRemitoService } from './digitalized-remito.service';
-import { ValidationDataDto } from './dto/validation-data.dto'; // 👈 Importa el DTO
+import { ValidationDataDto } from './dto/validation-data.dto';
+
 @Controller('digitalized-remito')
 export class DigitalizedRemitoController {
   constructor(private readonly remitoService: DigitalizedRemitoService) {}
 
-  // --- AÑADIR ESTE MÉTODO COMPLETO ---
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file')) // 'file' es el nombre clave que la app móvil debe usar
+  @UseGuards(JwtAuthGuard) // <-- 3. Proteger la ruta (asegura que req.user exista)
+  @UseInterceptors(FileInterceptor('file'))
   uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body('branchId') branchId: string,
-    // @Request() req, // Descomenta esto si usas JWT para obtener el usuario del token
+    @Request() req: any, // <-- 4. Inyectar el objeto Request
   ) {
-    // Por ahora, simularemos el ID del usuario. Más adelante vendrá del token JWT.
-    const userId = '21406f7f-843f-43ba-bae4-8223b4de7d39'; // <-- Reemplaza con un UUID válido de un usuario en tu BD
+    // --- 5. SOLUCIÓN: Obtenemos el userId real desde el token JWT ---
+    // (Asegúrate de que 'req.user.sub' sea la propiedad correcta de tu payload de JWT)
+    const userId = req.user.sub; 
 
     return this.remitoService.createInitialRemito(file, userId, branchId);
   }
+
   @Get('pending/:branchId')
+  @UseGuards(JwtAuthGuard) // <-- Proteger esta ruta también
   findPendingByBranch(@Param('branchId') branchId: string) {
     return this.remitoService.findPendingByBranch(branchId);
   }
 
-  // 2. Endpoint para obtener los detalles de UN remito específico
   @Get(':id')
+  @UseGuards(JwtAuthGuard) // <-- Proteger esta ruta también
   findOne(@Param('id') id: string) {
     return this.remitoService.findOne(id);
   }
 
-  // 3. Endpoint para recibir los datos validados y actualizar el stock
   @Post(':id/validate')
+  @UseGuards(JwtAuthGuard) // <-- Proteger esta ruta también
   validateRemito(
     @Param('id') id: string, 
-    @Body() validationData: ValidationDataDto, // 👈 Usa el DTO aquí
+    @Body() validationData: ValidationDataDto,
   ) {
     return this.remitoService.validateAndFinalizeRemito(id, validationData);
   }
-
 }

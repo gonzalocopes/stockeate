@@ -1,17 +1,18 @@
-// src/digitalized-remito/digitalized-remito.module.ts
 import { Module } from '@nestjs/common';
-import { MulterModule } from '@nestjs/platform-express'; // <-- 1. Importar Multer
+import { MulterModule } from '@nestjs/platform-express';
 import { DigitalizedRemitoController } from './digitalized-remito.controller';
 import { DigitalizedRemitoService } from './digitalized-remito.service';
-import { PrismaService } from '../prisma.service'; // <-- 3. Importar PrismaService
+import { PrismaService } from '../prisma.service';
+import { AuthModule } from '../auth/auth.module'; // <-- 1. IMPORTA EL MÓDULO DE AUTENTICACIÓN
 
 @Module({
   imports: [
-    MulterModule.register({ // <-- 2. Registrar Multer
-      dest: './uploads', // Directorio temporal donde se guardarán los archivos
+    AuthModule, // <-- 2. AÑÁDELO AQUÍ
+    MulterModule.register({
+      dest: './uploads',
     }),
   ],
   controllers: [DigitalizedRemitoController],
-  providers: [DigitalizedRemitoService, PrismaService], // Y aquí
+  providers: [DigitalizedRemitoService, PrismaService],
 })
 export class DigitalizedRemitoModule {}
