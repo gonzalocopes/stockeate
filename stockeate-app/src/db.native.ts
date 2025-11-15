@@ -31,11 +31,9 @@ export function initDb() {
       official_number TEXT,
       branch_id TEXT NOT NULL,
       customer TEXT,
-      -- 👇 CAMPOS NUEVOS AÑADIDOS
       customer_cuit TEXT,
       customer_address TEXT,
       customer_tax_condition TEXT,
-      -- 👆 FIN CAMPOS NUEVOS
       notes TEXT,
       created_at TEXT NOT NULL,
       synced INTEGER DEFAULT 0,
@@ -59,17 +57,36 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
-upsertProduct(p: any) {
-    const incomingVersion = p.version ?? 0;
+  // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA (Soluciona UNIQUE constraint) ---
+  upsertProduct(p: any) {
+    const id = p.id ?? uid(); // Usa el ID del servidor si existe
     
-    db.runSync(
-      `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
-       VALUES(?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(code) DO UPDATE SET name=excluded.name, price=excluded.price, stock=COALESCE(excluded.stock, products.stock), updated_at=excluded.updated_at, archived=COALESCE(excluded.archived, products.archived)`,
-      [p.id ?? uid(), p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
-    );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code]);
+    try {
+      db.runSync(
+        `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
+         VALUES(?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET 
+           code=excluded.code,
+           name=excluded.name, 
+           price=excluded.price, 
+           stock=COALESCE(excluded.stock, products.stock), 
+           updated_at=excluded.updated_at,
+           archived=COALESCE(excluded.archived, products.archived)`,
+        [id, p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+      );
+    } catch (e: any) {
+      console.error(`Error guardando producto ${p.code} (ID: ${id}):`, e.message);
+      if (e.message.includes("UNIQUE constraint failed: products.code")) {
+        // Fallback por si el ID es nuevo pero el CÓDIGO ya existe (producto fantasma)
+        db.runSync(
+          `UPDATE products SET name=?, price=?, stock=COALESCE(?, stock), updated_at=?, archived=COALESCE(?, archived) WHERE code = ?`,
+          [p.name ?? p.code, p.price ?? 0, p.stock ?? 0, now(), p.archived ?? 0, p.code]
+        );
+      }
+    }
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [id]);
   },
+  // --- FIN DE LA ACTUALIZACIÓN ---
 
   incrementStock(productId: string, qty: number) {
     db.runSync(
@@ -84,18 +101,9 @@ upsertProduct(p: any) {
       `INSERT INTO remitos(id, tmp_number, official_number, branch_id, customer, customer_cuit, customer_address, customer_tax_condition, notes, created_at, synced, pdf_path)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        id,
-        data.tmp_number,
-        data.official_number ?? null,
-        data.branch_id,
-        data.customer ?? null,
-        data.customer_cuit ?? null,
-        data.customer_address ?? null,
-        data.customer_tax_condition ?? null,
-        data.notes ?? null,
-        now(),
-        0,
-        data.pdf_path ?? null
+        id, data.tmp_number, data.official_number ?? null, data.branch_id,
+        data.customer ?? null, data.customer_cuit ?? null, data.customer_address ?? null, data.customer_tax_condition ?? null,
+        data.notes ?? null, now(), 0, data.pdf_path ?? null
       ]
     );
     return id;
@@ -121,14 +129,18 @@ upsertProduct(p: any) {
   getRemitoById(remitoId: string) {
     return db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ?? null;
   },
+  
+  // --- 👇 CORRECCIÓN: 'LEFT JOIN' (Soluciona "nombres no se ven") ---
   getRemitoItems(remitoId: string) {
     return db.getAllSync<any>(
-      `SELECT ri.*, p.code, p.name FROM remito_items ri
-       JOIN products p ON p.id=ri.product_id
-       WHERE ri.remito_id=?`,
+      `SELECT ri.*, p.code, p.name 
+       FROM remito_items ri
+       LEFT JOIN products p ON p.id = ri.product_id
+       WHERE ri.remito_id = ?`,
       [remitoId]
     );
   },
+  // --- FIN DE LA CORRECCIÓN ---
 
   listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
     const q = `%${search.trim()}%`;
@@ -245,7 +257,7 @@ upsertProduct(p: any) {
   },
 
   // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAUTADAS Y CORREGIDAS) ---
-  
+  // (Solucionan el NullPointerException)
   upsertRemito(r: any) {
     try {
       db.runSync(
@@ -262,9 +274,9 @@ upsertProduct(p: any) {
           r.id,
           r.tmp_number,
           r.customer ?? null,
-          r.customerCuit ?? null,         // 👈 CORRECCIÓN
-          r.customerAddress ?? null,      // 👈 CORRECCIÓN
-          r.customerTaxCondition ?? null, // 👈 CORRECCIÓN
+          r.customerCuit ?? null,
+          r.customerAddress ?? null,
+          r.customerTaxCondition ?? null,
           r.notes ?? null,
           r.created_at,
           r.branch_id
@@ -288,7 +300,7 @@ upsertProduct(p: any) {
           item.remito_id,
           item.product_id,
           item.qty,
-          item.unit_price ?? 0 // 👈 CORRECCIÓN
+          item.unit_price ?? 0
         ]
       );
     } catch (e) {

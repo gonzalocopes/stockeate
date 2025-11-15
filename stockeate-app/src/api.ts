@@ -1,11 +1,10 @@
-﻿// src/api.ts
-import axios, { AxiosRequestHeaders } from "axios";
+﻿import axios, { AxiosRequestHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://stockeate.onrender.com"; // <-- URL de producción (o tu ngrok para pruebas)
+  "https://stockeate.onrender.com"; // <-- O tu ngrok si estás probando
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({
@@ -43,14 +42,18 @@ export async function wakeServer() {
   }
 }
 
+// --- 👇 TIPO ACTUALIZADO ---
 export type PullProduct = {
+  id: string; // <-- 1. ¡ESTA ES LA LÍNEA QUE FALTABA!
   code: string;
   name: string;
   price?: number;
   stock?: number;
   branch_id: string;
   updated_at?: number;
+  archived?: number; // Añadido para consistencia
 };
+// --- FIN DEL CAMBIO ---
 
 export type PullMove = {
   id: string;
@@ -61,21 +64,20 @@ export type PullMove = {
   created_at?: number;
 };
 
-// --- 👇 TIPO ACTUALIZADO CON NUEVOS CAMPOS ---
+// --- 👇 TIPO ACTUALIZADO ---
 export type PullRemito = {
   id: string;
   tmpNumber: string;
   customer?: string;
-  // --- CAMPOS NUEVOS AÑADIDOS ---
   customerCuit?: string;
   customerAddress?: string;
   customerTaxCondition?: string;
-  // --- FIN CAMPOS NUEVOS ---
   notes?: string;
-  createdAt: string; // O Date
+  createdAt: string;
   branchId: string;
 };
 
+// --- 👇 TIPO ACTUALIZADO ---
 export type PullRemitoItem = {
   id: string;
   remitoId: string;
@@ -84,25 +86,24 @@ export type PullRemitoItem = {
   unitPrice: number;
 };
 
-// --- PullPayload (ya estaba correcto) ---
+// --- 👇 PullPayload ACTUALIZADO ---
 export type PullPayload = {
   clock: number;
   full: boolean;
   products: PullProduct[];
   stockMoves: PullMove[];
-  remitos: PullRemito[];
-  remitoItems: PullRemitoItem[];
+  remitos: PullRemito[]; // <-- AÑADIDO
+  remitoItems: PullRemitoItem[]; // <-- AÑADIDO
 };
 
 export async function pullFromServer(branchId: string, since?: number): Promise<PullPayload> {
   const { data } = await api.get<PullPayload>("/sync/pull", {
     params: { branchId, since },
   });
-  // console.log("DATOS RECIBIDOS (PULL):", JSON.stringify(data, null, 2));
   return data;
 }
 
-// --- 👇 FUNCIÓN 'uploadRemitoFile' REAL RESTAURADA ---
+// --- Función 'uploadRemitoFile' (ya estaba correcta) ---
 export async function uploadRemitoFile(file: { uri: string; name: string; type?: string; }, branchId: string) {
   const formData = new FormData();
   formData.append('file', {
@@ -112,11 +113,10 @@ export async function uploadRemitoFile(file: { uri: string; name: string; type?:
   } as any);
   formData.append('branchId', branchId);
 
-  // Usamos la instancia 'api' global
   const { data } = await api.post('/digitalized-remito/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
-      'ngrok-skip-browser-warning': 'true', // Útil para pruebas con ngrok
+      'ngrok-skip-browser-warning': 'true',
     },
   });
   return data;
