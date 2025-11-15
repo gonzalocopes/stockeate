@@ -3,10 +3,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DigitalizationStatus } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
+import { Inject } from '@nestjs/common';
+import { LOGGER } from '../logger.provider';
+import { Logger } from 'winston';
 
 @Injectable()
 export class DigitalizedRemitoService {
-  constructor(private prisma: PrismaService) {}
+  // ...eliminado constructor duplicado...
+  constructor(
+    private prisma: PrismaService,
+    @Inject(LOGGER) private readonly logger: Logger,
+  ) {}
 
   // 👇 PARÁMETROS RESTAURADOS AQUÍ
   async createInitialRemito(
@@ -26,7 +33,7 @@ export class DigitalizedRemitoService {
   }
 
   private async processOcr(remitoId: string, filePath: string) {
-    console.log(`[OCR] Iniciando procesamiento para el remito: ${remitoId}`);
+    this.logger.info(`[OCR] Iniciando procesamiento para el remito: ${remitoId}`);
     try {
       await new Promise(resolve => setTimeout(resolve, 5000));
       const parsedData = {
@@ -44,9 +51,9 @@ export class DigitalizedRemitoService {
           status: DigitalizationStatus.PENDING_VALIDATION,
         },
       });
-      console.log(`[OCR] Procesamiento exitoso para el remito: ${remitoId}`);
+      this.logger.info(`[OCR] Procesamiento exitoso para el remito: ${remitoId}`);
     } catch (error) {
-      console.error(`[OCR] Falló el procesamiento para el remito: ${remitoId}`, error);
+      this.logger.error(`[OCR] Falló el procesamiento para el remito: ${remitoId} - ${error}`);
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {

@@ -9,6 +9,9 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { addMinutes, isBefore } from 'date-fns';
 import { EmailService } from '../email/email.service';
+import { Inject } from '@nestjs/common';
+import { LOGGER } from '../logger.provider';
+import { Logger } from 'winston';
 
 @Injectable()
 export class AuthService {
@@ -16,7 +19,10 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private email: EmailService,
-  ) {}
+    @Inject(LOGGER) private readonly logger: Logger,
+  ) {
+    this.logger.info('AuthService inicializado');
+  }
 
   async register(
     email: string,
@@ -25,11 +31,18 @@ export class AuthService {
     lastName?: string,
     dni?: string,
   ): Promise<string> {
+    this.logger.info('Prueba de log desde register');
     const existsEmail = await this.prisma.user.findUnique({ where: { email } });
-    if (existsEmail)
-      throw new BadRequestException('El email ya está registrado');
-    const existsDni = await this.prisma.user.findUnique({ where: { dni } });
-    if (existsDni) throw new BadRequestException('El DNI ya está registrado');
+if (existsEmail) {
+  this.logger.warn(`Intento de registro con email ya registrado: ${email}`);
+  this.logger.info('Test log a archivo desde AuthService');
+  throw new BadRequestException('El email ya está registrado');
+}
+const existsDni = await this.prisma.user.findUnique({ where: { dni } });
+if (existsDni) {
+  this.logger.warn(`Intento de registro con DNI ya registrado: ${dni}`);
+  throw new BadRequestException('El DNI ya está registrado');
+}
 
     const hash = await bcrypt.hash(password, 10);
     const user = await this.prisma.user.create({
@@ -45,11 +58,18 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<string> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Credenciales inválidas');
+  this.logger.info('Entrando al método login');
+  const user = await this.prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    this.logger.info(`Login fallido: usuario no encontrado para email ${email}`);
+    throw new UnauthorizedException('Credenciales inválidas');
+  }
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) throw new UnauthorizedException('Credenciales inválidas');
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) {
+    this.logger.warn(`Login fallido: contraseña incorrecta para email ${email}`);
+    throw new UnauthorizedException('Credenciales inválidas');
+  }
 
     return this.sign(user.id, user.email);
   }
@@ -58,7 +78,10 @@ export class AuthService {
   async forgot(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     // Siempre respondemos OK para no filtrar existencia
-    if (!user) throw new NotFoundException('El correo no está registrado');
+    if (!user) {
+      this.logger.warn(`Recuperación fallida: correo no registrado ${email}`);
+      throw new NotFoundException('El correo no está registrado');
+    }
 
     // invalidar tokens viejos
     await this.prisma.passwordReset.deleteMany({ where: { userId: user.id } });
@@ -77,15 +100,23 @@ export class AuthService {
     const pr = await this.prisma.passwordReset.findFirst({
       where: { token: token },
     });
-    if (!pr) throw new BadRequestException('Código inválido');
+    if (!pr) {
+      this.logger.warn(`Código de recuperación inválido: ${token}`);
+      throw new BadRequestException('Código inválido');
+    }
 
-    if (isBefore(pr.expiresAt, new Date()))
+    if (isBefore(pr.expiresAt, new Date())) {
+      this.logger.warn(`Código de recuperación expirado: ${token}`);
       throw new BadRequestException('Código expirado');
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: pr.userId },
     });
-    if (!user) throw new BadRequestException('Usuario no encontrado');
+    if (!user) {
+      this.logger.warn(`Intento de cambio de contraseña para usuario no encontrado: ${pr.userId}`);
+      throw new BadRequestException('Usuario no encontrado');
+    }
 
     const hash = await bcrypt.hash(newPassword, 10);
 

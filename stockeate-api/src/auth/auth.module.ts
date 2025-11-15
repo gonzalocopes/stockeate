@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
+import { LoggerModule } from '../logger.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
@@ -12,6 +13,7 @@ import { EmailModule } from '../email/email.module';
       signOptions: { expiresIn: '7d' },
     }),
     EmailModule,
+    LoggerModule,
   ],
   providers: [AuthService, PrismaService],
   controllers: [AuthController],

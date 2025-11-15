@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express'; // <-- 1. Importar Multer
 import { DigitalizedRemitoController } from './digitalized-remito.controller';
 import { DigitalizedRemitoService } from './digitalized-remito.service';
+import { LoggerModule } from '../logger.module';
 import { PrismaService } from '../prisma.service'; // <-- 3. Importar PrismaService
 
 @Module({
@@ -10,6 +11,7 @@ import { PrismaService } from '../prisma.service'; // <-- 3. Importar PrismaServ
     MulterModule.register({ // <-- 2. Registrar Multer
       dest: './uploads', // Directorio temporal donde se guardarán los archivos
     }),
+    LoggerModule,
   ],
   controllers: [DigitalizedRemitoController],
   providers: [DigitalizedRemitoService, PrismaService], // Y aquí

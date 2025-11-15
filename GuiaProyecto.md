@@ -123,3 +123,79 @@ npm run lint       # Ejecuta linter
 - [React Native Docs](https://reactnative.dev/)
 - [SQLite Docs](https://www.sqlite.org/docs.html)
 - [Zustand Docs](https://docs.pmnd.rs/zustand/getting-started/introduction)
+
+---
+
+## Backend: Logging y archivos de logs
+
+
+
+### Sistema de logging backend
+
+El backend implementa un sistema de logs centralizado usando Winston y winston-daily-rotate-file, integrado como provider global de NestJS.
+
+- Los logs se guardan en la carpeta `logs/` del backend, con un archivo por día (rotación automática).
+- Se conservan los últimos 4 días de logs (ajustable en la configuración del provider).
+- Los logs pueden mostrarse en consola y/o solo en archivos, según configuración.
+- El nivel de logs y la salida a consola se configuran por variables de entorno en `.env`:
+  - `LOG_LEVEL` (por ejemplo: `info`, `warn`, `error`)
+  - `LOG_CONSOLE` (`true` o `false`)
+  - `NODE_ENV` (`development` o `production`)
+- Ejemplo de configuración en `.env`:
+  ```env
+  LOG_LEVEL=warn
+  LOG_CONSOLE=false
+  NODE_ENV=production
+  ```
+- La lógica de configuración y el provider están en `stockeate-api/src/logger.provider.ts` y `stockeate-api/src/logger.module.ts`.
+- El logger se inyecta por dependencia en servicios, interceptores y filtros usando el provider global.
+
+#### Ejemplo de uso en servicios/interceptores/filtros
+
+```typescript
+import { Inject } from '@nestjs/common';
+import { LOGGER } from './logger.provider';
+import { Logger } from 'winston';
+
+constructor(@Inject(LOGGER) private readonly logger: Logger) {}
+
+this.logger.info('Mensaje informativo');
+this.logger.error('Mensaje de error', { contexto: 'auth', userId });
+```
+
+#### Ejemplo de log generado
+
+```
+2025-11-14 20:00:16 [info]: ✅ API escuchando en 0.0.0.0:3000 (Swagger: /docs)
+2025-11-14 20:01:10 [warn]: Intento de registro con email ya registrado: test@mail.com
+2025-11-14 20:02:05 [error]: Excepción global atrapada: {"path":"/api/products","method":"POST","status":500,"message":"Internal server error"}
+```
+
+#### Recomendaciones y buenas prácticas
+
+- No borres manualmente los archivos de logs: Winston los gestiona solo.
+- Si necesitas auditar o depurar, revisa los archivos de la carpeta `logs/`.
+- Para producción, mantené la rotación activa para evitar problemas de espacio en disco.
+- Usá niveles de log adecuados (`info`, `warn`, `error`) según la criticidad del evento.
+- Incluí contexto útil en los logs (por ejemplo, usuario, endpoint, parámetros relevantes).
+
+#### Troubleshooting
+
+- **No aparecen logs:**
+  - Verifica que la carpeta `logs/` exista y tenga permisos de escritura.
+  - Revisa el valor de `LOG_LEVEL` y `LOG_CONSOLE` en `.env`.
+  - Asegúrate de que el provider esté correctamente importado en los módulos que usan el logger.
+- **No rota o elimina archivos viejos:**
+  - Revisa la opción `maxFiles` en la configuración del transport de Winston.
+- **Quiero cambiar la cantidad de días de logs:**
+  - Modifica el valor de `maxFiles` en `src/logger.provider.ts`.
+- **Quiero desactivar la rotación:**
+  - Reemplaza el transport `DailyRotateFile` por el de `File` estándar de Winston en la configuración del provider.
+
+#### Dependencias
+
+- Winston
+- winston-daily-rotate-file
+- Configuración y provider en `src/logger.provider.ts` y `src/logger.module.ts`
+
+---
