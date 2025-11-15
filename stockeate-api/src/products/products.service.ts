@@ -7,10 +7,16 @@ import { PrismaService } from '../prisma.service';
 import { ProductDto } from './products.controller';
 import { UpdateProductDto } from './products.controller';
 import { Decimal } from '@prisma/client/runtime/library';
+import { Inject } from '@nestjs/common';
+import { LOGGER } from '../logger.provider';
+import { Logger } from 'winston';
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(LOGGER) private readonly logger: Logger,
+  ) {}
 
   private toApi(p: any) {
     if (!p) return null;
@@ -63,8 +69,9 @@ export class ProductsService {
       },
     });
     if (existingProduct) {
+      this.logger.warn(`Intento de crear producto duplicado: código ${product.code}, branch ${branchId}`);
       throw new BadRequestException(
-        `Ya existe un producto con el código ${product.code} en esta sucursal.`,
+        `El producto con código ${product.code} ya existe en esta sucursal`,
       );
     }
     return this.prisma.product.create({
@@ -93,9 +100,10 @@ export class ProductsService {
       where: { code, branchId },
     });
     if (!product) {
-      throw new NotFoundException(
-        `No se encontró producto con código ${code} en la sucursal indicada`,
-      );
+    this.logger.warn(`Producto no encontrado para update: código ${code}, branch ${branchId}`);
+    throw new NotFoundException(
+      `Producto con código ${code} no encontrado en esta sucursal`,
+    );
     }
     const data: any = {};
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -104,9 +112,10 @@ export class ProductsService {
     if (updateData.name !== undefined) data.name = updateData.name;
     if (updateData.stock !== undefined) {
       if (updateData.stock < 0) {
-        throw new BadRequestException(
-          `El stock no puede ser negativo (${updateData.stock})`,
-        );
+    this.logger.warn(`Intento de setear stock negativo (${updateData.stock}) para producto ${code}, branch ${branchId}`);
+    throw new BadRequestException(
+      `El stock no puede ser negativo (${updateData.stock})`,
+    );
       }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       data.stock = updateData.stock;
@@ -119,7 +128,8 @@ export class ProductsService {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('No hay campos válidos para actualizar');
+    this.logger.warn(`Intento de actualizar producto sin campos válidos: código ${code}, branch ${branchId}`);
+    throw new BadRequestException('No hay campos válidos para actualizar');
     }
 
     const updated = await this.prisma.product.update({
@@ -139,8 +149,10 @@ export class ProductsService {
       },
     });
     if (!product) {
+      this.logger.warn(`Producto no encontrado para delete: código ${code}, branch ${branchId}`);
       throw new NotFoundException('Producto no encontrado en esta sucursal');
     }
+    
     const updatedProduct = await this.prisma.product.update({
       where: {
         id: product.id,
@@ -153,3 +165,4 @@ export class ProductsService {
     return updatedProduct;
   }
 }
+

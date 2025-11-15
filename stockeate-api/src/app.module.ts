@@ -6,6 +6,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { DigitalizedRemitoModule } from './digitalized-remito/digitalized-remito.module';
 
+
 import { AuthModule } from './auth/auth.module';
 import { ProductsModule } from './products/products.module';
 import { SyncModule } from './sync/sync.module';
@@ -13,6 +14,7 @@ import { BranchesModule } from './branches/branches.module';
 import { EmailModule } from './email/email.module';
 import { PrismaService } from './prisma.service';
 import { RemitosModule } from './remitos/remitos.module';
+import { loggerProvider } from './logger.provider';
 
 @Module({
   imports: [
@@ -31,6 +33,6 @@ import { RemitosModule } from './remitos/remitos.module';
     DigitalizedRemitoModule,
   ],
   controllers: [], // Si no usas AppController, déjalo vacío
-  providers: [PrismaService],
+  providers: [PrismaService, loggerProvider],
 })
 export class AppModule {}
