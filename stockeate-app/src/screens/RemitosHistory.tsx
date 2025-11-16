@@ -1,5 +1,5 @@
 // src/screens/RemitosHistory.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,23 +9,19 @@ import {
   ActivityIndicator,
   Platform,
   StyleSheet,
-  SafeAreaView,         // FIX: importar SafeAreaView
-  useWindowDimensions,  // FIX: ya lo usás; aseguramos import
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useBranch } from "../stores/branch";
 import { useThemeStore } from "../stores/themeProviders";
 
-// 👇 1. Importamos la lógica de Sincronización
+// 👇 1. Importamos la lógica de Sincronización COMPLETA
 import { api, pullFromServer, PullPayload } from "../api";
-import { applyPull } from "../sync/apply"; // Asegúrate que la ruta a 'apply.ts' sea correcta
+import { applyPull } from "../sync/apply"; // <-- Ahora 'applyPull' existe
 import * as SQLite from "expo-sqlite";
 
 // 👇 imports menú
 import { useAuth } from "../stores/auth";
 import HamburgerMenu from "../components/HamburgerMenu";
-
-import { DB } from "../db";
 
 type Row = {
   id: string;
@@ -41,49 +37,10 @@ type Row = {
   total_amount: number;
 };
 
-// 👇 2. Función de BBDD con la consulta SQL corregida
-const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string): Row[] => {
+// 👇 2. Función de BBDD actualizada con la consulta SQL corregida (SIN 'dir')
+const getRemitosHistoryFromLocalDB = (branchId: string, q: string): Row[] => { 
   if (Platform.OS === "web") {
-    const qTrim = q.trim().toLowerCase();
-    const all = (DB as any).listAllRemitos?.() ?? [];
-    const byBranch = all.filter((r: any) => r.branch_id === branchId);
-
-    const withComputed = byBranch.map((r: any) => {
-      const items = DB.getRemitoItems(r.id) || [];
-      const total_qty = items.reduce((acc: number, it: any) => acc + Number(it.qty || 0), 0);
-      const total_amount = items.reduce((acc: number, it: any) => acc + Number((it.qty || 0) * (it.unit_price || 0)), 0);
-      const inferredDir = r.tmp_number?.startsWith("ENT-") ? "IN" : null;
-      return {
-        id: r.id,
-        tmp_number: r.tmp_number ?? null,
-        official_number: r.official_number ?? null,
-        branch_id: r.branch_id,
-        customer: r.customer ?? null,
-        notes: r.notes ?? null,
-        created_at: r.created_at,
-        pdf_path: r.pdf_path ?? null,
-        dir: inferredDir,
-        total_qty,
-        total_amount,
-      } as Row;
-    });
-
-    const filtered = withComputed.filter((row) => {
-      if (dir !== "ALL" && row.dir !== dir) return false;
-      if (!qTrim) return true;
-      const matchesHeader =
-        (row.tmp_number ?? "").toLowerCase().includes(qTrim) ||
-        (row.customer ?? "").toLowerCase().includes(qTrim);
-      if (matchesHeader) return true;
-
-      const items = DB.getRemitoItems(row.id) || [];
-      return items.some((it: any) =>
-        (it.code ?? "").toLowerCase().includes(qTrim) ||
-        (it.name ?? "").toLowerCase().includes(qTrim)
-      );
-    });
-
-    return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return [];
   }
   const db = SQLite.openDatabaseSync("stockeate.db");
 
@@ -91,7 +48,6 @@ const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string):
   const limit = 200;
   const off = 0;
 
-  // Consulta SQL actualizada para detectar 'ENT-' y corregir el filtro 'dir'
   const data = (db as any).getAllSync(
     `
     SELECT
@@ -112,22 +68,24 @@ const getRemitosHistoryFromLocalDB = (branchId: string, q: string, dir: string):
     ORDER BY datetime(r.created_at) DESC
     LIMIT ? OFFSET ?;
     `,
-    // Solo 8 argumentos, el filtro 'dir' lo hacemos en JS
+    // 👇 Solo 8 argumentos. Eliminamos el filtro de 'dir' de la consulta SQL.
     [branchId, q.trim(), qLike, qLike, qLike, qLike, limit, off]
   );
   
-  // Filtramos por dirección en JS. Es más seguro y evita el NullPointerException.
-  return data.filter((r: any) => dir === 'ALL' || r.dir === dir);
+  return data;
 };
 
 export default function RemitosHistory({ navigation }: any) {
   const { mode, theme, toggleTheme } = useThemeStore();
+  
+  // --- 👇 3. LEEMOS 'isHydrated' ---
   const branchId = useBranch((s) => s.id);
-  const { height, width } = useWindowDimensions();
+  const isHydrated = useBranch((s) => s.isHydrated); // <-- CLAVE
+
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"ALL" | "IN" | "OUT">("ALL");
   const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true); // Empezar cargando
+  const [loading, setLoading] = useState(true);
 
   // ... (lógica del menú y header se mantiene igual) ...
   const [menuVisible, setMenuVisible] = useState(false);
@@ -145,44 +103,51 @@ export default function RemitosHistory({ navigation }: any) {
       headerTitleStyle: { color: theme.colors.text },
       headerTintColor: theme.colors.text,
       headerRight: () => (
-        <TouchableOpacity onPress={() => setMenuVisible(true)} /* ... */ >
+        <TouchableOpacity
+          onPress={() => setMenuVisible(true)}
+          style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Abrir menú"
+        >
           <Ionicons name="menu" size={22} color={theme.colors.text} />
         </TouchableOpacity>
       ),
     });
   }, [navigation, theme, mode]);
-  // ... (fin lógica menú) ...
 
   const subtitle = useMemo(() => {
     const label = dir === "ALL" ? "Entrada y salida" : dir === "IN" ? "Entrada" : "Salida";
     return `${label} — ${rows.length} remito${rows.length === 1 ? "" : "s"}`;
   }, [rows.length]);
 
-  useEffect(() => {
-    if (!branchId) {
-      setLoading(false);
+  // 👇 4. 'load' ahora usa 'useCallback' y espera a 'isHydrated'
+  const load = useCallback(async () => {
+    if (!isHydrated) { // Espera a que el store esté listo
+      setLoading(true); 
       return;
     }
-    const id = setTimeout(load, 250);
-    return () => clearTimeout(id);
-  }, [q, dir, branchId]);
+    if (!branchId) { // Si no hay sucursal, no hagas nada
+      setLoading(false);
+      setRows([]);
+      return;
+    }
 
-  // 👇 3. Función 'load' ACTUALIZADA con Sincronización
-  const load = async () => {
-    if (!branchId) return;
     setLoading(true);
     try {
-      // 1. TRAEMOS los datos del servidor
+      // 1. Sincronizamos
       const payload: PullPayload = await pullFromServer(branchId);
       
-      // 2. APLICAMOS los datos a la BD local
+      // 2. Aplicamos cambios (ahora applyPull SÍ existe)
       await applyPull(branchId, payload); 
 
-      // 3. AHORA SÍ consultamos la BD local actualizada
-      const data = getRemitosHistoryFromLocalDB(branchId, q, dir);
+      // 3. Consultamos la BD local actualizada
+      const data = getRemitosHistoryFromLocalDB(branchId, q);
+      
+      // 4. Filtramos en JavaScript (Arregla el error 'Cannot find name dir')
+      const filteredData = data.filter(r => dir === 'ALL' || r.dir === dir);
       
       setRows(
-        data.map((r: any) => ({
+        filteredData.map((r: any) => ({
           ...r,
           dir: (r.dir === "IN" || r.dir === "OUT") ? r.dir : null,
         }))
@@ -193,9 +158,15 @@ export default function RemitosHistory({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [q, dir, branchId, isHydrated]); // Depende de 'isHydrated'
 
-  // 👇 4. 'renderItem' ACTUALIZADO con etiqueta de digitalización
+  useEffect(() => {
+    // Usamos 'load' como dependencia
+    const timerId = setTimeout(load, 250); // Debounce
+    return () => clearTimeout(timerId);
+  }, [load]);
+
+  // 👇 5. 'renderItem' ACTUALIZADO con etiqueta de digitalización
   const renderItem = ({ item }: { item: Row }) => {
     const created = new Date(item.created_at).toLocaleString();
     const isIN = item.dir === "IN";
@@ -241,18 +212,20 @@ export default function RemitosHistory({ navigation }: any) {
     );
   };
 
-  if (!branchId) {
+  if (!branchId && !loading) { 
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
         <Text style={{ color: theme.colors.text }}>Primero seleccioná una sucursal.</Text>
       </View>
     );
   }
-
+  
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <View style={[styles.screen, { maxWidth: 1000, alignSelf: 'center', width: '100%' }]}>
-        {/* Encabezado, búsqueda y filtros */}
+    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
+      <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Historial de remitos</Text>
+
+      {/* Filtros */}
+      <View style={styles.filtersContainer}>
         <TextInput
           value={q}
           onChangeText={setQ}
@@ -267,7 +240,6 @@ export default function RemitosHistory({ navigation }: any) {
             }
           ]}
         />
-
         <View style={styles.filterButtons}>
           <TouchableOpacity 
             onPress={() => setDir("ALL")} 
@@ -306,28 +278,36 @@ export default function RemitosHistory({ navigation }: any) {
             </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>
+      <Text style={[styles.subtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
 
+      {loading ? (
+        <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }}/>
+      ) : (
         <FlatList
           data={rows}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(x) => x.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 4, minHeight: height }}
-          ListEmptyComponent={
-            loading ? (
-              <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
-            ) : (
-              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>No hay remitos</Text>
-            )
-          }
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={[styles.emptyText, {color: theme.colors.textMuted}]}>No se encontraron remitos.</Text>}
+          onRefresh={load} 
+          refreshing={loading}
         />
-      </View>
-    </SafeAreaView>
+      )}
+
+       <HamburgerMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        items={menuItems}
+        navigation={navigation}
+      />
+    </View>
   );
 }
 
-// 👇 5. Centralizamos todos los estilos en StyleSheet
+// 👇 7. Centralizamos todos los estilos en StyleSheet
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: 16, gap: 12 },
   centered: { flex: 1, padding: 16, alignItems: "center", justifyContent: "center" },
