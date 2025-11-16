@@ -1,25 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { Prisma } from '@prisma/client'; // Importar Prisma para TransactionClient
+import { Prisma } from '@prisma/client'; 
 
 @Injectable()
 export class SyncService {
   constructor(private prisma: PrismaService) {}
 
-  // ---------- PULL (ACTUALIZADO PARA EL HISTORIAL) ----------
+  // ---------- PULL (ACTUALIZADO) ----------
   async pull(branchId: string, since?: number) {
     const clock = Date.now();
     const full = !since;
 
-    // --- Productos (Tu lógica de 'main') ---
+    // --- Productos (Tu lógica existente) ---
     let products: any[] = [];
     if (full) {
       const list = await this.prisma.product.findMany({
-        where: { branchId, isActive: true } as any, 
+        where: { branchId, isActive: true } as any,
         orderBy: { name: 'asc' },
         take: 5000,
       });
       products = list.map((p: any) => ({
+        id: p.id, // <-- 1. AÑADIDO EL ID QUE FALTABA
         code: p.code, name: p.name, price: p.price ?? 0, stock: p.stock ?? 0,
         branch_id: p.branchId,
         updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
@@ -35,6 +36,7 @@ export class SyncService {
         take: 5000,
       });
       products = list.map((p: any) => ({
+        id: p.id, // <-- 1. AÑADIDO EL ID QUE FALTABA
         code: p.code, name: p.name, price: p.price ?? 0, stock: p.stock ?? 0,
         branch_id: p.branchId,
         updated_at: p.updatedAt ? new Date(p.updatedAt).getTime() : undefined,
@@ -42,7 +44,7 @@ export class SyncService {
       }));
     }
 
-    // --- Movimientos de stock (Tu lógica de 'main') ---
+    // --- Movimientos de stock (Tu lógica existente) ---
     let moves: any[] = [];
     try {
       moves = await this.prisma.stockMove.findMany({
@@ -69,14 +71,13 @@ export class SyncService {
         branchId,
         ...(since ? { createdAt: { gt: new Date(since) } } : {}),
       },
-      // 👇 Seleccionamos los nuevos campos para enviarlos a la app
       select: {
         id: true,
         tmpNumber: true,
         customer: true,
-        customerCuit: true, // <-- NUEVO
-        customerAddress: true, // <-- NUEVO
-        customerTaxCondition: true, // <-- NUEVO
+        customerCuit: true,
+        customerAddress: true,
+        customerTaxCondition: true,
         notes: true,
         createdAt: true,
         branchId: true,
@@ -134,6 +135,7 @@ export class SyncService {
         if (!existing) {
           await tx.product.create({
             data: {
+              id: p.id, // <-- AÑADIDO: Usar el ID de la app si viene
               branchId, code, name: p.name ?? code, price: p.price ?? 0,
               stock: p.stock ?? 0, version: typeof p.version === 'number' ? p.version : 0,
               isActive: true,
@@ -187,7 +189,7 @@ export class SyncService {
         patched.push({ entity: 'product', id: updated.id, stock: updated.stock, version: updated.version });
       }
 
-      // 3) Remitos + items (ACTUALIZADO con nuevos campos)
+      // 3) Remitos + items
       for (const r of remitos) {
         const tmpNumber = r.tmpNumber ?? r.tmp_number ?? null;
         if (!tmpNumber) continue;
@@ -201,12 +203,12 @@ export class SyncService {
         
         const rem = await tx.remito.create({
           data: {
+            id: r.id, // <-- AÑADIDO: Usar el ID de la app si viene
             branchId,
             tmpNumber,
             officialNumber: official,
             customer,
             notes,
-            // --- 👇 CAMPOS NUEVOS AÑADIDOS AL 'create' ---
             customerCuit: r.customerCuit ?? null,
             customerAddress: r.customerAddress ?? null,
             customerTaxCondition: r.customerTaxCondition ?? null,
@@ -224,7 +226,13 @@ export class SyncService {
           }
           if (!pid) continue;
           await tx.remitoItem.create({
-            data: { remitoId: rem.id, productId: pid, qty: it.qty, unitPrice: it.unitPrice ?? it.unit_price ?? 0 },
+            data: { 
+              id: it.id, // <-- AÑADIDO: Usar el ID de la app si viene
+              remitoId: rem.id, 
+              productId: pid, 
+              qty: it.qty, 
+              unitPrice: it.unitPrice ?? it.unit_price ?? 0 
+            },
           });
         }
       }

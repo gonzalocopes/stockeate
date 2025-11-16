@@ -43,16 +43,19 @@ function applyStockDelta(productId: string, delta: number, branchId: string, rea
 }
 
 export async function applyPull(branchId: string, payload: PullPayload) {
-  // 1) upsert de productos
+  
+  // 1) upsert de productos (Se ejecuta primero, como debe ser)
   if (payload.products) {
+    console.log(`[Sync] Recibidos ${payload.products.length} productos para guardar.`);
     for (const p of payload.products) {
       DB.upsertProduct({
+        id: p.id, // ID del servidor
         code: p.code,
         name: p.name ?? p.code,
         price: p.price ?? 0,
         branch_id: branchId,
         ...(payload.full && typeof p.stock === "number" ? { stock: p.stock } : {}),
-        // Aquí asumimos que upsertProduct también maneja 'archived'
+        archived: (p as any).archived ?? 0
       });
     }
   }
@@ -67,15 +70,16 @@ export async function applyPull(branchId: string, payload: PullPayload) {
       if (!mv.id || applied.has(mv.id)) continue;
 
       let p = DB.getProductByCode(mv.productCode);
+      
+      // --- 👇 LA CORRECCIÓN ESTÁ AQUÍ ---
       if (!p) {
-        p = DB.upsertProduct({
-          code: mv.productCode,
-          name: mv.productCode,
-          price: 0,
-          branch_id: branchId,
-          stock: 0,
-        });
+        // Si el producto no se encontró (porque no vino en el payload.products),
+        // no podemos procesar el movimiento. Lo saltamos.
+        // NO CREAMOS UN PRODUCTO FANTASMA.
+        console.warn(`[Sync] Saltando stock_move para el producto ${mv.productCode} no encontrado localmente.`);
+        continue; // <-- Esta línea es la corrección
       }
+      // --- FIN DE LA CORRECCIÓN ---
 
       applyStockDelta(p.id, mv.delta, branchId, mv.reason || "Sync");
       applied.add(mv.id);
@@ -93,18 +97,17 @@ export async function applyPull(branchId: string, payload: PullPayload) {
     DB.pruneProductsNotIn(branchId, keepCodes);
   }
 
-  // --- 👇 4. GUARDADO DE REMITOS (ACTUALIZADO) ---
+  // 4) Guardado de remitos
   if (payload.remitos) {
     console.log(`[Sync] Recibidos ${payload.remitos.length} remitos para guardar.`);
     for (const remito of payload.remitos) {
-      // Pasamos todos los campos nuevos a la BD local
       DB.upsertRemito({
         id: remito.id,
         tmp_number: remito.tmpNumber,
         customer: remito.customer,
-        customerCuit: remito.customerCuit, // <-- NUEVO
-        customerAddress: remito.customerAddress, // <-- NUEVO
-        customerTaxCondition: remito.customerTaxCondition, // <-- NUEVO
+        customerCuit: remito.customerCuit,
+        customerAddress: remito.customerAddress,
+        customerTaxCondition: remito.customerTaxCondition,
         notes: remito.notes,
         created_at: remito.createdAt,
         branch_id: remito.branchId,
@@ -112,7 +115,7 @@ export async function applyPull(branchId: string, payload: PullPayload) {
     }
   }
 
-  // --- 👇 5. GUARDADO DE ITEMS (YA ESTABA BIEN) ---
+  // 5) Guardado de items
   if (payload.remitoItems) {
     console.log(`[Sync] Recibidos ${payload.remitoItems.length} items de remito para guardar.`);
     for (const item of payload.remitoItems) {

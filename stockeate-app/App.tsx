@@ -24,6 +24,8 @@ import RemitosHistory from "./src/screens/RemitosHistory";
 import RemitoDetail from "./src/screens/RemitoDetail";
 import ExternalRemitoResult from "./src/screens/ExternalRemitoResult";
 import UploadRemitoScreen from "./src/screens/UploadRemitoScreen";
+import { PendingRemitosScreen } from './src/screens/PendingRemitosScreen';
+import  ValidationScreen  from './src/screens/ValidationScreen';
 import SettingsScreen from "./src/screens/SettingsScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 
