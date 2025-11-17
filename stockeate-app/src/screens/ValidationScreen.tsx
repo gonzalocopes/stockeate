@@ -38,7 +38,7 @@ type RemitoData = {
 // --- Fin Tipos ---
 
 
-export default function ValidationScreen({ route, navigation }: NavigationProps) {
+export default function ValidationScreen({ route, navigation }: any) {
   const { remitoId } = route.params;
   const { theme } = useThemeStore();
 
