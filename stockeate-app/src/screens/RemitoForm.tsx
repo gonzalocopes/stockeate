@@ -190,7 +190,8 @@ export default function RemitoForm({ navigation }: any) {
 
       try { (useBatch.getState() as any).clear(); } catch {}
 
-      navigation.replace("RemitoResult", { remitoId, tmpNumber: tmpNum, pdfPath });
+      navigation.replace("RemitoResult", { remitoId, tmp: tmpNum, pdfPath });
+      
     } catch (e) {
       console.log(e);
       Alert.alert("Error", "Hubo un problema al guardar el remito.");

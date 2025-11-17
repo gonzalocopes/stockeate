@@ -47,20 +47,87 @@ export function initDb() {
       unit_price REAL DEFAULT 0
     );
   `);
+
+  // 🔄 Migraciones suaves para dispositivos que ya tenían la tabla `remitos` vieja
+  const migrations = [
+    `ALTER TABLE remitos ADD COLUMN customer_cuit TEXT`,
+    `ALTER TABLE remitos ADD COLUMN customer_address TEXT`,
+    `ALTER TABLE remitos ADD COLUMN customer_tax_condition TEXT`,
+    `ALTER TABLE remitos ADD COLUMN notes TEXT`,
+    `ALTER TABLE remitos ADD COLUMN official_number TEXT`,
+    `ALTER TABLE remitos ADD COLUMN synced INTEGER DEFAULT 0`,
+    `ALTER TABLE remitos ADD COLUMN pdf_path TEXT`,
+  ];
+
+  for (const sql of migrations) {
+    try {
+      db.execSync(sql);
+    } catch {
+      // Si la columna ya existe, SQLite tira "duplicate column name" y lo ignoramos
+    }
+  }
 }
 
 const now = () => new Date().toISOString();
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const uid = () =>
+  Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export const DB = {
   getProductByCode(code: string) {
-    return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
+    return (
+      db.getFirstSync<any>(
+        "SELECT * FROM products WHERE code = ?",
+        [code]
+      ) ?? null
+    );
   },
 
-  // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA (Soluciona UNIQUE constraint) ---
+  // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA Y SANEADA ---
   upsertProduct(p: any) {
-    const id = p.id ?? uid(); // Usa el ID del servidor si existe
-    
+    // Si no hay código, no intentamos guardar ese producto
+    if (!p?.code) {
+      console.warn(
+        "Producto sin código recibido en upsertProduct, se ignora:",
+        p
+      );
+      return null;
+    }
+
+    const code = p.code.toString();
+
+    // 1) Buscamos si ya existe un producto con ese CODE
+    const existing = db.getFirstSync<any>(
+      "SELECT id FROM products WHERE code = ?",
+      [code]
+    );
+
+    // 2) Si existe, usamos ese id; si no, usamos el del servidor o generamos uno
+    const id = (
+      existing?.id ??
+      p.id ??
+      uid()
+    ).toString();
+
+    const name = (p.name ?? code).toString();
+    const price = Number.isFinite(Number(p.price))
+      ? Number(p.price)
+      : 0;
+    const stock = Number.isFinite(Number(p.stock))
+      ? Number(p.stock)
+      : 0;
+    const version = Number.isFinite(Number(p.version))
+      ? Number(p.version)
+      : 0;
+
+    const branchId = (
+      p.branch_id ??
+      p.branchId ??
+      p.branch ??
+      ""
+    ).toString();
+
+    const archived = Number(p.archived ?? 0) ? 1 : 0;
+
     try {
       db.runSync(
         `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
@@ -72,19 +139,24 @@ export const DB = {
            stock=COALESCE(excluded.stock, products.stock), 
            updated_at=excluded.updated_at,
            archived=COALESCE(excluded.archived, products.archived)`,
-        [id, p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+        [id, code, name, price, stock, version, branchId, now(), archived]
       );
     } catch (e: any) {
-      console.error(`Error guardando producto ${p.code} (ID: ${id}):`, e.message);
-      if (e.message.includes("UNIQUE constraint failed: products.code")) {
-        // Fallback por si el ID es nuevo pero el CÓDIGO ya existe (producto fantasma)
+      // Si llegara a quedar algún caso raro, todavía hacemos fallback por code
+      console.error(
+        `Error guardando producto ${code} (ID: ${id}):`,
+        e?.message ?? String(e)
+      );
+      if ((e?.message ?? "").includes("UNIQUE constraint failed: products.code")) {
         db.runSync(
           `UPDATE products SET name=?, price=?, stock=COALESCE(?, stock), updated_at=?, archived=COALESCE(?, archived) WHERE code = ?`,
-          [p.name ?? p.code, p.price ?? 0, p.stock ?? 0, now(), p.archived ?? 0, p.code]
+          [name, price, stock, now(), archived, code]
         );
       }
     }
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [id]);
+    return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [
+      id,
+    ]);
   },
   // --- FIN DE LA ACTUALIZACIÓN ---
 
@@ -101,9 +173,18 @@ export const DB = {
       `INSERT INTO remitos(id, tmp_number, official_number, branch_id, customer, customer_cuit, customer_address, customer_tax_condition, notes, created_at, synced, pdf_path)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        id, data.tmp_number, data.official_number ?? null, data.branch_id,
-        data.customer ?? null, data.customer_cuit ?? null, data.customer_address ?? null, data.customer_tax_condition ?? null,
-        data.notes ?? null, now(), 0, data.pdf_path ?? null
+        id,
+        data.tmp_number,
+        data.official_number ?? null,
+        data.branch_id,
+        data.customer ?? null,
+        data.customer_cuit ?? null,
+        data.customer_address ?? null,
+        data.customer_tax_condition ?? null,
+        data.notes ?? null,
+        now(),
+        0,
+        data.pdf_path ?? null,
       ]
     );
     return id;
@@ -127,10 +208,15 @@ export const DB = {
     db.runSync(`UPDATE remitos SET pdf_path=? WHERE id=?`, [path, remitoId]);
   },
   getRemitoById(remitoId: string) {
-    return db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ?? null;
+    return (
+      db.getFirstSync<any>(
+        "SELECT * FROM remitos WHERE id=?",
+        [remitoId]
+      ) ?? null
+    );
   },
-  
-  // --- 👇 CORRECCIÓN: 'LEFT JOIN' (Soluciona "nombres no se ven") ---
+
+  // --- 👇 JOIN para ver nombres en remitos ---
   getRemitoItems(remitoId: string) {
     return db.getAllSync<any>(
       `SELECT ri.*, p.code, p.name 
@@ -140,9 +226,15 @@ export const DB = {
       [remitoId]
     );
   },
-  // --- FIN DE LA CORRECCIÓN ---
 
-  listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+  listProductsByBranch(
+    branchId: string,
+    search: string = "",
+    limit = 200,
+    offset = 0
+  ) {
+    if (!branchId) return [];
+
     const q = `%${search.trim()}%`;
     if (search.trim()) {
       return db.getAllSync<any>(
@@ -162,7 +254,14 @@ export const DB = {
     );
   },
 
-  listArchivedByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
+  listArchivedByBranch(
+    branchId: string,
+    search: string = "",
+    limit = 200,
+    offset = 0
+  ) {
+    if (!branchId) return [];
+
     const q = `%${search.trim()}%`;
     if (search.trim()) {
       return db.getAllSync<any>(
@@ -187,10 +286,18 @@ export const DB = {
       `UPDATE products SET name=?, price=?, version=version+1, updated_at=? WHERE id=?`,
       [name, price, now(), productId]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>(
+      "SELECT * FROM products WHERE id=?",
+      [productId]
+    );
   },
 
-  adjustStock(productId: string, branchId: string, delta: number, reason: string = "Ajuste inventario") {
+  adjustStock(
+    productId: string,
+    branchId: string,
+    delta: number,
+    reason: string = "Ajuste inventario"
+  ) {
     db.runSync(
       "UPDATE products SET stock = stock + ?, version = version + 1, updated_at=? WHERE id=?",
       [delta, now(), productId]
@@ -199,11 +306,22 @@ export const DB = {
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
       [uid(), productId, branchId, delta, "adjust", reason, now()]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>(
+      "SELECT * FROM products WHERE id=?",
+      [productId]
+    );
   },
 
-  setStockExact(productId: string, branchId: string, target: number, reason = "Fijar stock") {
-    const cur = db.getFirstSync<any>("SELECT stock FROM products WHERE id=?", [productId]);
+  setStockExact(
+    productId: string,
+    branchId: string,
+    target: number,
+    reason = "Fijar stock"
+  ) {
+    const cur = db.getFirstSync<any>(
+      "SELECT stock FROM products WHERE id=?",
+      [productId]
+    );
     const current = Number(cur?.stock ?? 0);
     const delta = target - current;
     db.runSync(
@@ -214,27 +332,44 @@ export const DB = {
       `INSERT INTO stock_moves(id,product_id,branch_id,qty,type,ref,created_at,synced) VALUES(?,?,?,?,?,?,?,0)`,
       [uid(), productId, branchId, delta, "set", reason, now()]
     );
-    return db.getFirstSync<any>("SELECT * FROM products WHERE id=?", [productId]);
+    return db.getFirstSync<any>(
+      "SELECT * FROM products WHERE id=?",
+      [productId]
+    );
   },
 
   canDeleteProduct(productId: string): boolean {
-    const r = db.getFirstSync<any>(`SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`, [productId]);
+    const r = db.getFirstSync<any>(
+      `SELECT COUNT(*) as cnt FROM remito_items WHERE product_id=?`,
+      [productId]
+    );
     return Number(r?.cnt ?? 0) === 0;
   },
 
   deleteProduct(productId: string) {
-    db.runSync(`DELETE FROM stock_moves WHERE product_id=?`, [productId]);
+    db.runSync(
+      `DELETE FROM stock_moves WHERE product_id=?`,
+      [productId]
+    );
     db.runSync(`DELETE FROM products WHERE id=?`, [productId]);
   },
 
   archiveProduct(productId: string) {
-    db.runSync(`UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+    db.runSync(
+      `UPDATE products SET archived=1, updated_at=?, version=version+1 WHERE id=?`,
+      [now(), productId]
+    );
   },
   unarchiveProduct(productId: string) {
-    db.runSync(`UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`, [now(), productId]);
+    db.runSync(
+      `UPDATE products SET archived=0, updated_at=?, version=version+1 WHERE id=?`,
+      [now(), productId]
+    );
   },
 
   pruneProductsNotIn(branchId: string, keepCodes: string[]) {
+    if (!branchId) return;
+
     let rows: any[] = [];
     if (keepCodes.length > 0) {
       const placeholders = keepCodes.map(() => "?").join(",");
@@ -251,13 +386,25 @@ export const DB = {
     const ids = rows.map((r) => r.id);
     if (ids.length === 0) return;
     const ph = ids.map(() => "?").join(",");
-    try { db.runSync(`DELETE FROM remito_items WHERE product_id IN (${ph})`, ids); } catch {}
-    try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
-    db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
+    try {
+      db.runSync(
+        `DELETE FROM remito_items WHERE product_id IN (${ph})`,
+        ids
+      );
+    } catch {}
+    try {
+      db.runSync(
+        `DELETE FROM stock_moves WHERE product_id IN (${ph})`,
+        ids
+      );
+    } catch {}
+    db.runSync(
+      `DELETE FROM products WHERE id IN (${ph})`,
+      ids
+    );
   },
 
-  // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAUTADAS Y CORREGIDAS) ---
-  // (Solucionan el NullPointerException)
+  // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAURADAS) ---
   upsertRemito(r: any) {
     try {
       db.runSync(
@@ -279,11 +426,11 @@ export const DB = {
           r.customerTaxCondition ?? null,
           r.notes ?? null,
           r.created_at,
-          r.branch_id
+          r.branch_id,
         ]
       );
-    } catch (e) {
-      console.error(`Error guardando remito ${r.id}:`, e);
+    } catch {
+      // Silenciamos errores de sync para no romper la UI
     }
   },
 
@@ -300,11 +447,11 @@ export const DB = {
           item.remito_id,
           item.product_id,
           item.qty,
-          item.unit_price ?? 0
+          item.unit_price ?? 0,
         ]
       );
-    } catch (e) {
-      console.error(`Error guardando item ${item.id}:`, e);
+    } catch {
+      // Silenciamos errores de sync para no romper la UI
     }
   },
 };

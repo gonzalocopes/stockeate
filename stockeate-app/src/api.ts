@@ -1,4 +1,5 @@
-﻿import axios, { AxiosRequestHeaders } from "axios";
+﻿// src/api.ts
+import axios, { AxiosRequestHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Config por ENV, fallback a Render
@@ -13,23 +14,49 @@ export const api = axios.create({
 });
 
 // Interceptor de Debug "Rayos X"
-api.interceptors.request.use(request => {
-  console.log(`🚀 [AXIOS RAY-X] Petición: ${request.method?.toUpperCase()} ${request.baseURL}${request.url}`);
+api.interceptors.request.use((request) => {
+  console.log(
+    `🚀 [AXIOS RAY-X] Petición: ${request.method?.toUpperCase()} ${
+      request.baseURL
+    }${request.url}`
+  );
   return request;
 });
 
-// Interceptor de Token
+// Interceptor de Token (antes de enviar)
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("token");
     if (token && config.headers) {
-      (config.headers as AxiosRequestHeaders).set("Authorization", `Bearer ${token}`);
+      (config.headers as AxiosRequestHeaders).set(
+        "Authorization",
+        `Bearer ${token}`
+      );
     }
   } catch (e) {
     console.error("Error reading token from AsyncStorage", e);
   }
   return config;
 });
+
+// 🔴 Interceptor de RESPUESTA -> manejar 401 (token vencido / inválido)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      console.warn("[API] 401 no autorizado. Eliminando token guardado.");
+      try {
+        await AsyncStorage.removeItem("token");
+      } catch (e) {
+        console.error("Error limpiando token al recibir 401", e);
+      }
+      // acá podrías, si querés, marcar el error
+      // error.isUnauthorized = true;
+    }
+    return Promise.reject(error);
+  }
+);
 
 // -------- Pull (para sync) --------
 export async function wakeServer() {
@@ -92,31 +119,40 @@ export type PullPayload = {
   full: boolean;
   products: PullProduct[];
   stockMoves: PullMove[];
-  remitos: PullRemito[]; // <-- AÑADIDO
-  remitoItems: PullRemitoItem[]; // <-- AÑADIDO
+  remitos: PullRemito[];
+  remitoItems: PullRemitoItem[];
 };
 
-export async function pullFromServer(branchId: string, since?: number): Promise<PullPayload> {
+export async function pullFromServer(
+  branchId: string,
+  since?: number
+): Promise<PullPayload> {
   const { data } = await api.get<PullPayload>("/sync/pull", {
     params: { branchId, since },
   });
   return data;
 }
 
-// --- Función 'uploadRemitoFile' (ya estaba correcta) ---
-export async function uploadRemitoFile(file: { uri: string; name: string; type?: string; }, branchId: string) {
+// --- Función 'uploadRemitoFile' ---
+export async function uploadRemitoFile(
+  file: { uri: string; name: string; type?: string },
+  branchId: string
+) {
   const formData = new FormData();
-  formData.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.type || 'application/octet-stream',
-  } as any);
-  formData.append('branchId', branchId);
+  formData.append(
+    "file",
+    {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    } as any
+  );
+  formData.append("branchId", branchId);
 
-  const { data } = await api.post('/digitalized-remito/upload', formData, {
+  const { data } = await api.post("/digitalized-remito/upload", formData, {
     headers: {
-      'Content-Type': 'multipart/form-data',
-      'ngrok-skip-browser-warning': 'true',
+      "Content-Type": "multipart/form-data",
+      "ngrok-skip-browser-warning": "true",
     },
   });
   return data;

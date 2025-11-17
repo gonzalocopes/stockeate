@@ -95,15 +95,7 @@ export default function RemitoHub({ navigation }: any) {
           isFocused={isFocused} // <-- 3. Pasamos isFocused
         />
 
-        <FullButton
-          title="Remito de Entrada (Manual)"
-          subtitle="Escaneá lo recibido y suma stock manualmente."
-          icon="arrow-down-circle-outline" // Icono más específico
-          gradient={gradEntrada}
-          onPress={() => navigation.navigate("RemitoIngreso")}
-          isFocused={isFocused} // <-- 3. Pasamos isFocused
-        />
-
+  
         {/* --- 👇 BOTONES NUEVOS INTEGRADOS --- */}
         <FullButton
           title="Digitalizar Remito Externo"
