@@ -57,9 +57,9 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [code]) ?? null;
   },
 
-  // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA (Soluciona UNIQUE constraint) ---
-  upsertProduct(p: any) {
-    const id = p.id ?? uid(); // Usa el ID del servidor si existe
+  // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA ---
+upsertProduct(p: any) {
+    const id = p.id ?? uid(); 
     
     try {
       db.runSync(
@@ -72,18 +72,51 @@ export const DB = {
            stock=COALESCE(excluded.stock, products.stock), 
            updated_at=excluded.updated_at,
            archived=COALESCE(excluded.archived, products.archived)`,
-        [id, p.code, p.name ?? p.code, p.price ?? 0, p.stock ?? 0, p.version ?? 0, p.branch_id, now(), p.archived ?? 0]
+        [
+          id, 
+          p.code ?? null,
+          (p.name ?? p.code) ?? null,
+          p.price ?? 0, 
+          p.stock ?? 0,
+          p.version ?? 0, 
+          p.branch_id ?? null,
+          now(), 
+          p.archived ?? 0
+        ]
       );
     } catch (e: any) {
-      console.error(`Error guardando producto ${p.code} (ID: ${id}):`, e.message);
+      
+      // --- 👇 CORRECCIÓN CLAVE ---
+      // Comprobar si es el error "esperado" de conflicto de código.
       if (e.message.includes("UNIQUE constraint failed: products.code")) {
-        // Fallback por si el ID es nuevo pero el CÓDIGO ya existe (producto fantasma)
+        
+        // Esto no es un error, es parte del "upsert". 
+        // Simplemente actualizamos el registro existente que tiene ese código.
+        
         db.runSync(
           `UPDATE products SET name=?, price=?, stock=COALESCE(?, stock), updated_at=?, archived=COALESCE(?, archived) WHERE code = ?`,
-          [p.name ?? p.code, p.price ?? 0, p.stock ?? 0, now(), p.archived ?? 0, p.code]
+          [
+            (p.name ?? p.code) ?? null,
+            p.price ?? 0, 
+            p.stock ?? 0,
+            now(), 
+            p.archived ?? 0,
+            p.code ?? null
+          ]
         );
+        
+        // Retornamos el producto actualizado y salimos.
+        return db.getFirstSync<any>("SELECT * FROM products WHERE code = ?", [p.code ?? null]);
+      
+      } else {
+        // Si es CUALQUIER OTRO error (como el NullPointerException de antes), 
+        // SÍ queremos reportarlo.
+        console.error(`Error guardando producto ${p.code} (ID: ${id}):`, e.message);
       }
+      // --- FIN DE LA CORRECCIÓN ---
     }
+    
+    // Este 'return' solo se ejecuta si el 'try' tuvo éxito.
     return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [id]);
   },
   // --- FIN DE LA ACTUALIZACIÓN ---
@@ -130,7 +163,6 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM remitos WHERE id=?", [remitoId]) ?? null;
   },
   
-  // --- 👇 CORRECCIÓN: 'LEFT JOIN' (Soluciona "nombres no se ven") ---
   getRemitoItems(remitoId: string) {
     return db.getAllSync<any>(
       `SELECT ri.*, p.code, p.name 
@@ -140,7 +172,6 @@ export const DB = {
       [remitoId]
     );
   },
-  // --- FIN DE LA CORRECCIÓN ---
 
   listProductsByBranch(branchId: string, search: string = "", limit = 200, offset = 0) {
     const q = `%${search.trim()}%`;
@@ -255,9 +286,7 @@ export const DB = {
     try { db.runSync(`DELETE FROM stock_moves WHERE product_id IN (${ph})`, ids); } catch {}
     db.runSync(`DELETE FROM products WHERE id IN (${ph})`, ids);
   },
-
-  // --- 👇 FUNCIONES DE SINCRONIZACIÓN (RESTAUTADAS Y CORREGIDAS) ---
-  // (Solucionan el NullPointerException)
+  
   upsertRemito(r: any) {
     try {
       db.runSync(
