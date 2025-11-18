@@ -1,9 +1,5 @@
 // src/digitalized-remito/digitalized-remito.service.ts
-import {
-  Injectable,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DigitalizationStatus, Prisma } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
@@ -15,67 +11,92 @@ export class DigitalizedRemitoService {
 
   constructor(private prisma: PrismaService) {}
 
-  // --- MÉTODO 1: crear registro inicial y disparar OCR ---
+  // ─────────────────────────────────────────────
+  // 1) Crear registro inicial y disparar OCR
+  // ─────────────────────────────────────────────
   async createInitialRemito(
     file: Express.Multer.File,
-    userId: string | null,
+    userId: string,
     branchId: string,
   ) {
     this.logger.log(
-      `[createInitialRemito] file=${file?.originalname} userId=${userId} branchId=${branchId}`,
+      `[createInitialRemito] file=${file.originalname} mimetype=${file.mimetype} userId=${userId} branchId=${branchId}`,
     );
 
-    let newDigitalizedRemito;
-
-    try {
-      // Intento normal: con userId (si viene) + branchId
-      newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
-        data: {
-          // Si userId es null/undefined, Prisma lo ignora (campo opcional)
-          userId: userId ?? undefined,
-          branchId,
-          originalFileUrl: file.path,
-          status: DigitalizationStatus.PROCESSING,
-        },
-      });
-    } catch (err: any) {
-      // Si la FK al usuario no existe, volvemos a intentar sin userId
-      if (
-        err.code === 'P2003' &&
-        err.meta?.constraint === 'DigitalizedRemito_userId_fkey'
-      ) {
-        this.logger.error(
-          `[createInitialRemito] FK userId inválido (${userId}), creando remito sin usuario`,
-        );
-
-        newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
-          data: {
-            branchId,
-            originalFileUrl: file.path,
-            status: DigitalizationStatus.PROCESSING,
-          },
+    // Normalizamos el userId (puede venir "anonymous")
+    let finalUserId: string | null = null;
+    if (userId && userId !== 'anonymous') {
+      try {
+        const exists = await this.prisma.user.findUnique({
+          where: { id: userId },
         });
-      } else {
+        if (exists) {
+          finalUserId = userId;
+        } else {
+          this.logger.error(
+            `[createInitialRemito] FK userId inválido (${userId}), creando remito sin usuario`,
+          );
+        }
+      } catch (e) {
         this.logger.error(
-          '[createInitialRemito] Error creando DigitalizedRemito',
-          err,
+          `[createInitialRemito] Error comprobando userId=${userId}`,
+          e as any,
         );
-        throw err;
       }
     }
 
-    // Lanzamos el OCR en segundo plano (no bloquea la respuesta)
-    this.processOcr(newDigitalizedRemito.id, file.path).catch((e) =>
+    const newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
+      data: {
+        userId: finalUserId,
+        branchId,
+        originalFileUrl: file.path,
+        status: DigitalizationStatus.PROCESSING,
+      },
+    });
+
+    // 👉 IMPORTANTE: si NO es imagen, NO corremos Tesseract (evitamos el crash con PDFs)
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      const msg =
+        'Formato no soportado para OCR. Por ahora solo se admiten imágenes (JPG/PNG).';
+
       this.logger.error(
-        `[processOcr] Falló el procesamiento para ${newDigitalizedRemito.id}`,
-        e,
-      ),
-    );
+        `[createInitialRemito] ${msg} mimetype=${file.mimetype}`,
+      );
+
+      await this.prisma.digitalizedRemito.update({
+        where: { id: newDigitalizedRemito.id },
+        data: {
+          status: DigitalizationStatus.FAILED,
+          errorMessage: msg,
+          extractedData: {
+            provider: '',
+            date: new Date().toISOString().slice(0, 10),
+            customerCuit: '',
+            customerAddress: '',
+            customerTaxCondition: '',
+            items: [],
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      // Lo devolvemos igual, pero marcado como FAILED
+      return newDigitalizedRemito;
+    }
+
+    // Si es imagen, disparamos OCR en background SIN permitir que reviente el proceso
+    this.processOcr(newDigitalizedRemito.id, file.path).catch((err) => {
+      this.logger.error(
+        `[processOcr] Error no capturado para remito=${newDigitalizedRemito.id}`,
+        err,
+      );
+    });
 
     return newDigitalizedRemito;
   }
 
-  // --- MÉTODO 2: procesamiento OCR con Tesseract ---
+  // ─────────────────────────────────────────────
+  // 2) OCR con Tesseract
+  // ─────────────────────────────────────────────
   private async processOcr(remitoId: string, filePath: string) {
     this.logger.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
 
@@ -83,7 +104,7 @@ export class DigitalizedRemitoService {
 
     try {
       const ret = await worker.recognize(filePath);
-      const textoExtraido = ret.data.text;
+      const textoExtraido = ret.data.text || '';
 
       this.logger.log(
         `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(
@@ -97,9 +118,9 @@ export class DigitalizedRemitoService {
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          // 👇 Prisma espera InputJsonValue / NullableJsonNullValueInput
           extractedData: parsedData as Prisma.InputJsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
+          errorMessage: null,
         },
       });
 
@@ -109,12 +130,16 @@ export class DigitalizedRemitoService {
     } catch (error) {
       this.logger.error(
         `[OCR] Falló el procesamiento para: ${remitoId}`,
-        error,
+        error as any,
       );
 
-      // Fallback: dejamos un JSON mínimo con error
       const fallback = {
-        error: (error as Error).message,
+        provider: '',
+        date: new Date().toISOString().slice(0, 10),
+        customerCuit: '',
+        customerAddress: '',
+        customerTaxCondition: '',
+        items: [],
       };
 
       await this.prisma.digitalizedRemito.update({
@@ -133,7 +158,9 @@ export class DigitalizedRemitoService {
     }
   }
 
-  // --- MÉTODO 3: parser de texto del remito ---
+  // ─────────────────────────────────────────────
+  // 3) Parser de texto (igual que antes)
+  // ─────────────────────────────────────────────
   private parsearTextoDeTesseract(texto: string): any {
     this.logger.log('[Parser] Analizando texto real con Regex...');
 
@@ -145,41 +172,42 @@ export class DigitalizedRemitoService {
 
     const items: ExtractedItem[] = [];
 
-    // Patrones de proveedor (razón social)
+    // Patrones de Proveedor
     const patronesProveedor: RegExp[] = [
-      /Raz[oó]n Social\s*[:—-]\s*(.*)/im,
-      /Señor\(es\)\s*[:—-]\s*(.*)/im,
-      /Cliente\s*[:—-]\s*(.*)/im,
+      /Razón Social\s*[:—]\s*(.*)/im,
+      /Señor\(es\)\s*[:—]\s*(.*)/im,
+      /Cliente\s*[:—]\s*(.*)/im,
+      /Remito\s+N?[°º]?\s*.*\n(.*)/im, // línea debajo de "Remito ..."
     ];
 
-    // Patrones de fecha
+    // Patrones de Fecha
     const patronesFecha: RegExp[] = [
-      /Fecha(?: de Emisi[oó]n)?\s*[:—-]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
-      /(\d{2}[\/-]\d{2}[\/-]\d{4})/im,
+      /Fecha (?:de Emisión)?\s*[:—]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
+      /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
     ];
 
     // Patrones de CUIT
     const patronesCuit: RegExp[] = [
-      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—-]?\s*(\d{2}-\d{8}-\d{1})/im,
+      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—]?\s*(\d{2}-\d{8}-\d{1})/im,
       /(\d{2}-\d{8}-\d{1})/im,
     ];
 
-    // Patrones de dirección
+    // Patrones de Dirección
     const patronesDireccion: RegExp[] = [
-      /Direcci[oó]n\s*[:—-]?\s*(.*)/im,
-      /Domicilio\s*[:—-]?\s*(.*)/im,
+      /Dirección\s*[:—]?\s*(.*)/im,
+      /Domicilio\s*[:—]?\s*(.*)/im,
     ];
 
     const provider =
       this.findFirstMatch(texto, patronesProveedor) ||
-      'Proveedor (No detectado)';
+      'Proveedor (no detectado)';
     const date =
       this.findFirstMatch(texto, patronesFecha) ||
       new Date().toISOString().slice(0, 10);
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
-    // Por ahora simulamos un único ítem genérico si no pudo detectar nada
+    // Por ahora simulamos un ítem genérico si no detectamos tabla
     if (items.length === 0) {
       items.push({
         detectedCode: '???',
@@ -202,11 +230,7 @@ export class DigitalizedRemitoService {
     };
   }
 
-  // Helper del parser
-  private findFirstMatch(
-    texto: string,
-    patrones: RegExp[],
-  ): string | null {
+  private findFirstMatch(texto: string, patrones: RegExp[]): string | null {
     for (const patron of patrones) {
       const match = texto.match(patron);
       if (match && match[1]) {
@@ -217,15 +241,22 @@ export class DigitalizedRemitoService {
     return null;
   }
 
-  // --- MÉTODO 4: listar pendientes por sucursal ---
+  // ─────────────────────────────────────────────
+  // 4) Listar pendientes por sucursal
+  // ─────────────────────────────────────────────
   async findPendingByBranch(branchId: string) {
     return this.prisma.digitalizedRemito.findMany({
-      where: { branchId, status: DigitalizationStatus.PENDING_VALIDATION },
+      where: {
+        branchId,
+        status: DigitalizationStatus.PENDING_VALIDATION,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // --- MÉTODO 5: buscar uno por ID ---
+  // ─────────────────────────────────────────────
+  // 5) Obtener uno por ID
+  // ─────────────────────────────────────────────
   async findOne(id: string) {
     const remito = await this.prisma.digitalizedRemito.findUnique({
       where: { id },
@@ -240,28 +271,23 @@ export class DigitalizedRemitoService {
     return remito;
   }
 
-  // --- MÉTODO 6: validar y generar remito de entrada + stock ---
-  async validateAndFinalizeRemito(
-    id: string,
-    validationData: ValidationDataDto,
-  ) {
+  // ─────────────────────────────────────────────
+  // 6) Validar y generar Remito de entrada
+  // ─────────────────────────────────────────────
+  async validateAndFinalizeRemito(id: string, validationData: ValidationDataDto) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Busca el remito digitalizado
-      const digitalizedRemito =
-        await tx.digitalizedRemito.findUnique({
-          where: { id },
-        });
+      const digitalizedRemito = await tx.digitalizedRemito.findUnique({
+        where: { id },
+      });
 
       if (
         !digitalizedRemito ||
-        digitalizedRemito.status !== 'PENDING_VALIDATION'
+        digitalizedRemito.status !== DigitalizationStatus.PENDING_VALIDATION
       ) {
-        throw new NotFoundException(
-          'Remito no encontrado o ya fue procesado.',
-        );
+        throw new NotFoundException('Remito no encontrado o ya fue procesado.');
       }
 
-      // 2. Busca o crea los productos según los ítems validados
+      // 1) Buscar o crear productos
       const processedItems = await Promise.all(
         validationData.items.map(async (item) => {
           let product = await tx.product.findUnique({
@@ -284,7 +310,7 @@ export class DigitalizedRemitoService {
         }),
       );
 
-      // 3. Crea el Remito de ENTRADA oficial
+      // 2) Crear remito de ENTRADA
       const newRemito = await tx.remito.create({
         data: {
           branchId: digitalizedRemito.branchId,
@@ -305,11 +331,13 @@ export class DigitalizedRemitoService {
         },
       });
 
-      // 4. Actualiza el stock y crea movimientos
+      // 3) Actualizar stock y movimientos
       for (const item of processedItems) {
         await tx.product.update({
           where: { id: item.productId },
-          data: { stock: { increment: item.qty } },
+          data: {
+            stock: { increment: item.qty },
+          },
         });
 
         await tx.stockMove.create({
@@ -323,10 +351,12 @@ export class DigitalizedRemitoService {
         });
       }
 
-      // 5. Marca el remito digitalizado como COMPLETADO
+      // 4) Marcar digitalizado como COMPLETED
       return tx.digitalizedRemito.update({
         where: { id },
-        data: { status: DigitalizationStatus.COMPLETED },
+        data: {
+          status: DigitalizationStatus.COMPLETED,
+        },
       });
     });
   }
