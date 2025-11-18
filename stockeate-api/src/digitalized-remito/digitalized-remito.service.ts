@@ -1,196 +1,210 @@
-// src/digitalized-remito/digitalized-remito.service.ts
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DigitalizationStatus, Prisma } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
-import { createWorker, Worker } from 'tesseract.js';
-
-// ID de usuario de fallback (uno que sepamos que existe en tu DB)
-// Podés sobreescribirlo con una env en Render si querés.
-const FALLBACK_USER_ID =
-  process.env.DIGITALIZED_FALLBACK_USER_ID ||
-  '2c8ef635-f304-444f-ab87-430558b4d4ad';
+import { createWorker } from 'tesseract.js';
 
 @Injectable()
 export class DigitalizedRemitoService {
-  private readonly logger = new Logger(DigitalizedRemitoService.name);
-
   constructor(private prisma: PrismaService) {}
 
-  // --- 1) Crear registro inicial y disparar OCR en background ---
+  // ========================
+  // 1) CREAR REGISTRO INICIAL
+  // ========================
   async createInitialRemito(
     file: Express.Multer.File,
     userId: string,
     branchId: string,
   ) {
-    this.logger.log(
-      `[createInitialRemito] userId=${userId} branchId=${branchId} path=${file?.path}`,
-    );
-
-    let newDigitalizedRemito;
-
-    try {
-      // Intento normal con el userId del token
-      newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
-        data: {
-          userId,
-          branchId,
-          originalFileUrl: file.path,
-          status: DigitalizationStatus.PROCESSING,
-        },
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `[createInitialRemito] Error creando con userId=${userId}: ${err?.message}`,
-        err?.stack,
-      );
-
-      // Si es un error de FK (userId no existe), probamos con un fallback
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2003'
-      ) {
-        this.logger.warn(
-          `[createInitialRemito] FK falló con userId=${userId}. Reintentando con FALLBACK_USER_ID=${FALLBACK_USER_ID}`,
-        );
-
-        newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
-          data: {
-            userId: FALLBACK_USER_ID,
-            branchId,
-            originalFileUrl: file.path,
-            status: DigitalizationStatus.PROCESSING,
-          },
-        });
-      } else {
-        // Otro tipo de error -> lo propagamos
-        throw err;
-      }
+    if (!file || !file.path) {
+      throw new BadRequestException('No se recibió ningún archivo válido.');
     }
 
-    // Disparamos OCR en background (si falla, actualizamos estado pero no rompemos el POST)
-    this.processOcr(newDigitalizedRemito.id, file.path).catch((err) => {
-      this.logger.error(
-        `[processOcr] Error NO manejado en background: ${err?.message}`,
-        err?.stack,
-      );
+    const newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
+      data: {
+        userId,
+        branchId,
+        originalFileUrl: file.path,
+        status: DigitalizationStatus.PROCESSING,
+      },
     });
+
+    // Lanzamos el OCR en background (no bloquea la respuesta HTTP)
+    this.processOcrSafe(newDigitalizedRemito.id, file.path);
 
     return newDigitalizedRemito;
   }
 
-  // --- 2) OCR con Tesseract protegido ---
-  private async processOcr(remitoId: string, filePath: string) {
-    this.logger.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
-    let worker: Worker | null = null;
+  // ========================
+  // 2) OCR + PARSER (ROBUSTO)
+  // ========================
+  private async processOcrSafe(remitoId: string, filePath: string) {
+    console.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
+    let worker: any;
 
     try {
+      // Si es PDF, Tesseract.js a veces falla -> seguimos intentando igual,
+      // pero si explota usamos datos por defecto.
       worker = await createWorker('spa');
-      const ret = await worker.recognize(filePath);
-      const textoExtraido = ret.data.text;
 
-      this.logger.log(
+      const ret = await worker.recognize(filePath);
+      const textoExtraido = ret.data.text || '';
+      console.log(
         `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(
           0,
           400,
         )}...`,
       );
 
-      const parsedData = this.parsearTextoDeTesseract(textoExtraido);
+      let parsedData = this.parsearTextoDeTesseract(textoExtraido);
+
+      // Si no se pudo sacar nada útil, generamos un objeto base para editar a mano
+      if (!parsedData || !parsedData.items || parsedData.items.length === 0) {
+        parsedData = this.buildFallbackData();
+      }
 
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          extractedData: parsedData,
+          extractedData: parsedData as Prisma.JsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
+          errorMessage: null,
         },
       });
 
-      this.logger.log(
-        `[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `[OCR] Falló el procesamiento para: ${remitoId} - ${error?.message}`,
-        error?.stack,
-      );
+      console.log(`[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`);
+    } catch (error) {
+      console.error(`[OCR] Falló el procesamiento para: ${remitoId}`, error);
+
+      // ⬇️ En lugar de dejarlo en FAILED, lo dejamos en PENDING_VALIDATION
+      // con datos mínimos para poder editarlo en la app.
+      const fallback = this.buildFallbackData();
 
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          status: DigitalizationStatus.FAILED,
-          errorMessage: error?.message ?? 'OCR error',
+          extractedData: fallback as Prisma.JsonValue,
+          status: DigitalizationStatus.PENDING_VALIDATION,
+          errorMessage: (error as Error).message,
         },
       });
+
+      console.log(
+        `[OCR] Marcado como PENDING_VALIDATION con datos básicos para: ${remitoId}`,
+      );
     } finally {
       if (worker) {
-        try {
-          await worker.terminate();
-        } catch (e: any) {
-          this.logger.warn(
-            `[OCR] Error al terminar worker: ${e?.message}`,
-            e?.stack,
-          );
-        }
+        await worker.terminate();
       }
-      this.logger.log(
-        `[OCR] Trabajador Tesseract terminado para: ${remitoId}`,
-      );
+      console.log(`[OCR] Trabajador Tesseract terminado para: ${remitoId}`);
     }
   }
 
-  // --- 3) Parser mejorado ---
+  // =========================================
+  // 3) PARSER MEJORADO (SE PUEDE IR AJUSTANDO)
+  // =========================================
   private parsearTextoDeTesseract(texto: string): any {
-    this.logger.log('[Parser] Analizando texto real con Regex...');
+    console.log('[Parser] Analizando texto real con Regex...');
 
     type ExtractedItem = {
       detectedCode: string;
       detectedName: string;
       qty: number;
     };
-
     const items: ExtractedItem[] = [];
 
+    // --- Diccionario de Variaciones (Regex) ---
+    // (i = ignora mayúsculas, m = multilínea)
+
+    // Patrones de Proveedor (Razón Social)
     const patronesProveedor: RegExp[] = [
-      /Razón Social\s*[:—]\s*(.*)/im,
-      /Señor\(es\)\s*[:—]\s*(.*)/im,
-      /Cliente\s*[:—]\s*(.*)/im,
+      /Raz[oó]n Social\s*[:—-]\s*(.+)/im,
+      /Señor\(es\)\s*[:—-]\s*(.+)/im,
+      /Cliente\s*[:—-]\s*(.+)/im,
+      /Proveedor\s*[:—-]\s*(.+)/im,
     ];
 
+    // Patrones de Fecha
     const patronesFecha: RegExp[] = [
-      /Fecha (?:de Emisión)?\s*[:—]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
-      /(\d{2}[\/-]\d{2}[\/-]\d{4})/im,
+      /Fecha(?: de Emisi[oó]n)?\s*[:—-]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
+      /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
     ];
 
+    // Patrones de CUIT
     const patronesCuit: RegExp[] = [
-      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—]?\s*(\d{2}-\d{8}-\d{1})/im,
-      /(\d{2}-\d{8}-\d{1})/im,
+      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—-]?\s*(\d{2}-\d{8}-\d)/im,
+      /(\d{2}-\d{8}-\d)/im,
     ];
 
+    // Patrones de Dirección
     const patronesDireccion: RegExp[] = [
-      /Dirección\s*[:—]?\s*(.*)/im,
-      /Domicilio\s*[:—]?\s*(.*)/im,
+      /Direcci[oó]n\s*[:—-]?\s*(.+)/im,
+      /Domicilio\s*[:—-]?\s*(.+)/im,
     ];
 
     const provider =
       this.findFirstMatch(texto, patronesProveedor) ||
-      'Proveedor (No detectado)';
+      'Proveedor (no detectado)';
     const date =
       this.findFirstMatch(texto, patronesFecha) ||
-      new Date().toISOString().slice(0, 10);
+      new Date().toLocaleDateString('es-AR');
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
+    // --- BUSCAR POSIBLE TABLA DE ÍTEMS (heurística simple) ---
+    const lineas = texto.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    // Detectamos una línea de cabecera típico de remito
+    const indiceHeader = lineas.findIndex((line) =>
+      /(c[oó]digo|c[oó]d|art[ií]culo).*(descripci[oó]n|detalle).*(cant\.?|cantidad)/i.test(
+        line,
+      ),
+    );
+
+    if (indiceHeader >= 0) {
+      for (let i = indiceHeader + 1; i < lineas.length; i++) {
+        const linea = lineas[i];
+
+        // Cortamos cuando llegamos a totales o pie del remito
+        if (/total/i.test(linea)) break;
+
+        // Intento básico: [CÓDIGO] [DESCRIPCIÓN.....] [CANTIDAD]
+        const partes = linea.split(/\s{2,}/); // separamos por 2+ espacios
+
+        if (partes.length >= 2) {
+          const primera = partes[0].trim();
+          const ultima = partes[partes.length - 1].trim();
+
+          // Candidatos a cantidad (entero pequeño)
+          const qty = parseInt(ultima, 10);
+          if (!isNaN(qty) && qty > 0 && qty < 10000) {
+            const codigo = primera;
+            const nombre = partes
+              .slice(1, partes.length - 1)
+              .join(' ')
+              .trim();
+
+            items.push({
+              detectedCode: codigo || 'SIN-CODIGO',
+              detectedName: nombre || 'Producto sin nombre',
+              qty,
+            });
+          }
+        }
+      }
+    }
+
     if (items.length === 0) {
+      // Si no encontramos nada, devolvemos un ítem genérico editable
       items.push({
-        detectedCode: '???',
-        detectedName: 'Ítem no detectado (Editar)',
+        detectedCode: '',
+        detectedName: 'Ítem no detectado (completar manualmente)',
         qty: 1,
       });
     }
 
-    this.logger.log(
-      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}`,
+    console.log(
+      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}, Ítems: ${items.length}`,
     );
 
     return {
@@ -203,18 +217,39 @@ export class DigitalizedRemitoService {
     };
   }
 
+  // Fallback por si el OCR falla por completo
+  private buildFallbackData(): any {
+    return {
+      provider: 'Proveedor (completar manualmente)',
+      date: new Date().toLocaleDateString('es-AR'),
+      customerCuit: '',
+      customerAddress: '',
+      customerTaxCondition: '',
+      items: [
+        {
+          detectedCode: '',
+          detectedName: 'Ítem no detectado (completar manualmente)',
+          qty: 1,
+        },
+      ],
+    };
+  }
+
+  // Helper genérico
   private findFirstMatch(texto: string, patrones: RegExp[]): string | null {
     for (const patron of patrones) {
       const match = texto.match(patron);
       if (match && match[1]) {
-        const resultadoLimpio = match[1].trim().split('\n')[0];
-        if (resultadoLimpio) return resultadoLimpio;
+        const limpio = match[1].trim().split('\n')[0];
+        if (limpio) return limpio;
       }
     }
     return null;
   }
 
-  // --- 4) Pendientes por sucursal ---
+  // ========================
+  // 4) LISTAR PENDIENTES
+  // ========================
   async findPendingByBranch(branchId: string) {
     return this.prisma.digitalizedRemito.findMany({
       where: { branchId, status: DigitalizationStatus.PENDING_VALIDATION },
@@ -222,7 +257,9 @@ export class DigitalizedRemitoService {
     });
   }
 
-  // --- 5) Detalle de uno ---
+  // ========================
+  // 5) OBTENER UNO
+  // ========================
   async findOne(id: string) {
     const remito = await this.prisma.digitalizedRemito.findUnique({
       where: { id },
@@ -235,7 +272,9 @@ export class DigitalizedRemitoService {
     return remito;
   }
 
-  // --- 6) Validar y crear remito de entrada + stock ---
+  // ========================
+  // 6) VALIDAR Y FINALIZAR
+  // ========================
   async validateAndFinalizeRemito(id: string, validationData: ValidationDataDto) {
     return this.prisma.$transaction(async (tx) => {
       const digitalizedRemito = await tx.digitalizedRemito.findUnique({
@@ -257,8 +296,8 @@ export class DigitalizedRemitoService {
             product = await tx.product.create({
               data: {
                 branchId: digitalizedRemito.branchId,
-                code: item.detectedCode,
-                name: item.detectedName,
+                code: item.detectedCode || `AUTO-${Date.now()}`,
+                name: item.detectedName || 'Producto sin nombre',
                 stock: 0,
                 isActive: true,
               },
