@@ -1,11 +1,11 @@
-﻿// src/api.ts
-import axios, { AxiosRequestHeaders } from "axios";
+﻿import axios, { AxiosRequestHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://stockeate.onrender.com"; // <-- O tu ngrok si estás probando
+  "https://stockeate.onrender.com";
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({
@@ -16,14 +16,12 @@ export const api = axios.create({
 // Interceptor de Debug "Rayos X"
 api.interceptors.request.use((request) => {
   console.log(
-    `🚀 [AXIOS RAY-X] Petición: ${request.method?.toUpperCase()} ${
-      request.baseURL
-    }${request.url}`
+    `🚀 [AXIOS RAY-X] Petición: ${request.method?.toUpperCase()} ${request.baseURL}${request.url}`
   );
   return request;
 });
 
-// Interceptor de Token (antes de enviar)
+// Interceptor de Token
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("token");
@@ -39,26 +37,7 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// 🔴 Interceptor de RESPUESTA -> manejar 401 (token vencido / inválido)
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const status = error?.response?.status;
-    if (status === 401) {
-      console.warn("[API] 401 no autorizado. Eliminando token guardado.");
-      try {
-        await AsyncStorage.removeItem("token");
-      } catch (e) {
-        console.error("Error limpiando token al recibir 401", e);
-      }
-      // acá podrías, si querés, marcar el error
-      // error.isUnauthorized = true;
-    }
-    return Promise.reject(error);
-  }
-);
-
-// -------- Pull (para sync) --------
+// -------- Wake / Health --------
 export async function wakeServer() {
   try {
     await api.get("/health", { timeout: 5000 });
@@ -69,18 +48,17 @@ export async function wakeServer() {
   }
 }
 
-// --- 👇 TIPO ACTUALIZADO ---
+// -------- Tipos de Sync --------
 export type PullProduct = {
-  id: string; // <-- 1. ¡ESTA ES LA LÍNEA QUE FALTABA!
+  id: string;
   code: string;
   name: string;
   price?: number;
   stock?: number;
   branch_id: string;
   updated_at?: number;
-  archived?: number; // Añadido para consistencia
+  archived?: number;
 };
-// --- FIN DEL CAMBIO ---
 
 export type PullMove = {
   id: string;
@@ -91,7 +69,6 @@ export type PullMove = {
   created_at?: number;
 };
 
-// --- 👇 TIPO ACTUALIZADO ---
 export type PullRemito = {
   id: string;
   tmpNumber: string;
@@ -104,7 +81,6 @@ export type PullRemito = {
   branchId: string;
 };
 
-// --- 👇 TIPO ACTUALIZADO ---
 export type PullRemitoItem = {
   id: string;
   remitoId: string;
@@ -113,7 +89,6 @@ export type PullRemitoItem = {
   unitPrice: number;
 };
 
-// --- 👇 PullPayload ACTUALIZADO ---
 export type PullPayload = {
   clock: number;
   full: boolean;
@@ -133,27 +108,56 @@ export async function pullFromServer(
   return data;
 }
 
-// --- Función 'uploadRemitoFile' ---
+// -------- Upload de Remito (imagen/PDF) --------
 export async function uploadRemitoFile(
   file: { uri: string; name: string; type?: string },
   branchId: string
 ) {
   const formData = new FormData();
-  formData.append(
-    "file",
-    {
-      uri: file.uri,
-      name: file.name,
-      type: file.type || "application/octet-stream",
-    } as any
-  );
+
+  if (Platform.OS === "web") {
+    // 🕸️ WEB: el uri suele ser blob:, lo convertimos a Blob real
+    const response = await fetch(file.uri);
+    const blob = await response.blob();
+    formData.append("file", blob, file.name);
+  } else {
+    // 📱 NATIVO: usamos el objeto con uri
+    formData.append(
+      "file",
+      {
+        uri: file.uri,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+      } as any
+    );
+  }
+
   formData.append("branchId", branchId);
 
-  const { data } = await api.post("/digitalized-remito/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      "ngrok-skip-browser-warning": "true",
-    },
-  });
-  return data;
+  // Importante: NO forzar Content-Type,
+  // dejamos que Axios / RN / navegador agreguen el boundary correcto.
+  const headers: Record<string, string> = {
+    "ngrok-skip-browser-warning": "true",
+  };
+
+  try {
+    const { data } = await api.post("/digitalized-remito/upload", formData, {
+      headers,
+    });
+    return data;
+  } catch (error: any) {
+    console.error(
+      "Error en uploadRemitoFile:",
+      JSON.stringify(
+        {
+          message: error?.message,
+          status: error?.response?.status,
+          data: error?.response?.data,
+        },
+        null,
+        2
+      )
+    );
+    throw error;
+  }
 }

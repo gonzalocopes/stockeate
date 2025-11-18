@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   SafeAreaView,
-  Platform,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -20,7 +19,7 @@ import { useThemeStore } from "../stores/themeProviders";
 type SelectedFile = {
   uri: string;
   name: string;
-  mimeType?: string;
+  type?: string; // 👈 importante para el FormData
 };
 
 export default function UploadRemitoScreen({ navigation }: any) {
@@ -29,64 +28,60 @@ export default function UploadRemitoScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const branchId = useBranch((s) => s.id);
 
-  // ------------ Seleccionar archivo (imagen o PDF) ------------
+  // -------- Seleccionar PDF / Imagen desde archivos --------
   const selectFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/png", "image/jpeg", "application/pdf"],
+        copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setSelectedFile({
           uri: asset.uri,
-          name: asset.name,
-          mimeType: asset.mimeType,
+          name: asset.name ?? "remito",
+          type: asset.mimeType ?? "application/octet-stream",
         });
       }
     } catch (error) {
       Alert.alert("Error", "No se pudo seleccionar el archivo.");
-      console.error(error);
+      console.error("Error en selectFile:", error);
     }
   };
 
-  // ------------ Sacar foto con la cámara ------------
+  // -------- Sacar foto con la cámara --------
   const takePhoto = async () => {
-    if (Platform.OS === "web") {
-      Alert.alert("Cámara no disponible", "En la versión web no se puede usar la cámara.");
-      return;
-    }
-
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Permiso denegado",
-          "Necesitamos acceso a la cámara para tomar una foto del remito."
+          "Necesitamos acceso a la cámara para sacar la foto del remito."
         );
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
         quality: 0.8,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setSelectedFile({
           uri: asset.uri,
-          name: asset.fileName ?? "foto-remito.jpg",
-          mimeType: asset.type === "image" ? "image/jpeg" : undefined,
+          name: "foto-remito.jpg",
+          type: "image/jpeg",
         });
       }
     } catch (error) {
       Alert.alert("Error", "No se pudo usar la cámara.");
-      console.error(error);
+      console.error("Error en takePhoto:", error);
     }
   };
 
-  // ------------ Subir y procesar ------------
+  // -------- Subir y procesar --------
   const handleUpload = async () => {
     if (!selectedFile) return;
 
@@ -98,7 +93,16 @@ export default function UploadRemitoScreen({ navigation }: any) {
     setIsLoading(true);
 
     try {
-      const newDigitalizedRemito = await uploadRemitoFile(selectedFile, branchId);
+      console.log("[Upload] Enviando archivo:", selectedFile, "branch:", branchId);
+
+      const newDigitalizedRemito = await uploadRemitoFile(
+        {
+          uri: selectedFile.uri,
+          name: selectedFile.name,
+          type: selectedFile.type,
+        },
+        branchId
+      );
 
       if (!newDigitalizedRemito || !newDigitalizedRemito.id) {
         throw new Error("La API no devolvió un ID para el remito procesado.");
@@ -106,11 +110,12 @@ export default function UploadRemitoScreen({ navigation }: any) {
 
       setSelectedFile(null);
 
+      // Navegar directo a la pantalla de validación
       navigation.navigate("Validation", {
         remitoId: newDigitalizedRemito.id,
       });
-    } catch (error) {
-      console.error(JSON.stringify(error, null, 2));
+    } catch (error: any) {
+      console.error("Error en handleUpload:", error);
       Alert.alert(
         "Error",
         "No se pudo subir el archivo. Revisa tu conexión y la URL de la API."
@@ -120,8 +125,8 @@ export default function UploadRemitoScreen({ navigation }: any) {
     }
   };
 
-  // ------------ Render ------------
-  const isImage = selectedFile?.mimeType?.startsWith("image/");
+  // -------- UI --------
+  const isImage = selectedFile?.type?.startsWith("image/");
 
   return (
     <SafeAreaView
@@ -155,7 +160,7 @@ export default function UploadRemitoScreen({ navigation }: any) {
             ]}
           >
             <Text style={{ color: theme.colors.textMuted }}>
-              Selecciona un archivo o toma una foto para previsualizar
+              Selecciona un archivo o saca una foto para previsualizar
             </Text>
           </View>
         )}
@@ -166,18 +171,12 @@ export default function UploadRemitoScreen({ navigation }: any) {
             onPress={selectFile}
             color={theme.colors.primary}
           />
-
-          {Platform.OS !== "web" && (
-            <>
-              <View style={{ height: 8 }} />
-              <Button
-                title="Sacar foto del remito"
-                onPress={takePhoto}
-                color={theme.colors.primary}
-              />
-            </>
-          )}
-
+          <View style={{ height: 8 }} />
+          <Button
+            title="Sacar foto del remito"
+            onPress={takePhoto}
+            color={theme.colors.primary}
+          />
           <View style={{ height: 16 }} />
 
           {isLoading ? (
