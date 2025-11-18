@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// src/digitalized-remito/digitalized-remito.service.ts
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DigitalizationStatus } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
@@ -6,6 +7,8 @@ import { createWorker, Worker } from 'tesseract.js';
 
 @Injectable()
 export class DigitalizedRemitoService {
+  private readonly logger = new Logger(DigitalizedRemitoService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // --- MÉTODO 1: crear registro inicial y disparar OCR en background ---
@@ -14,35 +17,73 @@ export class DigitalizedRemitoService {
     userId: string,
     branchId: string,
   ) {
-    const newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
-      data: {
-        userId,
-        branchId,
-        originalFileUrl: file.path,
-        status: DigitalizationStatus.PROCESSING,
-      },
-    });
+    this.logger.log(
+      `[createInitialRemito] userId=${userId} branchId=${branchId} path=${file?.path}`,
+    );
 
-    // Disparamos el OCR en background, pero SIEMPRE atrapamos errores
+    let newDigitalizedRemito;
+
+    try {
+      // Intento "normal" usando el userId del token
+      newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
+        data: {
+          userId,
+          branchId,
+          originalFileUrl: file.path,
+          status: DigitalizationStatus.PROCESSING,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `[createInitialRemito] Error creando con userId=${userId}: ${err?.message}`,
+        err?.stack,
+      );
+
+      // 🔥 Parche de desarrollo: si el problema es FK con userId, reintentamos SIN userId
+      try {
+        newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
+          data: {
+            // userId omitido a propósito
+            branchId,
+            originalFileUrl: file.path,
+            status: DigitalizationStatus.PROCESSING,
+          },
+        });
+        this.logger.warn(
+          `[createInitialRemito] Creado sin userId por error anterior.`,
+        );
+      } catch (err2: any) {
+        this.logger.error(
+          `[createInitialRemito] Error también sin userId: ${err2?.message}`,
+          err2?.stack,
+        );
+        // Si también falla, dejamos que suba la excepción (Nest responderá 500)
+        throw err2;
+      }
+    }
+
+    // Disparamos el OCR en background, pero siempre atrapando errores
     this.processOcr(newDigitalizedRemito.id, file.path).catch((err) => {
-      console.error('[OCR] Error no manejado en background:', err);
+      this.logger.error(
+        `[processOcr] Error no manejado en background: ${err?.message}`,
+        err?.stack,
+      );
     });
 
     return newDigitalizedRemito;
   }
 
-  // --- MÉTODO 2: OCR con Tesseract (protegido con try/catch desde createWorker) ---
+  // --- MÉTODO 2: OCR con Tesseract protegido ---
   private async processOcr(remitoId: string, filePath: string) {
-    console.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
+    this.logger.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
     let worker: Worker | null = null;
 
     try {
-      // AHORA el createWorker también está dentro del try
       worker = await createWorker('spa');
 
       const ret = await worker.recognize(filePath);
       const textoExtraido = ret.data.text;
-      console.log(
+      this.logger.log(
         `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(
           0,
           400,
@@ -59,33 +100,42 @@ export class DigitalizedRemitoService {
         },
       });
 
-      console.log(`[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`);
-    } catch (error) {
-      console.error(`[OCR] Falló el procesamiento para: ${remitoId}`, error);
+      this.logger.log(
+        `[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[OCR] Falló el procesamiento para: ${remitoId} - ${error?.message}`,
+        error?.stack,
+      );
 
-      // Marcamos el remito como FAILED para que el front pueda mostrar un mensaje
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
           status: DigitalizationStatus.FAILED,
-          errorMessage: (error as Error).message,
+          errorMessage: error?.message ?? 'OCR error',
         },
       });
     } finally {
       if (worker) {
         try {
           await worker.terminate();
-        } catch (e) {
-          console.warn('[OCR] Error al terminar worker:', e);
+        } catch (e: any) {
+          this.logger.warn(
+            `[OCR] Error al terminar worker: ${e?.message}`,
+            e?.stack,
+          );
         }
       }
-      console.log(`[OCR] Trabajador Tesseract terminado para: ${remitoId}`);
+      this.logger.log(
+        `[OCR] Trabajador Tesseract terminado para: ${remitoId}`,
+      );
     }
   }
 
-  // --- MÉTODO 3: Parser mejorado ---
+  // --- MÉTODO 3: Parser ---
   private parsearTextoDeTesseract(texto: string): any {
-    console.log('[Parser] Analizando texto real con Regex...');
+    this.logger.log('[Parser] Analizando texto real con Regex...');
 
     type ExtractedItem = {
       detectedCode: string;
@@ -132,7 +182,7 @@ export class DigitalizedRemitoService {
       });
     }
 
-    console.log(
+    this.logger.log(
       `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}`,
     );
 
