@@ -1,9 +1,15 @@
 // src/digitalized-remito/digitalized-remito.service.ts
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { DigitalizationStatus } from '@prisma/client';
+import { DigitalizationStatus, Prisma } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
 import { createWorker, Worker } from 'tesseract.js';
+
+// ID de usuario de fallback (uno que sepamos que existe en tu DB)
+// Podés sobreescribirlo con una env en Render si querés.
+const FALLBACK_USER_ID =
+  process.env.DIGITALIZED_FALLBACK_USER_ID ||
+  '2c8ef635-f304-444f-ab87-430558b4d4ad';
 
 @Injectable()
 export class DigitalizedRemitoService {
@@ -11,7 +17,7 @@ export class DigitalizedRemitoService {
 
   constructor(private prisma: PrismaService) {}
 
-  // --- MÉTODO 1: crear registro inicial y disparar OCR en background ---
+  // --- 1) Crear registro inicial y disparar OCR en background ---
   async createInitialRemito(
     file: Express.Multer.File,
     userId: string,
@@ -24,7 +30,7 @@ export class DigitalizedRemitoService {
     let newDigitalizedRemito;
 
     try {
-      // Intento "normal" usando el userId del token
+      // Intento normal con el userId del token
       newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
         data: {
           userId,
@@ -39,33 +45,33 @@ export class DigitalizedRemitoService {
         err?.stack,
       );
 
-      // 🔥 Parche de desarrollo: si el problema es FK con userId, reintentamos SIN userId
-      try {
+      // Si es un error de FK (userId no existe), probamos con un fallback
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2003'
+      ) {
+        this.logger.warn(
+          `[createInitialRemito] FK falló con userId=${userId}. Reintentando con FALLBACK_USER_ID=${FALLBACK_USER_ID}`,
+        );
+
         newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
           data: {
-            // userId omitido a propósito
+            userId: FALLBACK_USER_ID,
             branchId,
             originalFileUrl: file.path,
             status: DigitalizationStatus.PROCESSING,
           },
         });
-        this.logger.warn(
-          `[createInitialRemito] Creado sin userId por error anterior.`,
-        );
-      } catch (err2: any) {
-        this.logger.error(
-          `[createInitialRemito] Error también sin userId: ${err2?.message}`,
-          err2?.stack,
-        );
-        // Si también falla, dejamos que suba la excepción (Nest responderá 500)
-        throw err2;
+      } else {
+        // Otro tipo de error -> lo propagamos
+        throw err;
       }
     }
 
-    // Disparamos el OCR en background, pero siempre atrapando errores
+    // Disparamos OCR en background (si falla, actualizamos estado pero no rompemos el POST)
     this.processOcr(newDigitalizedRemito.id, file.path).catch((err) => {
       this.logger.error(
-        `[processOcr] Error no manejado en background: ${err?.message}`,
+        `[processOcr] Error NO manejado en background: ${err?.message}`,
         err?.stack,
       );
     });
@@ -73,16 +79,16 @@ export class DigitalizedRemitoService {
     return newDigitalizedRemito;
   }
 
-  // --- MÉTODO 2: OCR con Tesseract protegido ---
+  // --- 2) OCR con Tesseract protegido ---
   private async processOcr(remitoId: string, filePath: string) {
     this.logger.log(`[OCR] Iniciando Tesseract para: ${remitoId}`);
     let worker: Worker | null = null;
 
     try {
       worker = await createWorker('spa');
-
       const ret = await worker.recognize(filePath);
       const textoExtraido = ret.data.text;
+
       this.logger.log(
         `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(
           0,
@@ -133,7 +139,7 @@ export class DigitalizedRemitoService {
     }
   }
 
-  // --- MÉTODO 3: Parser ---
+  // --- 3) Parser mejorado ---
   private parsearTextoDeTesseract(texto: string): any {
     this.logger.log('[Parser] Analizando texto real con Regex...');
 
@@ -142,6 +148,7 @@ export class DigitalizedRemitoService {
       detectedName: string;
       qty: number;
     };
+
     const items: ExtractedItem[] = [];
 
     const patronesProveedor: RegExp[] = [
@@ -207,7 +214,7 @@ export class DigitalizedRemitoService {
     return null;
   }
 
-  // --- MÉTODO 4 ---
+  // --- 4) Pendientes por sucursal ---
   async findPendingByBranch(branchId: string) {
     return this.prisma.digitalizedRemito.findMany({
       where: { branchId, status: DigitalizationStatus.PENDING_VALIDATION },
@@ -215,7 +222,7 @@ export class DigitalizedRemitoService {
     });
   }
 
-  // --- MÉTODO 5 ---
+  // --- 5) Detalle de uno ---
   async findOne(id: string) {
     const remito = await this.prisma.digitalizedRemito.findUnique({
       where: { id },
@@ -228,7 +235,7 @@ export class DigitalizedRemitoService {
     return remito;
   }
 
-  // --- MÉTODO 6 ---
+  // --- 6) Validar y crear remito de entrada + stock ---
   async validateAndFinalizeRemito(id: string, validationData: ValidationDataDto) {
     return this.prisma.$transaction(async (tx) => {
       const digitalizedRemito = await tx.digitalizedRemito.findUnique({
