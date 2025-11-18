@@ -43,8 +43,6 @@ export class DigitalizedRemitoService {
     let worker: any;
 
     try {
-      // Si es PDF, Tesseract.js a veces falla -> seguimos intentando igual,
-      // pero si explota usamos datos por defecto.
       worker = await createWorker('spa');
 
       const ret = await worker.recognize(filePath);
@@ -58,7 +56,6 @@ export class DigitalizedRemitoService {
 
       let parsedData = this.parsearTextoDeTesseract(textoExtraido);
 
-      // Si no se pudo sacar nada útil, generamos un objeto base para editar a mano
       if (!parsedData || !parsedData.items || parsedData.items.length === 0) {
         parsedData = this.buildFallbackData();
       }
@@ -66,7 +63,8 @@ export class DigitalizedRemitoService {
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          extractedData: parsedData as Prisma.JsonValue,
+          // ⬇️ CAMBIO: casteamos a InputJsonValue (aceptado por Prisma)
+          extractedData: parsedData as Prisma.InputJsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
           errorMessage: null,
         },
@@ -76,14 +74,13 @@ export class DigitalizedRemitoService {
     } catch (error) {
       console.error(`[OCR] Falló el procesamiento para: ${remitoId}`, error);
 
-      // ⬇️ En lugar de dejarlo en FAILED, lo dejamos en PENDING_VALIDATION
-      // con datos mínimos para poder editarlo en la app.
       const fallback = this.buildFallbackData();
 
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          extractedData: fallback as Prisma.JsonValue,
+          // ⬇️ CAMBIO: idem acá
+          extractedData: fallback as Prisma.InputJsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
           errorMessage: (error as Error).message,
         },
@@ -113,10 +110,6 @@ export class DigitalizedRemitoService {
     };
     const items: ExtractedItem[] = [];
 
-    // --- Diccionario de Variaciones (Regex) ---
-    // (i = ignora mayúsculas, m = multilínea)
-
-    // Patrones de Proveedor (Razón Social)
     const patronesProveedor: RegExp[] = [
       /Raz[oó]n Social\s*[:—-]\s*(.+)/im,
       /Señor\(es\)\s*[:—-]\s*(.+)/im,
@@ -124,19 +117,16 @@ export class DigitalizedRemitoService {
       /Proveedor\s*[:—-]\s*(.+)/im,
     ];
 
-    // Patrones de Fecha
     const patronesFecha: RegExp[] = [
       /Fecha(?: de Emisi[oó]n)?\s*[:—-]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
       /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
     ];
 
-    // Patrones de CUIT
     const patronesCuit: RegExp[] = [
       /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—-]?\s*(\d{2}-\d{8}-\d)/im,
       /(\d{2}-\d{8}-\d)/im,
     ];
 
-    // Patrones de Dirección
     const patronesDireccion: RegExp[] = [
       /Direcci[oó]n\s*[:—-]?\s*(.+)/im,
       /Domicilio\s*[:—-]?\s*(.+)/im,
@@ -151,10 +141,11 @@ export class DigitalizedRemitoService {
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
-    // --- BUSCAR POSIBLE TABLA DE ÍTEMS (heurística simple) ---
-    const lineas = texto.split('\n').map((l) => l.trim()).filter(Boolean);
+    const lineas = texto
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
-    // Detectamos una línea de cabecera típico de remito
     const indiceHeader = lineas.findIndex((line) =>
       /(c[oó]digo|c[oó]d|art[ií]culo).*(descripci[oó]n|detalle).*(cant\.?|cantidad)/i.test(
         line,
@@ -165,17 +156,14 @@ export class DigitalizedRemitoService {
       for (let i = indiceHeader + 1; i < lineas.length; i++) {
         const linea = lineas[i];
 
-        // Cortamos cuando llegamos a totales o pie del remito
         if (/total/i.test(linea)) break;
 
-        // Intento básico: [CÓDIGO] [DESCRIPCIÓN.....] [CANTIDAD]
-        const partes = linea.split(/\s{2,}/); // separamos por 2+ espacios
+        const partes = linea.split(/\s{2,}/);
 
         if (partes.length >= 2) {
           const primera = partes[0].trim();
           const ultima = partes[partes.length - 1].trim();
 
-          // Candidatos a cantidad (entero pequeño)
           const qty = parseInt(ultima, 10);
           if (!isNaN(qty) && qty > 0 && qty < 10000) {
             const codigo = primera;
@@ -195,7 +183,6 @@ export class DigitalizedRemitoService {
     }
 
     if (items.length === 0) {
-      // Si no encontramos nada, devolvemos un ítem genérico editable
       items.push({
         detectedCode: '',
         detectedName: 'Ítem no detectado (completar manualmente)',
@@ -217,7 +204,6 @@ export class DigitalizedRemitoService {
     };
   }
 
-  // Fallback por si el OCR falla por completo
   private buildFallbackData(): any {
     return {
       provider: 'Proveedor (completar manualmente)',
@@ -235,7 +221,6 @@ export class DigitalizedRemitoService {
     };
   }
 
-  // Helper genérico
   private findFirstMatch(texto: string, patrones: RegExp[]): string | null {
     for (const patron of patrones) {
       const match = texto.match(patron);
