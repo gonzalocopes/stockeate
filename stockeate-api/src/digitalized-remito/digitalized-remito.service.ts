@@ -203,7 +203,10 @@ export class DigitalizedRemitoService {
   }
 
   // -------- 6) Validar y crear Remito de entrada + stock  ----------
-  async validateAndFinalizeRemito(id: string, validationData: ValidationDataDto) {
+  async validateAndFinalizeRemito(
+    id: string,
+    validationData: ValidationDataDto,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Buscar el remito digitalizado
       const digitalizedRemito = await tx.digitalizedRemito.findUnique({
@@ -223,13 +226,16 @@ export class DigitalizedRemitoService {
 
       // 2. Procesar ítems: buscar/crear productos y calcular precio
       const processedItems = await Promise.all(
-        (validationData.items || []).map(async (item) => {
+        (validationData.items || []).map(async (item, index) => {
           const rawCode = (item.detectedCode || '').trim();
           const name =
             (item.detectedName || '').trim() || 'Producto sin nombre';
-          const qty = Number(item.qty) || 0;
 
-          // Precio recibido desde la app (puede venir en item.unitPrice)
+          // 👉 Normalizamos la cantidad: si viene vacía, 0 o rara, usamos 1
+          const rawQty = Number(item.qty);
+          const qty = !isNaN(rawQty) && rawQty > 0 ? rawQty : 1;
+
+          // Precio recibido desde la app (puede venir en item.unitPrice o item.price)
           const unitPriceNumber =
             Number((item as any).unitPrice ?? (item as any).price ?? 0) || 0;
           const unitPriceDecimal = new Prisma.Decimal(unitPriceNumber);
@@ -238,6 +244,10 @@ export class DigitalizedRemitoService {
           const code =
             rawCode ||
             `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+          this.logger.log(
+            `[validateAndFinalizeRemito] Ítem #${index} -> code=${code}, name="${name}", qty=${qty}, price=${unitPriceNumber}`,
+          );
 
           // Buscar producto por código + sucursal
           let product = await tx.product.findFirst({
@@ -251,11 +261,15 @@ export class DigitalizedRemitoService {
                 branchId,
                 code,
                 name,
-                price: unitPriceDecimal, // 👈 IMPORTANTE: guardamos precio en el producto
+                price: unitPriceDecimal, // 👈 guardamos precio en el producto
                 stock: 0,
                 isActive: true,
               },
             });
+
+            this.logger.log(
+              `[validateAndFinalizeRemito] Producto creado -> id=${product.id}, code=${code}`,
+            );
           } else {
             // Si ya existe, opcionalmente actualizamos el precio si vino > 0
             if (unitPriceNumber > 0) {
@@ -263,6 +277,9 @@ export class DigitalizedRemitoService {
                 where: { id: product.id },
                 data: { price: unitPriceDecimal },
               });
+              this.logger.log(
+                `[validateAndFinalizeRemito] Precio actualizado para product=${product.id} -> ${unitPriceNumber}`,
+              );
             }
           }
 
@@ -297,10 +314,9 @@ export class DigitalizedRemitoService {
         },
       });
 
-      // 4. Actualizar stock y movimientos
+      // 4. Actualizar stock y movimientos (YA NO SALTEAMOS ÍTEMS)
       for (const item of processedItems) {
-        if (!item.qty || item.qty === 0) continue;
-
+        // Siempre incrementamos al menos 1
         await tx.product.update({
           where: { id: item.productId },
           data: { stock: { increment: item.qty } },
@@ -315,6 +331,10 @@ export class DigitalizedRemitoService {
             ref: `Remito de entrada ${newRemito.tmpNumber}`,
           },
         });
+
+        this.logger.log(
+          `[validateAndFinalizeRemito] Stock incrementado -> product=${item.productId}, +${item.qty}`,
+        );
       }
 
       // 5. Marcar el remito digitalizado como COMPLETED
