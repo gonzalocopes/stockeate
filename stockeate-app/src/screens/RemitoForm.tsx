@@ -1,9 +1,9 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -109,16 +109,16 @@ export default function RemitoForm({ navigation }: any) {
         </Text>
       </View>
       <View style={styles.itemActions}>
-        <TouchableOpacity onPress={() => dec(item.code)} style={[styles.itemButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.card }]} activeOpacity={0.8}>
+        <Pressable onPress={() => dec(item.code)} style={[styles.itemButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.card }]}> 
           <Text style={[styles.itemButtonText, { color: theme.colors.primary }]}>-</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={[styles.itemQty, { color: theme.colors.text }]}>{item.qty}</Text>
-        <TouchableOpacity onPress={() => addOrInc(item, 1)} style={[styles.itemButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary }]} activeOpacity={0.8}>
+        <Pressable onPress={() => addOrInc(item, 1)} style={[styles.itemButton, { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary }]}> 
           <Text style={[styles.itemButtonText, { color: "white" }]}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => remove(item.code)} style={[styles.itemButton, { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger, marginLeft: 6 }]} activeOpacity={0.8}>
+        </Pressable>
+        <Pressable onPress={() => remove(item.code)} style={[styles.itemButton, { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger, marginLeft: 6 }]}> 
           <Text style={[styles.itemButtonText, { color: "white" }]}>🗑️</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );
@@ -264,13 +264,13 @@ export default function RemitoForm({ navigation }: any) {
         {/* --- 👇 CAMBIO 1 DE 2: Encabezado de Items con botón de búsqueda --- */}
         <View style={styles.itemsHeader}>
           <Text style={[styles.itemsTitle, { color: theme.colors.text }]}>Items ({totalQty} u.)</Text>
-          <TouchableOpacity 
+          <Pressable 
             style={[styles.searchButton, { borderColor: theme.colors.primary }]}
             onPress={() => navigation.navigate("BranchProducts", { mode: "picker" })} // Navega en modo picker
           >
             <Ionicons name="search" size={16} color={theme.colors.primary} />
             <Text style={[styles.searchButtonText, { color: theme.colors.primary }]}>Buscar en Inventario</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* --- Lista de Items --- */}
@@ -292,24 +292,22 @@ export default function RemitoForm({ navigation }: any) {
         <Text style={[styles.totalText, { color: theme.colors.text }]}>
           Total estimado: ${totalImporte.toFixed(2)}
         </Text>
-        <TouchableOpacity
+        <Pressable
           onPress={() => navigation.navigate("ScanAdd", { mode: "batch" })}
           style={[styles.footerButton, { backgroundColor: theme.colors.primary }]}
-          activeOpacity={0.9}
         >
           <Ionicons name="scan-outline" size={20} color="white" />
           <Text style={styles.footerButtonText}>Agregar con Escáner</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </Pressable>
+        <Pressable
           onPress={confirmAndSave}
           style={[styles.footerButton, { backgroundColor: items.length > 0 ? theme.colors.success : theme.colors.neutral, opacity: saving ? 0.85 : 1 }]}
-          activeOpacity={0.9}
           disabled={saving || items.length === 0}
         >
           {saving ? ( <ActivityIndicator color="#fff" /> ) : (
             <Text style={styles.footerButtonText}>Guardar remito (egreso)</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <HamburgerMenu
