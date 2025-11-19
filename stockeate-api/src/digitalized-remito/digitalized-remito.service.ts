@@ -227,17 +227,26 @@ export class DigitalizedRemitoService {
       // 2. Procesar ítems: buscar/crear productos y calcular precio
       const processedItems = await Promise.all(
         (validationData.items || []).map(async (item, index) => {
+          // --- Normalizar campos básicos ---
           const rawCode = (item.detectedCode || '').trim();
           const name =
             (item.detectedName || '').trim() || 'Producto sin nombre';
 
-          // 👉 Normalizamos la cantidad: si viene vacía, 0 o rara, usamos 1
-          const rawQty = Number(item.qty);
-          const qty = !isNaN(rawQty) && rawQty > 0 ? rawQty : 1;
+          // Cantidad: siempre entero >= 1
+          const parsedQty = Number(item.qty);
+          const qty =
+            Number.isFinite(parsedQty) && parsedQty > 0
+              ? Math.floor(parsedQty)
+              : 1;
 
-          // Precio recibido desde la app (puede venir en item.unitPrice o item.price)
+          // Precio: si viene lo usamos, si no 0. Pero NUNCA afecta si se crea o no.
+          const rawUnitPrice =
+            (item as any).unitPrice ?? (item as any).price ?? 0;
+          const parsedPrice = Number(rawUnitPrice);
           const unitPriceNumber =
-            Number((item as any).unitPrice ?? (item as any).price ?? 0) || 0;
+            Number.isFinite(parsedPrice) && parsedPrice >= 0
+              ? parsedPrice
+              : 0;
           const unitPriceDecimal = new Prisma.Decimal(unitPriceNumber);
 
           // Si no trae código, generamos uno
@@ -254,24 +263,24 @@ export class DigitalizedRemitoService {
             where: { code, branchId },
           });
 
-          // Si no existe, lo creamos con el precio detectado
+          // Si no existe, lo creamos (con el precio que venga o 0)
           if (!product) {
             product = await tx.product.create({
               data: {
                 branchId,
                 code,
                 name,
-                price: unitPriceDecimal, // 👈 guardamos precio en el producto
+                price: unitPriceDecimal,
                 stock: 0,
                 isActive: true,
               },
             });
 
             this.logger.log(
-              `[validateAndFinalizeRemito] Producto creado -> id=${product.id}, code=${code}`,
+              `[validateAndFinalizeRemito] Producto creado -> id=${product.id}, code=${code}, price=${unitPriceNumber}`,
             );
           } else {
-            // Si ya existe, opcionalmente actualizamos el precio si vino > 0
+            // Si existe y el precio > 0, actualizamos el price del producto (opcional)
             if (unitPriceNumber > 0) {
               await tx.product.update({
                 where: { id: product.id },
@@ -308,15 +317,14 @@ export class DigitalizedRemitoService {
             create: processedItems.map((item) => ({
               productId: item.productId,
               qty: item.qty,
-              unitPrice: item.unitPriceDecimal, // 👈 mismo precio en RemitoItem
+              unitPrice: item.unitPriceDecimal,
             })),
           },
         },
       });
 
-      // 4. Actualizar stock y movimientos (YA NO SALTEAMOS ÍTEMS)
+      // 4. Actualizar stock y movimientos SIEMPRE para TODOS los ítems
       for (const item of processedItems) {
-        // Siempre incrementamos al menos 1
         await tx.product.update({
           where: { id: item.productId },
           data: { stock: { increment: item.qty } },
