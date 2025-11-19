@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,12 @@ import {
   Alert,
   Modal,
   KeyboardAvoidingView,
-  TouchableWithoutFeedback,
   Keyboard,
   Platform,
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons"; // <-- Importamos Ionicons
 import { useIsFocused } from "@react-navigation/native";
@@ -67,6 +67,7 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
   const [editPrice, setEditPrice] = useState<string>("");
   const [editStock, setEditStock] = useState<string>("");
   const [filter, setFilter] = useState<"ALL" | "LOW" | "ZERO">("ALL");
+  const pendingTargetsRef = useRef<Record<string, number>>({});
 
   const loadLocal = () => {
     if (!branchId) return;
@@ -78,12 +79,30 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
     if (!branchId) return;
     setLoading(true);
     try {
-      await pullBranchCatalog(branchId);
+      if (Object.keys(pendingTargetsRef.current).length > 0) {
+        for (let i = 0; i < 8; i++) {
+          await pullBranchCatalog(branchId);
+          let allOk = true;
+          const keys = Object.keys(pendingTargetsRef.current);
+          for (const code of keys) {
+            const check = DB.getProductByCode(code);
+            const applied = Number(check?.stock ?? 0);
+            if (applied !== pendingTargetsRef.current[code]) {
+              allOk = false;
+              break;
+            }
+          }
+          if (keys.length === 0 || allOk) break;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        pendingTargetsRef.current = {};
+      } else {
+        await pullBranchCatalog(branchId);
+      }
     } catch (e: any) {
       console.log("SYNC_ERR", e?.message || e);
     } finally {
       loadLocal();
-      setPendingStock({});
       setLoading(false);
     }
   };
@@ -138,13 +157,6 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
     if (!name || isNaN(price)) {
       return Alert.alert("Editar producto", "Revisá nombre y precio.");
     }
-
-    setRows((cur) =>
-      cur.map((r) =>
-        r.id === editing.id ? { ...r, name, price, stock: target } : r
-      )
-    );
-    setPendingStock((m) => ({ ...m, [editing.id]: target }));
     setEditOpen(false);
     setEditing(null);
 
@@ -160,6 +172,7 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
       const latest = DB.getProductByCode(updatedBase.code);
       const before = Number(latest?.stock ?? 0);
       const delta = target - before;
+      pendingTargetsRef.current[updatedBase.code] = target;
 
       if (delta !== 0) {
         try {
@@ -167,15 +180,10 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
         } catch (e) {
           console.log("pushMoveByCode fail", e);
         }
+        pendingTargetsRef.current[updatedBase.code] = target;
       }
 
-      await pullBranchCatalog(branchId);
-      loadLocal();
     } finally {
-      setPendingStock((m) => {
-        const { [editing?.id ?? ""]: _skip, ...rest } = m;
-        return rest;
-      });
     }
   };
 
@@ -297,30 +305,27 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
         <View style={styles.actions}>
           {isPickerMode ? (
             // MODO SELECTOR: Mostrar botón de AÑADIR
-            <TouchableOpacity
+            <Pressable
               onPress={() => handleSelectProduct(item)}
-              style={[styles.iconBtn, { backgroundColor: theme.colors.success }]} // Botón verde
-              activeOpacity={0.85}
+              style={[styles.iconBtn, { backgroundColor: theme.colors.success }]}
             >
               <Ionicons name="add" size={24} color="white" />
-            </TouchableOpacity>
+            </Pressable>
           ) : (
             // MODO NORMAL: Mostrar botones de Editar y Borrar
             <>
-              <TouchableOpacity
+              <Pressable
                 onPress={() => openEdit(item)}
                 style={[styles.iconBtn, { backgroundColor: theme.colors.primary }]}
-                activeOpacity={0.85}
               >
                 <Text style={styles.iconEmoji}>✏️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 onPress={() => confirmDelete(item)}
                 style={[styles.iconBtn, { backgroundColor: theme.colors.danger }]}
-                activeOpacity={0.85}
               >
                 <Text style={styles.iconEmoji}>🗑️</Text>
-              </TouchableOpacity>
+              </Pressable>
             </>
           )}
         </View>
@@ -354,21 +359,19 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
         {/* --- 👇 8. BOTONES CONDICIONALES (se ocultan en modo picker) --- */}
         {!isPickerMode && (
           <View style={styles.buttonRow}>
-            <TouchableOpacity
+            <Pressable
               onPress={pullThenLoad}
               style={[styles.actionButton, { backgroundColor: theme.colors.primary, flex: 1 }, isSmallScreen && styles.actionButtonSmall]}
-              activeOpacity={0.9}
               disabled={loading}
             >
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Refrescar</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity
+            </Pressable>
+            <Pressable
               onPress={() => navigation.navigate("BranchArchived")}
               style={[styles.actionButton, { backgroundColor: theme.colors.neutral, flex: 1 }, isSmallScreen && styles.actionButtonSmall]}
-              activeOpacity={0.9}
             >
               <Text style={styles.actionButtonText}>Archivados</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         )}
       </View>
@@ -400,7 +403,7 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
       {/* --- 👇 10. MODAL CONDICIONAL (no se abre en modo picker) --- */}
       {!isPickerMode && (
         <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
             <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
               <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -500,7 +503,7 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
 
                   {/* Botones: Cancelar / Guardar */}
                   <View style={{ flexDirection: "row", gap: 12 }}>
-                    <TouchableOpacity
+                    <Pressable
                       onPress={() => {
                         setEditOpen(false);
                         setEditing(null);
@@ -512,12 +515,11 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                         backgroundColor: theme.colors.inputBorder,
                         alignItems: "center",
                       }}
-                      activeOpacity={0.9}
                     >
                       <Text style={{ color: theme.colors.text, fontWeight: "800" }}>Cancelar</Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
-                    <TouchableOpacity
+                    <Pressable
                       onPress={onSaveEdit}
                       style={{
                         flex: 1,
@@ -526,14 +528,13 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                         backgroundColor: theme.colors.primary,
                         alignItems: "center",
                       }}
-                      activeOpacity={0.9}
                     >
                       <Text style={{ color: "#fff", fontWeight: "800" }}>Guardar</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {/* Archivar */}
-                  <TouchableOpacity
+                  <Pressable
                     onPress={archiveFromEdit}
                     style={{
                       marginTop: 10,
@@ -542,14 +543,13 @@ export default function BranchProducts({ navigation, route }: any) { // <-- 2. A
                       backgroundColor: theme.colors.neutral,
                       alignItems: "center",
                     }}
-                    activeOpacity={0.9}
                   >
                     <Text style={{ color: "#fff", fontWeight: "800" }}>Archivar producto</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </KeyboardAvoidingView>
             </View>
-          </TouchableWithoutFeedback>
+          </Pressable>
         </Modal>
       )}
     </View>
@@ -569,9 +569,8 @@ function Chip({
   theme: any;
 }) {
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.85}
       style={[
         styles.chip,
         {
@@ -589,7 +588,7 @@ function Chip({
       >
         {label}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
