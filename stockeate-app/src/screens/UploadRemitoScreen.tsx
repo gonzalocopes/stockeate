@@ -174,7 +174,7 @@ export default function UploadRemitoScreen({ navigation }: any) {
 
         <View style={styles.actions}>
           <Button
-            title="Seleccionar Archivo (Imagen/PDF)"
+            title="Seleccionar Imagen"
             onPress={selectFile}
             color={theme.colors.primary}
           />
