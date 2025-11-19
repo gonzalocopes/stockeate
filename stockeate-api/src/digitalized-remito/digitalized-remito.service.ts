@@ -1,4 +1,3 @@
-// src/digitalized-remito/digitalized-remito.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -92,7 +91,8 @@ export class DigitalizedRemitoService {
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          extractedData: parsedData as Prisma.JsonValue,
+          // 👇 CAMBIO IMPORTANTE: usar InputJsonValue en vez de JsonValue
+          extractedData: parsedData as Prisma.InputJsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
         },
       });
@@ -118,7 +118,7 @@ export class DigitalizedRemitoService {
     }
   }
 
-  // --- 3) Parser simple (igual que tenías, solo devuelvo el objeto) ---
+  // --- 3) Parser simple ---
   private parsearTextoDeTesseract(texto: string): any {
     this.logger.log('[Parser] Analizando texto real con Regex...');
 
@@ -160,7 +160,6 @@ export class DigitalizedRemitoService {
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
-    // ⬇ Por ahora un solo ítem genérico
     if (items.length === 0) {
       items.push({
         detectedCode: '???',
@@ -228,7 +227,6 @@ export class DigitalizedRemitoService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // 1. Remito digitalizado
         const digitalizedRemito = await tx.digitalizedRemito.findUnique({
           where: { id },
         });
@@ -242,7 +240,6 @@ export class DigitalizedRemitoService {
           );
         }
 
-        // 2. Normalizamos ítems (importante para evitar errores raros)
         const saneItems = (validationData.items || [])
           .map((item, index) => {
             const rawQty = (item as any).qty;
@@ -263,7 +260,7 @@ export class DigitalizedRemitoService {
               price,
             };
           })
-          .filter((i) => i.qty > 0); // solo mantenemos cantidades > 0
+          .filter((i) => i.qty > 0);
 
         if (!saneItems.length) {
           throw new BadRequestException(
@@ -271,7 +268,6 @@ export class DigitalizedRemitoService {
           );
         }
 
-        // 3. Buscar o crear productos
         const processedItems = await Promise.all(
           saneItems.map(async (item) => {
             let code = item.detectedCode;
@@ -300,7 +296,6 @@ export class DigitalizedRemitoService {
                 },
               });
             } else if (item.price > 0) {
-              // si ya existe, podemos actualizar precio y nombre
               product = await tx.product.update({
                 where: { id: product.id },
                 data: {
@@ -317,7 +312,6 @@ export class DigitalizedRemitoService {
           }),
         );
 
-        // 4. Crear Remito de ENTRADA
         const tmpNumber = `ENT-${Date.now()}-${Math.floor(
           Math.random() * 1000,
         )}`;
@@ -342,7 +336,6 @@ export class DigitalizedRemitoService {
           },
         });
 
-        // 5. Actualizar stock + movimiento
         for (const item of processedItems) {
           await tx.product.update({
             where: { id: item.productId },
@@ -364,7 +357,6 @@ export class DigitalizedRemitoService {
           });
         }
 
-        // 6. Marcar digitalizado como COMPLETED
         return tx.digitalizedRemito.update({
           where: { id },
           data: {
