@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
   "https://stockeate.onrender.com";
+
 console.log("[API baseURL]", baseURL);
 
 export const api = axios.create({
@@ -21,7 +22,7 @@ api.interceptors.request.use((request) => {
   return request;
 });
 
-// Interceptor de Token
+// Interceptor de Token (para TODAS las peticiones Axios normales)
 api.interceptors.request.use(async (config) => {
   try {
     const token = await AsyncStorage.getItem("token");
@@ -109,6 +110,7 @@ export async function pullFromServer(
 }
 
 // -------- Upload de Remito (imagen/PDF) --------
+// ⚠️ IMPORTANTE: acá NO usamos axios, usamos fetch para evitar el "Network Error" en APK.
 export async function uploadRemitoFile(
   file: { uri: string; name: string; type?: string },
   branchId: string
@@ -116,12 +118,15 @@ export async function uploadRemitoFile(
   const formData = new FormData();
 
   if (Platform.OS === "web") {
-    // 🕸️ WEB: el uri suele ser blob:, lo convertimos a Blob real
+    // 🕸️ WEB: convertir el blob
     const response = await fetch(file.uri);
     const blob = await response.blob();
-    formData.append("file", blob, file.name);
+    const webFile = new File([blob], file.name, {
+      type: file.type || blob.type || "application/octet-stream",
+    });
+    formData.append("file", webFile);
   } else {
-    // 📱 NATIVO: usamos el objeto con uri
+    // 📱 NATIVO (Android / iOS)
     formData.append(
       "file",
       {
@@ -134,31 +139,50 @@ export async function uploadRemitoFile(
 
   formData.append("branchId", branchId);
 
-  // Importante: NO forzar Content-Type,
-  // dejamos que Axios / RN / navegador agreguen el boundary correcto.
+  // Traemos el token a mano (no pasa por el interceptor de axios porque usamos fetch)
+  const token = await AsyncStorage.getItem("token");
+
   const headers: Record<string, string> = {
+    Accept: "application/json",
     "ngrok-skip-browser-warning": "true",
   };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const url = `${baseURL}/digitalized-remito/upload`;
+  console.log("[Upload][fetch] POST", url, "branchId:", branchId);
 
   try {
-    const { data } = await api.post("/digitalized-remito/upload", formData, {
+    const response = await fetch(url, {
+      method: "POST",
       headers,
+      body: formData,
     });
-    return data;
+
+    const text = await response.text();
+    if (!response.ok) {
+      console.error(
+        "[Upload][fetch] Error HTTP",
+        response.status,
+        text.slice(0, 400)
+      );
+      throw new Error(`Upload failed with status ${response.status}`);
+    }
+
+    try {
+      const json = JSON.parse(text);
+      console.log("[Upload][fetch] OK, respuesta:", json);
+      return json;
+    } catch (parseErr) {
+      console.error("[Upload][fetch] Error parseando JSON:", parseErr, text);
+      throw new Error("Respuesta de la API no es JSON válido");
+    }
   } catch (error: any) {
     console.error(
-      "Error en uploadRemitoFile:",
-      JSON.stringify(
-        {
-          message: error?.message,
-          status: error?.response?.status,
-          data: error?.response?.data,
-        },
-        null,
-        2
-      )
+      "[Upload][fetch] Network/other error:",
+      error?.message ?? error
     );
     throw error;
   }
 }
-/* a*/

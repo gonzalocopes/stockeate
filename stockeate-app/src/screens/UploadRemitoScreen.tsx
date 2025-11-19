@@ -93,7 +93,12 @@ export default function UploadRemitoScreen({ navigation }: any) {
     setIsLoading(true);
 
     try {
-      console.log("[Upload] Enviando archivo:", selectedFile, "branch:", branchId);
+      console.log(
+        "[Upload] Enviando archivo:",
+        selectedFile,
+        "branch:",
+        branchId
+      );
 
       const newDigitalizedRemito = await uploadRemitoFile(
         {
@@ -146,7 +151,9 @@ export default function UploadRemitoScreen({ navigation }: any) {
               { backgroundColor: theme.colors.inputBackground },
             ]}
           >
-            <Text style={{ color: theme.colors.text }}>Archivo seleccionado:</Text>
+            <Text style={{ color: theme.colors.text }}>
+              Archivo seleccionado:
+            </Text>
             <Text style={[styles.fileName, { color: theme.colors.text }]}>
               {selectedFile.name}
             </Text>

@@ -1,3 +1,4 @@
+// src/digitalized-remito/dto/validation-data.dto.ts
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -10,35 +11,34 @@ import {
   IsNumber,
 } from 'class-validator';
 
-// Define la forma de cada ítem
+// Ítems que vienen desde la app
 export class ValidatedItemDto {
   @IsString()
-  @IsOptional() // Código puede venir vacío y se normaliza en el service
+  @IsOptional()
   detectedCode: string;
 
   @IsString()
-  @IsOptional() // Nombre también puede venir vacío
+  @IsOptional()
   detectedName: string;
 
   @IsInt()
-  @Min(0) // Cantidad no negativa (el service ya corrige a 1 si viene 0)
+  @Min(0)
   qty: number;
 
-  // NUEVO: precio del ítem
+  // 👇 NUEVO: precio opcional (puede venir vacío)
+  @IsNumber({}, { message: 'price debe ser numérico', each: false })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
   price?: number;
 }
 
-// Define la forma del payload completo que la app envía al validar
+// Payload completo que envía la app al validar
 export class ValidationDataDto {
   @IsString()
-  @IsOptional() // Permitimos proveedor vacío
+  @IsOptional()
   provider: string;
 
   @IsString()
-  @IsOptional() // Permitimos fecha vacía
+  @IsOptional()
   date: string;
 
   @IsString()
