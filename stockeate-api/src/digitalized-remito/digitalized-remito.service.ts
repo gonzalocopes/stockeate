@@ -239,14 +239,12 @@ export class DigitalizedRemitoService {
               ? Math.floor(parsedQty)
               : 1;
 
-          // Precio: si viene lo usamos, si no 0. Pero NUNCA afecta si se crea o no.
+          // Precio: si viene lo usamos, si no 0. Nunca afecta si se procesa o no.
           const rawUnitPrice =
             (item as any).unitPrice ?? (item as any).price ?? 0;
           const parsedPrice = Number(rawUnitPrice);
           const unitPriceNumber =
-            Number.isFinite(parsedPrice) && parsedPrice >= 0
-              ? parsedPrice
-              : 0;
+            isNaN(parsedPrice) || parsedPrice < 0 ? 0 : parsedPrice;
           const unitPriceDecimal = new Prisma.Decimal(unitPriceNumber);
 
           // Si no trae código, generamos uno
@@ -263,14 +261,14 @@ export class DigitalizedRemitoService {
             where: { code, branchId },
           });
 
-          // Si no existe, lo creamos (con el precio que venga o 0)
+          // Si no existe, lo creamos SIEMPRE (aunque el precio sea 0)
           if (!product) {
             product = await tx.product.create({
               data: {
                 branchId,
                 code,
                 name,
-                price: unitPriceDecimal,
+                price: unitPriceDecimal, // puede ser 0 sin problema
                 stock: 0,
                 isActive: true,
               },
