@@ -1,9 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+// src/digitalized-remito/digitalized-remito.service.ts
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { DigitalizationStatus, Prisma } from '@prisma/client';
 import { ValidationDataDto } from './dto/validation-data.dto';
@@ -15,75 +11,108 @@ export class DigitalizedRemitoService {
 
   constructor(private prisma: PrismaService) {}
 
-  // --- 1) Crear registro inicial y lanzar OCR en background ---
+  // ---------------------------------------------------------------------------
+  // 1) Crear el registro inicial cuando se sube el archivo
+  // ---------------------------------------------------------------------------
   async createInitialRemito(
     file: Express.Multer.File,
     userId: string | null,
     branchId: string,
   ) {
     this.logger.log(
-      `[createInitialRemito] file=${file?.originalname} userId=${
-        userId ?? 'anonymous'
-      } branchId=${branchId}`,
+      `[createInitialRemito] file=${file?.originalname} userId=${userId ?? 'anonymous'} branchId=${branchId}`,
     );
 
-    // userId AHORA ES OPCIONAL → validamos que exista antes de grabar
-    let safeUserId: string | null = null;
+    // Intentamos verificar que el userId exista
+    let finalUserId: string | null = userId;
     if (userId) {
       try {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-        });
-        if (user) {
-          safeUserId = user.id;
-        } else {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
           this.logger.error(
-            `[createInitialRemito] FK userId inválido (${userId}), creando remito sin usuario`,
+            `[createInitialRemito] userId inválido (${userId}), creando remito sin usuario`,
           );
+          finalUserId = null;
         }
-      } catch (e) {
+      } catch (err) {
         this.logger.error(
-          '[createInitialRemito] Error verificando userId',
-          e as any,
+          `[createInitialRemito] Error consultando usuario (${userId}), creando remito sin usuario: ${(
+            err as Error
+          ).message}`,
         );
+        finalUserId = null;
       }
     }
 
+    // Creamos el DigitalizedRemito (userId puede ser null)
     const newDigitalizedRemito = await this.prisma.digitalizedRemito.create({
       data: {
-        userId: safeUserId,
+        userId: finalUserId,
         branchId,
         originalFileUrl: file.path,
         status: DigitalizationStatus.PROCESSING,
       },
     });
 
-    // Lanzamos OCR en background (no bloquea la respuesta)
-    this.processOcr(newDigitalizedRemito.id, file.path).catch((err) =>
-      this.logger.error(
-        `[processOcr] Error procesando remito ${newDigitalizedRemito.id}`,
-        err,
-      ),
-    );
+    // Lanzamos OCR en background (no esperamos)
+    this.processOcr(newDigitalizedRemito.id, file.path).catch((err) => {
+      this.logger.error(`[createInitialRemito] Error lanzando OCR: ${(err as Error).message}`);
+    });
 
     return newDigitalizedRemito;
   }
 
-  // --- 2) OCR con Tesseract ---
+  // ---------------------------------------------------------------------------
+  // 2) Procesar OCR (JPG/PNG) o fallback para PDF
+  // ---------------------------------------------------------------------------
   private async processOcr(remitoId: string, filePath: string) {
-    this.logger.log(
-      `[OCR] Iniciando Tesseract para: ${remitoId} (${filePath})`,
-    );
-    const worker = await createWorker('spa');
+    this.logger.log(`[OCR] Iniciando Tesseract para: ${remitoId} (${filePath})`);
 
+    const isPdf = filePath.toLowerCase().endsWith('.pdf');
+
+    // Si es PDF y todavía no tenés soporte real, hacemos un fallback
+    if (isPdf) {
+      this.logger.warn(
+        `[OCR] Archivo PDF detectado (${filePath}). Por ahora no se procesa con Tesseract, se envía a validación manual.`,
+      );
+
+      const fallback = {
+        provider: 'Proveedor (no detectado)',
+        date: new Date().toISOString().slice(0, 10),
+        customerCuit: '',
+        customerAddress: '',
+        customerTaxCondition: '',
+        items: [
+          {
+            detectedCode: '???',
+            detectedName: 'Ítem no detectado (Editar manualmente)',
+            qty: 1,
+            price: 0,
+          },
+        ],
+      };
+
+      await this.prisma.digitalizedRemito.update({
+        where: { id: remitoId },
+        data: {
+          extractedData: fallback as Prisma.InputJsonValue,
+          status: DigitalizationStatus.PENDING_VALIDATION,
+        },
+      });
+
+      this.logger.log(
+        `[OCR] PDF ${filePath} enviado a PENDING_VALIDATION con datos genéricos para edición manual.`,
+      );
+      return;
+    }
+
+    // ---- IMAGEN (JPG/PNG) → OCR real ----
+    const worker = await createWorker('spa');
     try {
       const ret = await worker.recognize(filePath);
       const textoExtraido = ret.data.text || '';
       this.logger.log(
-        `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(
-          0,
-          400,
-        )}...`,
+        `[OCR] Texto extraído (primeros 400 chars): ${textoExtraido.substring(0, 400)}...`,
       );
 
       const parsedData = this.parsearTextoDeTesseract(textoExtraido);
@@ -91,25 +120,37 @@ export class DigitalizedRemitoService {
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
-          // 👇 CAMBIO IMPORTANTE: usar InputJsonValue en vez de JsonValue
           extractedData: parsedData as Prisma.InputJsonValue,
           status: DigitalizationStatus.PENDING_VALIDATION,
         },
       });
 
-      this.logger.log(
-        `[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`,
-      );
+      this.logger.log(`[OCR] Procesamiento Tesseract exitoso para: ${remitoId}`);
     } catch (error) {
-      this.logger.error(
-        `[OCR] Falló el procesamiento para: ${remitoId}`,
-        error as any,
-      );
+      this.logger.error(`[OCR] Falló el procesamiento para: ${remitoId}`, error as Error);
+
+      const fallback = {
+        provider: 'Proveedor (no detectado)',
+        date: new Date().toISOString().slice(0, 10),
+        customerCuit: '',
+        customerAddress: '',
+        customerTaxCondition: '',
+        items: [
+          {
+            detectedCode: '???',
+            detectedName: 'Ítem no detectado (Editar manualmente)',
+            qty: 1,
+            price: 0,
+          },
+        ],
+      };
+
       await this.prisma.digitalizedRemito.update({
         where: { id: remitoId },
         data: {
           status: DigitalizationStatus.FAILED,
           errorMessage: (error as Error).message,
+          extractedData: fallback as Prisma.InputJsonValue,
         },
       });
     } finally {
@@ -118,7 +159,9 @@ export class DigitalizedRemitoService {
     }
   }
 
-  // --- 3) Parser simple ---
+  // ---------------------------------------------------------------------------
+  // 3) Parser de texto OCR → estructura básica para la app
+  // ---------------------------------------------------------------------------
   private parsearTextoDeTesseract(texto: string): any {
     this.logger.log('[Parser] Analizando texto real con Regex...');
 
@@ -126,50 +169,52 @@ export class DigitalizedRemitoService {
       detectedCode: string;
       detectedName: string;
       qty: number;
+      price?: number;
     };
-
     const items: ExtractedItem[] = [];
 
+    // --- Patrones auxiliares ---
     const patronesProveedor: RegExp[] = [
-      /Razón Social\s*[:—]\s*(.*)/im,
-      /Señor\(es\)\s*[:—]\s*(.*)/im,
-      /Cliente\s*[:—]\s*(.*)/im,
+      /Raz[oó]n Social\s*[:—-]\s*(.*)/im,
+      /Señor\(es\)\s*[:—-]\s*(.*)/im,
+      /Cliente\s*[:—-]\s*(.*)/im,
     ];
 
     const patronesFecha: RegExp[] = [
-      /Fecha (?:de Emisión)?\s*[:—]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
+      /Fecha(?: de Emisi[oó]n)?\s*[:—-]?\s*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/im,
       /(\d{2}[\/-]\d{2}[\/-]\d{4})/im,
     ];
 
     const patronesCuit: RegExp[] = [
-      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—]?\s*(\d{2}-\d{8}-\d{1})/im,
+      /C\.?U\.?I\.?T\.?\s*N?°?\s*[:—-]?\s*(\d{2}-\d{8}-\d{1})/im,
       /(\d{2}-\d{8}-\d{1})/im,
     ];
 
     const patronesDireccion: RegExp[] = [
-      /Dirección\s*[:—]?\s*(.*)/im,
-      /Domicilio\s*[:—]?\s*(.*)/im,
+      /Direcci[oó]n\s*[:—-]?\s*(.*)/im,
+      /Domicilio\s*[:—-]?\s*(.*)/im,
     ];
 
     const provider =
-      this.findFirstMatch(texto, patronesProveedor) ||
-      'Proveedor (no detectado)';
+      this.findFirstMatch(texto, patronesProveedor) || 'Proveedor (no detectado)';
     const date =
       this.findFirstMatch(texto, patronesFecha) ||
       new Date().toISOString().slice(0, 10);
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
+    // 👇 Por ahora no parseamos tabla real; sólo un ítem dummy.
     if (items.length === 0) {
       items.push({
         detectedCode: '???',
         detectedName: 'Ítem no detectado (Editar)',
         qty: 1,
+        price: 0,
       });
     }
 
     this.logger.log(
-      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}`,
+      `[Parser] Detectado: provider=${provider}, CUIT=${cuit}, Fecha=${date}, Dirección=${address}`,
     );
 
     return {
@@ -193,7 +238,9 @@ export class DigitalizedRemitoService {
     return null;
   }
 
-  // --- 4) Pending por sucursal ---
+  // ---------------------------------------------------------------------------
+  // 4) Consultas auxiliares
+  // ---------------------------------------------------------------------------
   async findPendingByBranch(branchId: string) {
     return this.prisma.digitalizedRemito.findMany({
       where: { branchId, status: DigitalizationStatus.PENDING_VALIDATION },
@@ -201,175 +248,130 @@ export class DigitalizedRemitoService {
     });
   }
 
-  // --- 5) Obtener uno ---
   async findOne(id: string) {
-    const remito = await this.prisma.digitalizedRemito.findUnique({
-      where: { id },
-    });
+    const remito = await this.prisma.digitalizedRemito.findUnique({ where: { id } });
     if (!remito) {
-      throw new NotFoundException(
-        `Remito digitalizado con ID ${id} no encontrado.`,
-      );
+      throw new NotFoundException(`Remito digitalizado con ID ${id} no encontrado.`);
     }
     return remito;
   }
 
-  // --- 6) Validar y volcar a Remito + Stock ---
-  async validateAndFinalizeRemito(
-    id: string,
-    validationData: ValidationDataDto,
-  ) {
-    this.logger.log(
-      `[validateAndFinalizeRemito] id=${id} payload=${JSON.stringify(
-        validationData,
-      )}`,
-    );
-
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        const digitalizedRemito = await tx.digitalizedRemito.findUnique({
-          where: { id },
-        });
-
-        if (
-          !digitalizedRemito ||
-          digitalizedRemito.status !== 'PENDING_VALIDATION'
-        ) {
-          throw new NotFoundException(
-            'Remito no encontrado o ya fue procesado.',
-          );
-        }
-
-        const saneItems = (validationData.items || [])
-          .map((item, index) => {
-            const rawQty = (item as any).qty;
-            const rawPrice = (item as any).price;
-
-            const qty = Number.isFinite(Number(rawQty))
-              ? Number(rawQty)
-              : 0;
-            const price = Number.isFinite(Number(rawPrice))
-              ? Number(rawPrice)
-              : 0;
-
-            return {
-              index,
-              detectedCode: (item.detectedCode || '').trim(),
-              detectedName: (item.detectedName || '').trim(),
-              qty,
-              price,
-            };
-          })
-          .filter((i) => i.qty > 0);
-
-        if (!saneItems.length) {
-          throw new BadRequestException(
-            'Debe haber al menos un ítem con cantidad mayor a 0.',
-          );
-        }
-
-        const processedItems = await Promise.all(
-          saneItems.map(async (item) => {
-            let code = item.detectedCode;
-            if (!code) {
-              code = `AUTO-${Date.now()}-${item.index}`;
-            }
-
-            const name =
-              item.detectedName && item.detectedName.length > 0
-                ? item.detectedName
-                : 'Producto sin nombre';
-
-            let product = await tx.product.findUnique({
-              where: { code },
-            });
-
-            if (!product) {
-              product = await tx.product.create({
-                data: {
-                  branchId: digitalizedRemito.branchId,
-                  code,
-                  name,
-                  stock: 0,
-                  isActive: true,
-                  price: item.price ?? 0,
-                },
-              });
-            } else if (item.price > 0) {
-              product = await tx.product.update({
-                where: { id: product.id },
-                data: {
-                  price: item.price,
-                  name,
-                },
-              });
-            }
-
-            return {
-              ...item,
-              productId: product.id,
-            };
-          }),
-        );
-
-        const tmpNumber = `ENT-${Date.now()}-${Math.floor(
-          Math.random() * 1000,
-        )}`;
-
-        const newRemito = await tx.remito.create({
-          data: {
-            branchId: digitalizedRemito.branchId,
-            tmpNumber,
-            customer: validationData.provider || null,
-            notes: `Ingreso por digitalización. Origen: ${id}`,
-            digitalizedOriginId: id,
-            customerCuit: validationData.customerCuit || null,
-            customerAddress: validationData.customerAddress || null,
-            customerTaxCondition: validationData.customerTaxCondition || null,
-            items: {
-              create: processedItems.map((item) => ({
-                productId: item.productId,
-                qty: item.qty,
-                unitPrice: item.price ?? 0,
-              })),
-            },
-          },
-        });
-
-        for (const item of processedItems) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                increment: item.qty,
-              },
-            },
-          });
-
-          await tx.stockMove.create({
-            data: {
-              productId: item.productId,
-              branchId: digitalizedRemito.branchId,
-              qty: item.qty,
-              type: 'IN',
-              ref: `Remito de entrada ${newRemito.tmpNumber}`,
-            },
-          });
-        }
-
-        return tx.digitalizedRemito.update({
-          where: { id },
-          data: {
-            status: DigitalizationStatus.COMPLETED,
-          },
-        });
+  // ---------------------------------------------------------------------------
+  // 5) Validar y finalizar remito → CREA productos + remito + stockMove
+  // ---------------------------------------------------------------------------
+  async validateAndFinalizeRemito(id: string, validationData: ValidationDataDto) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Busca el remito digitalizado
+      const digitalizedRemito = await tx.digitalizedRemito.findUnique({
+        where: { id },
       });
-    } catch (err) {
-      this.logger.error(
-        '[validateAndFinalizeRemito] Error al validar remito',
-        err as any,
+
+      if (!digitalizedRemito || digitalizedRemito.status !== 'PENDING_VALIDATION') {
+        throw new NotFoundException('Remito no encontrado o ya fue procesado.');
+      }
+
+      // 2. Normalizamos items (evitar qty 0 y asegurar código/nombre)
+      const sanitizedItems = (validationData.items || []).filter(
+        (i) => i.qty && i.qty > 0,
       );
-      throw err;
-    }
+
+      if (!sanitizedItems.length) {
+        throw new NotFoundException(
+          'No hay ítems válidos para procesar (cantidad > 0).',
+        );
+      }
+
+      const processedItems = await Promise.all(
+        sanitizedItems.map(async (item, index) => {
+          const rawCode = item.detectedCode?.trim() || '';
+          const rawName = item.detectedName?.trim() || '';
+          const qty = item.qty || 0;
+          const price =
+            (item as any).price !== undefined && (item as any).price !== null
+              ? Number((item as any).price)
+              : 0;
+
+          const code =
+            rawCode === '' ? `REM-${Date.now()}-${index + 1}` : rawCode;
+          const name = rawName === '' ? 'Producto sin nombre' : rawName;
+
+          // 2.a) Busca o crea el producto por código
+          let product = await tx.product.findUnique({
+            where: { code },
+          });
+
+          if (!product) {
+            product = await tx.product.create({
+              data: {
+                branchId: digitalizedRemito.branchId,
+                code,
+                name,
+                stock: 0,
+                isActive: true,
+                price: price || 0,
+              },
+            });
+          }
+
+          return {
+            ...item,
+            productId: product.id,
+            qty,
+            price,
+            code,
+            name,
+          };
+        }),
+      );
+
+      // 3. Crea el Remito de ENTRADA oficial con los nuevos campos
+      const newRemito = await tx.remito.create({
+        data: {
+          branchId: digitalizedRemito.branchId,
+          tmpNumber: `ENT-${Date.now()}`,
+          customer: validationData.provider || 'Sin proveedor',
+          notes: `Ingreso por digitalización. Origen: ${id}`,
+          digitalizedOriginId: id,
+          customerCuit: validationData.customerCuit || '',
+          customerAddress: validationData.customerAddress || '',
+          customerTaxCondition: validationData.customerTaxCondition || '',
+          items: {
+            create: processedItems.map((item) => ({
+              productId: item.productId,
+              qty: item.qty,
+              unitPrice: item.price || 0,
+            })),
+          },
+        },
+      });
+
+      // 4. Actualiza el stock + crea movimientos
+      for (const item of processedItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: { increment: item.qty },
+            // Si el precio > 0, actualizamos el price del producto
+            ...(item.price && item.price > 0 ? { price: item.price } : {}),
+          },
+        });
+
+        await tx.stockMove.create({
+          data: {
+            productId: item.productId,
+            branchId: digitalizedRemito.branchId,
+            qty: item.qty,
+            type: 'IN',
+            ref: `Remito de entrada ${newRemito.tmpNumber}`,
+          },
+        });
+      }
+
+      // 5. Marca el remito digitalizado como COMPLETADO
+      return tx.digitalizedRemito.update({
+        where: { id },
+        data: { status: DigitalizationStatus.COMPLETED },
+      });
+    });
   }
 }
