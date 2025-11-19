@@ -114,6 +114,7 @@ export default function RemitoHub({ navigation }: any) {
           isFocused={isFocused}
         />
 
+      {/*}
         <FullButton
           title="Validar Remitos Digitalizados"
           subtitle="Revisa y aprueba los datos extraídos."
