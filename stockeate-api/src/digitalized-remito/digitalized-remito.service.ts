@@ -228,7 +228,13 @@ export class DigitalizedRemitoService {
       const processedItems = await Promise.all(
         (validationData.items || []).map(async (item, index) => {
           // --- Normalizar campos básicos ---
-          const rawCode = (item.detectedCode || '').trim();
+
+          // 👇 AQUÍ EL CAMBIO: tratamos '???' como "sin código"
+          let rawCode = (item.detectedCode || '').trim();
+          if (!rawCode || rawCode === '???') {
+            rawCode = '';
+          }
+
           const name =
             (item.detectedName || '').trim() || 'Producto sin nombre';
 
@@ -247,7 +253,7 @@ export class DigitalizedRemitoService {
             isNaN(parsedPrice) || parsedPrice < 0 ? 0 : parsedPrice;
           const unitPriceDecimal = new Prisma.Decimal(unitPriceNumber);
 
-          // Si no trae código, generamos uno
+          // Si no trae código (o era '???'), generamos uno
           const code =
             rawCode ||
             `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -351,4 +357,3 @@ export class DigitalizedRemitoService {
     });
   }
 }
-// /**/ */
