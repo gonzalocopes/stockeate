@@ -105,8 +105,8 @@ export default function RemitoHub({ navigation }: any) {
           onPress={() => navigation.navigate("UploadRemito")}
           isFocused={isFocused}
         />
-
-        <FullButton
+{/* 
+         <FullButton
           title="Validar Remitos Digitalizados"
           subtitle="Revisa y aprueba los datos extraídos."
           icon="checkmark-done-circle-outline"

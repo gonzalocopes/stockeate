@@ -1,4 +1,4 @@
-﻿// src/screens/LoginScreen.tsx
+// src/screens/LoginScreen.tsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -12,7 +12,7 @@ import {
   ScrollView,
   Alert,
   Image,
-  Animated, 
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,10 +24,13 @@ import { useAuth } from "../stores/auth";
 import { api } from "../api";
 
 // Logo (ruta según tu proyecto)
-import Logo from "../../assets/images/stockeatelogo.png";
+import Logo from "../../assets/images/login.png";
 
 const schema = z.object({
-  email: z.string().min(1, "Ingresá tu email").email("Formato de email inválido"),
+  email: z
+    .string()
+    .min(1, "Ingresá tu email")
+    .email("Formato de email inválido"),
   password: z.string().min(6, "Mínimo 6 caracteres"),
 });
 type FormData = z.infer<typeof schema>;
@@ -52,14 +55,25 @@ export default function LoginScreen({ navigation }: any) {
   const [rMsg, setRMsg] = useState<string | null>(null);
 
   // ===== Nuevo: RHF + Zod (sin romper tu lógica) =====
-  const { control, handleSubmit, formState: { errors }, setValue } = useForm<FormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    setValue,
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "" },
   });
 
   // Sync con tus states por compatibilidad (opcional)
-  const syncEmail = (v: string) => { setEmail(v); setValue("email", v, { shouldValidate: false }); };
-  const syncPass  = (v: string) => { setPass(v);  setValue("password", v, { shouldValidate: false }); };
+  const syncEmail = (v: string) => {
+    setEmail(v);
+    setValue("email", v, { shouldValidate: false });
+  };
+  const syncPass = (v: string) => {
+    setPass(v);
+    setValue("password", v, { shouldValidate: false });
+  };
 
   // ===== Helper run original =====
   const run = async (fn: () => Promise<void>) => {
@@ -69,7 +83,9 @@ export default function LoginScreen({ navigation }: any) {
       await fn();
     } catch (e: any) {
       const d = e?.response?.data;
-      const msg = Array.isArray(d?.message) ? d.message.join(", ") : (d?.message || e?.message || "Error");
+      const msg = Array.isArray(d?.message)
+        ? d.message.join(", ")
+        : d?.message || e?.message || "Error";
       setErr(msg);
     } finally {
       setLoginLoading(false);
@@ -94,14 +110,20 @@ export default function LoginScreen({ navigation }: any) {
     setRMsg(null);
     setRLoading(true);
     try {
-      await api.post("/auth/reset", { token: rToken.trim(), newPassword: rPass });
+      await api.post("/auth/reset", {
+        token: rToken.trim(),
+        newPassword: rPass,
+      });
       setRMsg("Contraseña actualizada. Ahora podés iniciar sesión.");
       setShowReset(false);
       setShowForgot(false);
-      setRPass(""); setRToken("");
+      setRPass("");
+      setRToken("");
     } catch (e: any) {
       const d = e?.response?.data;
-      const msg = Array.isArray(d?.message) ? d.message.join(", ") : (d?.message || e?.message || "Error");
+      const msg = Array.isArray(d?.message)
+        ? d.message.join(", ")
+        : d?.message || e?.message || "Error";
       setRMsg(msg);
     } finally {
       setRLoading(false);
@@ -131,8 +153,16 @@ export default function LoginScreen({ navigation }: any) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, scaleAnim]);
 
@@ -143,36 +173,41 @@ export default function LoginScreen({ navigation }: any) {
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 20 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            padding: 20,
+          }}
           keyboardShouldPersistTaps="handled"
         >
           {/* Branding con LOGO animado */}
           <View style={{ marginBottom: 24, alignItems: "center" }}>
             <Animated.View
               style={{
-                width: 90,
-                height: 90,
-                borderRadius: 20,
-                backgroundColor: "rgba(255,255,255,0.08)",
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.14)",
                 opacity: fadeAnim,
                 transform: [{ scale: scaleAnim }],
               }}
             >
               <Image
                 source={Logo}
-                style={{ width: 76, height: 76, resizeMode: "contain" }}
+                style={{ width: 90, height: 90, resizeMode: "contain" }}
                 accessible
                 accessibilityLabel="Logo de Stockeate"
               />
             </Animated.View>
-            <Text style={{ color: c.text, fontSize: 28, fontWeight: "800", marginTop: 14 }}>
+            <Text
+              style={{
+                color: c.text,
+                fontSize: 28,
+                fontWeight: "800",
+                marginTop: 14,
+              }}
+            >
               Stockeate
             </Text>
-            <Text style={{ color: c.sub, marginTop: 4 }}>Acceso a tu inventario</Text>
+            <Text style={{ color: c.sub, marginTop: 4 }}>
+              Acceso a tu inventario
+            </Text>
           </View>
 
           {/* Card */}
@@ -192,30 +227,48 @@ export default function LoginScreen({ navigation }: any) {
           >
             {/* Error general */}
             {err ? (
-              <Text style={{ color: c.danger, fontSize: 13, textAlign: "center", marginBottom: 8 }}>
+              <Text
+                style={{
+                  color: c.danger,
+                  fontSize: 13,
+                  textAlign: "center",
+                  marginBottom: 8,
+                }}
+              >
                 {err}
               </Text>
             ) : null}
 
             {/* Email */}
             <View style={{ marginBottom: 14 }}>
-              <Text style={{ color: c.sub, marginBottom: 8, fontSize: 12 }}>Email</Text>
+              <Text style={{ color: c.sub, marginBottom: 8, fontSize: 12 }}>
+                Email
+              </Text>
               <View
                 style={{
-                  flexDirection: "row", alignItems: "center",
+                  flexDirection: "row",
+                  alignItems: "center",
                   backgroundColor: "rgba(255,255,255,0.06)",
                   borderWidth: 1,
-                  borderColor: errors.email ? c.danger : "rgba(255,255,255,0.12)",
-                  borderRadius: 14, paddingHorizontal: 12,
+                  borderColor: errors.email
+                    ? c.danger
+                    : "rgba(255,255,255,0.12)",
+                  borderRadius: 14,
+                  paddingHorizontal: 12,
                 }}
               >
                 <Ionicons name="mail-outline" size={18} color={c.sub} />
                 <Controller
                   control={control}
                   name="email"
-                  render={({ field: { onChange, onBlur, value} }) => (
+                  render={({ field: { onChange, onBlur, value } }) => (
                     <TextInput
-                      style={{ flex: 1, color: c.text, paddingVertical: 12, paddingHorizontal: 10 }}
+                      style={{
+                        flex: 1,
+                        color: c.text,
+                        paddingVertical: 12,
+                        paddingHorizontal: 10,
+                      }}
                       placeholder="tu@email.com"
                       placeholderTextColor="rgba(230,232,242,0.35)"
                       autoCapitalize="none"
@@ -223,7 +276,10 @@ export default function LoginScreen({ navigation }: any) {
                       textContentType="emailAddress"
                       autoComplete="email"
                       onBlur={onBlur}
-                      onChangeText={(v) => { onChange(v); syncEmail(v); }}
+                      onChangeText={(v) => {
+                        onChange(v);
+                        syncEmail(v);
+                      }}
                       value={value}
                       returnKeyType="next"
                     />
@@ -239,14 +295,20 @@ export default function LoginScreen({ navigation }: any) {
 
             {/* Password */}
             <View style={{ marginBottom: 6 }}>
-              <Text style={{ color: c.sub, marginBottom: 8, fontSize: 12 }}>Contraseña</Text>
+              <Text style={{ color: c.sub, marginBottom: 8, fontSize: 12 }}>
+                Contraseña
+              </Text>
               <View
                 style={{
-                  flexDirection: "row", alignItems: "center",
+                  flexDirection: "row",
+                  alignItems: "center",
                   backgroundColor: "rgba(255,255,255,0.06)",
                   borderWidth: 1,
-                  borderColor: errors.password ? c.danger : "rgba(255,255,255,0.12)",
-                  borderRadius: 14, paddingHorizontal: 12,
+                  borderColor: errors.password
+                    ? c.danger
+                    : "rgba(255,255,255,0.12)",
+                  borderRadius: 14,
+                  paddingHorizontal: 12,
                 }}
               >
                 <Ionicons name="lock-closed-outline" size={18} color={c.sub} />
@@ -255,14 +317,22 @@ export default function LoginScreen({ navigation }: any) {
                   name="password"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <TextInput
-                      style={{ flex: 1, color: c.text, paddingVertical: 12, paddingHorizontal: 10 }}
+                      style={{
+                        flex: 1,
+                        color: c.text,
+                        paddingVertical: 12,
+                        paddingHorizontal: 10,
+                      }}
                       placeholder="••••••••"
                       placeholderTextColor="rgba(230,232,242,0.35)"
                       secureTextEntry={secure}
                       textContentType="password"
                       autoComplete="password"
                       onBlur={onBlur}
-                      onChangeText={(v) => { onChange(v); syncPass(v); }}
+                      onChangeText={(v) => {
+                        onChange(v);
+                        syncPass(v);
+                      }}
                       value={value}
                       returnKeyType="done"
                       onSubmitEditing={handleSubmit(onSubmit)}
@@ -270,7 +340,11 @@ export default function LoginScreen({ navigation }: any) {
                   )}
                 />
                 <TouchableOpacity onPress={() => setSecure((s) => !s)}>
-                  <Ionicons name={secure ? "eye-outline" : "eye-off-outline"} size={18} color={c.sub} />
+                  <Ionicons
+                    name={secure ? "eye-outline" : "eye-off-outline"}
+                    size={18}
+                    color={c.sub}
+                  />
                 </TouchableOpacity>
               </View>
               {errors.password && (
@@ -281,8 +355,17 @@ export default function LoginScreen({ navigation }: any) {
             </View>
 
             {/* Forgot */}
-            <TouchableOpacity onPress={() => setShowForgot(true)} style={{ alignSelf: "flex-end", paddingVertical: 8 }}>
-              <Text style={{ color: c.sub, fontSize: 12, textDecorationLine: "underline" }}>
+            <TouchableOpacity
+              onPress={() => setShowForgot(true)}
+              style={{ alignSelf: "flex-end", paddingVertical: 8 }}
+            >
+              <Text
+                style={{
+                  color: c.sub,
+                  fontSize: 12,
+                  textDecorationLine: "underline",
+                }}
+              >
                 ¿Olvidaste tu contraseña?
               </Text>
             </TouchableOpacity>
@@ -295,13 +378,20 @@ export default function LoginScreen({ navigation }: any) {
             >
               <LinearGradient
                 colors={[c.accent, c.accent2]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={{ paddingVertical: 14, alignItems: "center", opacity: loginLoading ? 0.7 : 1 }}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  opacity: loginLoading ? 0.7 : 1,
+                }}
               >
                 {loginLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>Ingresar</Text>
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>
+                    Ingresar
+                  </Text>
                 )}
               </LinearGradient>
             </TouchableOpacity>
@@ -320,7 +410,9 @@ export default function LoginScreen({ navigation }: any) {
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: c.text, fontWeight: "600" }}>Crear cuenta</Text>
+              <Text style={{ color: c.text, fontWeight: "600" }}>
+                Crear cuenta
+              </Text>
             </TouchableOpacity>
 
             {/* Sesión activa */}
@@ -329,9 +421,15 @@ export default function LoginScreen({ navigation }: any) {
                 <Text style={{ color: c.sub }}>Sesión activa</Text>
                 <TouchableOpacity
                   onPress={() => logout()}
-                  style={{ backgroundColor: "#ef4444", padding: 10, borderRadius: 10 }}
+                  style={{
+                    backgroundColor: "#ef4444",
+                    padding: 10,
+                    borderRadius: 10,
+                  }}
                 >
-                  <Text style={{ color: "white", fontWeight: "700" }}>Cerrar sesión</Text>
+                  <Text style={{ color: "white", fontWeight: "700" }}>
+                    Cerrar sesión
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -339,16 +437,41 @@ export default function LoginScreen({ navigation }: any) {
 
           {/* Footer */}
           <View style={{ marginTop: 16, alignItems: "center" }}>
-            <Text style={{ color: c.sub, fontSize: 12 }}>© {new Date().getFullYear()} Stockeate</Text>
+            <Text style={{ color: c.sub, fontSize: 12 }}>
+              © {new Date().getFullYear()} Stockeate
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Modal Forgot */}
-      <Modal visible={showForgot} transparent animationType="fade" onRequestClose={() => setShowForgot(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 16 }}>
-          <View style={{ backgroundColor: "#0b1220", borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Recuperar contraseña</Text>
+      <Modal
+        visible={showForgot}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowForgot(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#0b1220",
+              borderRadius: 16,
+              padding: 16,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.12)",
+            }}
+          >
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
+              Recuperar contraseña
+            </Text>
             <TextInput
               placeholder="Tu email"
               value={fEmail}
@@ -356,31 +479,60 @@ export default function LoginScreen({ navigation }: any) {
               keyboardType="email-address"
               autoCapitalize="none"
               placeholderTextColor="#9aa4b2"
-              style={{ backgroundColor: "#121a2b", color: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: "#121a2b",
+                color: "white",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.12)",
+              }}
             />
             <TouchableOpacity
               onPress={doForgot}
-              style={{ backgroundColor: "#2b68ff", padding: 12, borderRadius: 12, alignItems: "center" }}
+              style={{
+                backgroundColor: "#2b68ff",
+                padding: 12,
+                borderRadius: 12,
+                alignItems: "center",
+              }}
               disabled={fSending}
             >
-              {fSending ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Enviar código</Text>}
+              {fSending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={{ color: "white", fontWeight: "700" }}>
+                  Enviar código
+                </Text>
+              )}
             </TouchableOpacity>
 
             {fSent ? (
               <View style={{ gap: 6 }}>
                 <Text style={{ color: "#9aa4b2", fontSize: 12 }}>
-                  Te enviamos un código de 6 dígitos por email. Ingresalo para cambiar tu contraseña.
+                  Te enviamos un código de 6 dígitos por email. Ingresalo para
+                  cambiar tu contraseña.
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowReset(true)}
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)", padding: 10, borderRadius: 10, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    padding: 10,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.12)",
+                  }}
                 >
                   <Text style={{ color: "white" }}>Tengo el código</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
 
-            <TouchableOpacity onPress={() => setShowForgot(false)} style={{ padding: 8, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => setShowForgot(false)}
+              style={{ padding: 8, alignItems: "center" }}
+            >
               <Text style={{ color: "#94a3b8" }}>Cerrar</Text>
             </TouchableOpacity>
           </View>
@@ -388,10 +540,33 @@ export default function LoginScreen({ navigation }: any) {
       </Modal>
 
       {/* Modal Reset */}
-      <Modal visible={showReset} transparent animationType="fade" onRequestClose={() => setShowReset(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 16 }}>
-          <View style={{ backgroundColor: "#0b1220", borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Cambiar contraseña</Text>
+      <Modal
+        visible={showReset}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReset(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#0b1220",
+              borderRadius: 16,
+              padding: 16,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.12)",
+            }}
+          >
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
+              Cambiar contraseña
+            </Text>
             <TextInput
               placeholder="Código de 6 dígitos"
               value={rToken}
@@ -399,7 +574,14 @@ export default function LoginScreen({ navigation }: any) {
               autoCapitalize="none"
               keyboardType="number-pad"
               placeholderTextColor="#9aa4b2"
-              style={{ backgroundColor: "#121a2b", color: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: "#121a2b",
+                color: "white",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.12)",
+              }}
             />
             <TextInput
               placeholder="Nueva contraseña"
@@ -407,17 +589,38 @@ export default function LoginScreen({ navigation }: any) {
               onChangeText={setRPass}
               secureTextEntry
               placeholderTextColor="#9aa4b2"
-              style={{ backgroundColor: "#121a2b", color: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}
+              style={{
+                backgroundColor: "#121a2b",
+                color: "white",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.12)",
+              }}
             />
             {rMsg ? <Text style={{ color: "#93c5fd" }}>{rMsg}</Text> : null}
             <TouchableOpacity
               onPress={doReset}
-              style={{ backgroundColor: "#2b68ff", padding: 12, borderRadius: 12, alignItems: "center" }}
+              style={{
+                backgroundColor: "#2b68ff",
+                padding: 12,
+                borderRadius: 12,
+                alignItems: "center",
+              }}
               disabled={rLoading}
             >
-              {rLoading ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Cambiar</Text>}
+              {rLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={{ color: "white", fontWeight: "700" }}>
+                  Cambiar
+                </Text>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowReset(false)} style={{ padding: 8, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => setShowReset(false)}
+              style={{ padding: 8, alignItems: "center" }}
+            >
               <Text style={{ color: "#94a3b8" }}>Cerrar</Text>
             </TouchableOpacity>
           </View>

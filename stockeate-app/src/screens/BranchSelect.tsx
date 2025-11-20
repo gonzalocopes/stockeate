@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { api } from "../api";
 import { useBranch } from "../stores/branch";
 import { useAuth } from "../stores/auth";
 import { pullBranchCatalog } from "../sync/index";
 import { useThemeStore } from "../stores/themeProviders";
-
 import HamburgerMenu from "../components/HamburgerMenu";
 
 type Branch = {
@@ -27,6 +28,7 @@ export default function BranchSelect({ navigation }: any) {
   const { theme } = useThemeStore();
   const { logout, user } = useAuth();
   const setBranch = useBranch((s) => s.set);
+  const insets = useSafeAreaInsets();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [sel, setSel] = useState<Branch | null>(null);
@@ -60,7 +62,7 @@ export default function BranchSelect({ navigation }: any) {
     return () => clearInterval(interval);
   }, [branches]);
 
-  // Header del Stack con botón hamburguesa (sin círculo)
+  // Header del Stack con botón hamburguesa
   useEffect(() => {
     navigation.setOptions({
       headerTitle: "Elegir sucursal",
@@ -68,7 +70,7 @@ export default function BranchSelect({ navigation }: any) {
         <TouchableOpacity
           onPress={() => setMenuOpen(true)}
           hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-          style={{ paddingHorizontal: 6, paddingVertical: 6 }} // 👈 sin fondo ni borde
+          style={{ paddingHorizontal: 6, paddingVertical: 6 }}
           accessibilityLabel="Abrir menú"
           accessibilityRole="button"
         >
@@ -155,14 +157,23 @@ export default function BranchSelect({ navigation }: any) {
       }}
       activeOpacity={0.7}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, minHeight: 50 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          flex: 1,
+          minHeight: 50,
+        }}
+      >
         <View
           style={{
             width: 22,
             height: 22,
             borderRadius: 11,
             backgroundColor:
-              sel && sel.id === item.id ? theme.colors.primary : theme.colors.inputBorder,
+              sel && sel.id === item.id
+                ? theme.colors.primary
+                : theme.colors.inputBorder,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 12,
@@ -181,22 +192,34 @@ export default function BranchSelect({ navigation }: any) {
 
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text
-            style={{ fontSize: 17, fontWeight: "600", color: theme.colors.text, marginBottom: 4 }}
+            style={{
+              fontSize: 17,
+              fontWeight: "600",
+              color: theme.colors.text,
+              marginBottom: 4,
+            }}
             numberOfLines={1}
           >
             {item.name}
           </Text>
           <Text
-            style={{ fontSize: 14, color: theme.colors.textMuted, lineHeight: 18 }}
+            style={{
+              fontSize: 14,
+              color: theme.colors.textMuted,
+              lineHeight: 18,
+            }}
             numberOfLines={2}
           >
-            {item.address || "Av. Hipólito Yrigoyen 20260, B1856 Glew, Provincia de Buenos Aires"}
+            {item.address ||
+              "Av. Hipólito Yrigoyen 20260, B1856 Glew, Provincia de Buenos Aires"}
           </Text>
         </View>
 
         <View
           style={{
-            backgroundColor: branchStatus[item.id] ? theme.colors.success : theme.colors.danger,
+            backgroundColor: branchStatus[item.id]
+              ? theme.colors.success
+              : theme.colors.danger,
             paddingHorizontal: 8,
             paddingVertical: 4,
             borderRadius: 10,
@@ -205,7 +228,9 @@ export default function BranchSelect({ navigation }: any) {
             opacity: 0.8,
           }}
         >
-          <Text style={{ color: "white", fontSize: 12, fontWeight: "500" }}>
+          <Text
+            style={{ color: "white", fontSize: 12, fontWeight: "500" }}
+          >
             {branchStatus[item.id] ? "Abierto" : "Cerrado"}
           </Text>
         </View>
@@ -228,19 +253,33 @@ export default function BranchSelect({ navigation }: any) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+    >
       <View style={{ flex: 1, padding: 16, paddingTop: 32 }}>
         {loading && (
-          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
+          <ActivityIndicator
+            size="large"
+            color={theme.colors.primary}
+            style={{ marginTop: 20 }}
+          />
         )}
         {err ? (
-          <Text style={{ color: theme.colors.danger, marginBottom: 8, textAlign: "center" }}>
+          <Text
+            style={{
+              color: theme.colors.danger,
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
             {err}
           </Text>
         ) : null}
 
         {!loading && !err && branches.length === 0 ? (
-          <Text style={{ textAlign: "center", color: theme.colors.text }}>
+          <Text
+            style={{ textAlign: "center", color: theme.colors.text }}
+          >
             No hay sucursales.
           </Text>
         ) : (
@@ -248,12 +287,17 @@ export default function BranchSelect({ navigation }: any) {
             data={branches}
             keyExtractor={(i, idx) => (i?.id ? i.id : String(idx))}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 8, paddingTop: "6%", paddingBottom: 100 }}
+            contentContainerStyle={{
+              paddingHorizontal: 8,
+              paddingTop: "6%",
+              paddingBottom: (insets.bottom || 16) + 80, // 👈 deja espacio para el botón
+            }}
             showsVerticalScrollIndicator={false}
           />
         )}
       </View>
 
+      {/* Botón fijo abajo */}
       <View
         style={{
           position: "absolute",
@@ -262,8 +306,8 @@ export default function BranchSelect({ navigation }: any) {
           right: 0,
           backgroundColor: theme.colors.inputBackground,
           paddingHorizontal: 16,
-          paddingBottom: 16,
           paddingTop: 8,
+          paddingBottom: (insets.bottom || 8) + 8, // 👈 respeta la safe area
           borderTopWidth: 1,
           borderTopColor: theme.colors.border,
         }}
@@ -312,6 +356,6 @@ export default function BranchSelect({ navigation }: any) {
           { label: "Cerrar sesión", onPress: logout, isDestructive: true },
         ]}
       />
-    </View>
+    </SafeAreaView>
   );
 }
