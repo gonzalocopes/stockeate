@@ -125,7 +125,7 @@ export default function RemitoHub({ navigation }: any) {
           isFocused={isFocused} // <-- 3. Pasamos isFocused
         />
 
-        <FullButton
+        {/* <FullButton
           title="Transferencia entre Sucursales"
           subtitle="Enviar/recibir entre depósitos. (Próximo)"
           icon="swap-horizontal-outline"
@@ -133,7 +133,7 @@ export default function RemitoHub({ navigation }: any) {
           disabled
           onPress={() => {}}
           isFocused={isFocused} // <-- 3. Pasamos isFocused
-        />
+        /> */}
       </ScrollView>
 
       {/* Modal del menú */}
