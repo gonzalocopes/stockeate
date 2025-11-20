@@ -102,9 +102,9 @@ export default function ValidationScreen({ route, navigation }: any) {
               (data.extractedData.items || []).map((it: any) => ({
                 detectedCode: it.detectedCode ?? it.code ?? '',
                 detectedName: it.detectedName ?? it.name ?? '',
-                qty: it.qty ?? 1,
-                price: it.price ?? it.unitPrice ?? 0,
-              })) || [];
+                qty: String(it.qty ?? 1), // Asegura que el valor inicial sea un string
+                price: String(it.price ?? 0), // Asegura que el valor inicial sea un string
+            })) || [];
 
             setItems(mappedItems);
           }
@@ -148,8 +148,9 @@ export default function ValidationScreen({ route, navigation }: any) {
         if (i !== index) return item;
 
         if (field === 'qty') {
-          const onlyNumbers = value.replace(/[^0-9]/g, '');
-          return { ...item, qty: onlyNumbers };
+        const cleaned = value.replace(/[^0-9.,]/g, '');
+        const sanitized = cleaned.replace(/,/g, '.'); // Estandariza a punto
+        return { ...item, qty: sanitized };
         }
 
         if (field === 'price') {
