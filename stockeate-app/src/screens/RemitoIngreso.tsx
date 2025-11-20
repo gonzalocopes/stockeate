@@ -427,7 +427,7 @@ export default function RemitoIngreso({ navigation }: any) {
           }}
         />
 
-        {/* Notas */}
+        {/* Notas asdasd*/}
         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Notas</Text>
         <TextInput
           placeholder="Observaciones"
