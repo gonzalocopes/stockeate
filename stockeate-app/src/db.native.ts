@@ -74,12 +74,26 @@ const uid = () =>
 
 export const DB = {
   getProductByCode(code: string) {
+<<<<<<< HEAD
     return (
       db.getFirstSync<any>(
         "SELECT * FROM products WHERE code = ?",
         [code]
       ) ?? null
     );
+=======
+    try {
+      return (
+        db.getFirstSync<any>(
+          "SELECT * FROM products WHERE code = ?",
+          [code]
+        ) ?? null
+      );
+    } catch (error) {
+      console.warn(`Error consultando producto por código ${code}:`, error);
+      return null;
+    }
+>>>>>>> Tadeo2
   },
 
   // --- 👇 FUNCIÓN 'upsertProduct' CORREGIDA Y SANEADA ---
@@ -93,6 +107,7 @@ export const DB = {
       return null;
     }
 
+<<<<<<< HEAD
     const code = p.code.toString();
 
     // 1) Buscamos si ya existe un producto con ese CODE
@@ -157,6 +172,95 @@ export const DB = {
     return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [
       id,
     ]);
+=======
+    try {
+      const code = p.code.toString();
+
+      // 1) Buscamos si ya existe un producto con ese CODE con protección
+      let existing = null;
+      try {
+        existing = db.getFirstSync<any>(
+          "SELECT id FROM products WHERE code = ?",
+          [code]
+        );
+      } catch (dbError) {
+        console.warn(`Error consultando producto existente ${code}:`, dbError);
+        return null;
+      }
+
+      // 2) Si existe, usamos ese id; si no, usamos el del servidor o generamos uno
+      const id = (
+        existing?.id ??
+        p.id ??
+        uid()
+      ).toString();
+
+      const name = (p.name ?? code).toString();
+      const price = Number.isFinite(Number(p.price))
+        ? Number(p.price)
+        : 0;
+      const stock = Number.isFinite(Number(p.stock))
+        ? Number(p.stock)
+        : 0;
+      const version = Number.isFinite(Number(p.version))
+        ? Number(p.version)
+        : 0;
+
+      const branchId = (
+        p.branch_id ??
+        p.branchId ??
+        p.branch ??
+        ""
+      ).toString();
+
+      const archived = Number(p.archived ?? 0) ? 1 : 0;
+
+      try {
+        db.runSync(
+          `INSERT INTO products(id, code, name, price, stock, version, branch_id, updated_at, archived)
+           VALUES(?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET 
+             code=excluded.code,
+             name=excluded.name, 
+             price=excluded.price, 
+             stock=COALESCE(excluded.stock, products.stock), 
+             updated_at=excluded.updated_at,
+             archived=COALESCE(excluded.archived, products.archived)`,
+          [id, code, name, price, stock, version, branchId, now(), archived]
+        );
+      } catch (e: any) {
+        // Si llegara a quedar algún caso raro, todavía hacemos fallback por code
+        console.error(
+          `Error guardando producto ${code} (ID: ${id}):`,
+          e?.message ?? String(e)
+        );
+        if ((e?.message ?? "").includes("UNIQUE constraint failed: products.code")) {
+          try {
+            db.runSync(
+              `UPDATE products SET name=?, price=?, stock=COALESCE(?, stock), updated_at=?, archived=COALESCE(?, archived) WHERE code = ?`,
+              [name, price, stock, now(), archived, code]
+            );
+          } catch (updateError) {
+            console.error(`Error en fallback update para ${code}:`, updateError);
+            return null;
+          }
+        } else {
+          return null;
+        }
+      }
+      
+      // Retorno protegido
+      try {
+        return db.getFirstSync<any>("SELECT * FROM products WHERE id = ?", [id]);
+      } catch (selectError) {
+        console.warn(`Error obteniendo producto guardado ${id}:`, selectError);
+        return null;
+      }
+    } catch (generalError) {
+      console.error(`Error general en upsertProduct:`, generalError);
+      return null;
+    }
+>>>>>>> Tadeo2
   },
   // --- FIN DE LA ACTUALIZACIÓN ---
 
