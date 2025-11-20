@@ -150,7 +150,7 @@ export class DigitalizedRemitoService {
     // Si no se detectan ítems, dejamos uno "dummy" editable
     if (items.length === 0) {
       items.push({
-        detectedCode: '???',
+        detectedCode: 'Ingrese codigo',
         detectedName: 'Ítem no detectado (Editar)',
         qty: 1,
       });
