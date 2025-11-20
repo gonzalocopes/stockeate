@@ -37,7 +37,7 @@ type CatalogAdded = {
 };
 
 export default function ScanAdd({ navigation, route }: any) {
-  const { theme } = useThemeStore(); // 👈 Obtener el tema
+  const { theme } = useThemeStore();
   const initialMode: Mode =
     route?.params?.mode === "batch" ? "batch" : "catalog";
   const [mode] = useState<Mode>(initialMode);
@@ -94,7 +94,7 @@ export default function ScanAdd({ navigation, route }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const addScannedToBatch = (p: any) => {
+  const addScannedToBatch = (p: any, qty: number = 1) => {
     addOrInc(
       {
         product_id: p.id,
@@ -102,7 +102,7 @@ export default function ScanAdd({ navigation, route }: any) {
         name: p.name,
         unit_price: p.price ?? 0,
       },
-      1
+      qty
     );
   };
 
@@ -137,13 +137,16 @@ export default function ScanAdd({ navigation, route }: any) {
     }
   }
 
-  const bumpCatalogAdded = (p: {
-    id: string;
-    code: string;
-    name: string;
-    price?: number;
-    stock?: number;
-  }) => {
+  const bumpCatalogAdded = (
+    p: {
+      id: string;
+      code: string;
+      name: string;
+      price?: number;
+      stock?: number;
+    },
+    qty: number = 1
+  ) => {
     setCatalogAdds((cur) => {
       const ix = cur.findIndex((r) => r.code === p.code);
       if (ix >= 0) {
@@ -153,7 +156,7 @@ export default function ScanAdd({ navigation, route }: any) {
           name: p.name,
           price: p.price ?? 0,
           stock: p.stock ?? 0,
-          count: copy[ix].count + 1,
+          count: copy[ix].count + qty,
         };
         return copy;
       }
@@ -164,7 +167,7 @@ export default function ScanAdd({ navigation, route }: any) {
           name: p.name,
           price: p.price ?? 0,
           stock: p.stock ?? 0,
-          count: 1,
+          count: qty,
         },
         ...cur,
       ];
@@ -291,6 +294,8 @@ export default function ScanAdd({ navigation, route }: any) {
     stock?: number;
   }) => {
     const branchId = getBranchId();
+
+    // Validación de estado previo
     if (!branchId || !pendingCode) {
       setEditVisible(false);
       setPendingCode(null);
@@ -298,47 +303,43 @@ export default function ScanAdd({ navigation, route }: any) {
       return;
     }
 
+    // Normalización del stock inicial
     const initialStock = Math.max(0, Math.floor(data.stock ?? 0));
 
+    // 1. Guardar DEFINICIÓN del producto.
+    // IMPORTANTE: Seteamos el stock en 0 aquí. ¿Por qué?
+    // Porque la cantidad ingresada (initialStock) se pasará a la lista (Catalog o Batch)
+    // y será la lista la encargada de confirmar el movimiento de stock final.
+    // Si lo seteamos acá Y ADEMÁS lo agregamos a la lista, se duplicaría.
     const created = DB.upsertProduct({
       code: data.code,
       name: data.name,
       price: data.price,
-      stock: initialStock,
+      stock: 0,
       branch_id: branchId,
     });
 
-    // si hay stock inicial, lo registramos y lo pusheamos como IN
-    if (initialStock > 0) {
-      DB.insertStockMove({
-        product_id: created.id,
-        branch_id: branchId,
-        qty: initialStock,
-        type: "IN",
-        ref: "Stock inicial",
-      });
-      await pushMoveByCode(
-        branchId,
-        created.code,
-        initialStock,
-        "Stock inicial"
-      );
-    }
+    // Determinación de la cantidad a reflejar en la lista activa.
+    const qtyToAdd = initialStock > 0 ? initialStock : 1;
 
     if (mode === "batch") {
-      addScannedToBatch(created);
+      addScannedToBatch(created, qtyToAdd);
     } else {
-      bumpCatalogAdded(created);
-      setLastScanned(`${created.code} agregado a la sucursal ✅`);
+      bumpCatalogAdded(created, qtyToAdd);
+
+      setLastScanned(`${created.code} agregado (${qtyToAdd} un.) ✅`);
+
+      // Sincronización en segundo plano (definición del producto)
       await syncProductOnline({
         code: created.code,
         name: created.name,
         price: created.price ?? 0,
-        stock: created.stock ?? 0,
+        stock: 0,
         branch_id: branchId,
       });
     }
 
+    // Restablecimiento de estados de UI
     setEditVisible(false);
     setPendingCode(null);
     setManualCode("");
@@ -367,7 +368,7 @@ export default function ScanAdd({ navigation, route }: any) {
         gap: 8,
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderColor: theme.colors.border, // 👈 Color del borde
+        borderColor: theme.colors.border,
       }}
     >
       <Text style={{ flex: 1, color: theme.colors.text }}>
@@ -381,8 +382,8 @@ export default function ScanAdd({ navigation, route }: any) {
           paddingHorizontal: 12,
           paddingVertical: 4,
           borderWidth: 1,
-          borderColor: theme.colors.primary, // 👈 Borde primario
-          backgroundColor: theme.colors.card, // 👈 Fondo para contraste
+          borderColor: theme.colors.primary,
+          backgroundColor: theme.colors.card,
           borderRadius: 6,
         }}
         activeOpacity={0.7}
@@ -410,8 +411,8 @@ export default function ScanAdd({ navigation, route }: any) {
           paddingHorizontal: 12,
           paddingVertical: 4,
           borderWidth: 1,
-          borderColor: theme.colors.primary, // 👈 Borde primario
-          backgroundColor: theme.colors.primary, // 👈 Fondo primario
+          borderColor: theme.colors.primary,
+          backgroundColor: theme.colors.primary,
           borderRadius: 6,
         }}
         activeOpacity={0.8}
@@ -425,7 +426,7 @@ export default function ScanAdd({ navigation, route }: any) {
         style={{
           paddingHorizontal: 12,
           paddingVertical: 4,
-          backgroundColor: theme.colors.danger, // 👈 Fondo danger
+          backgroundColor: theme.colors.danger,
           borderRadius: 6,
         }}
         activeOpacity={0.8}
@@ -443,7 +444,7 @@ export default function ScanAdd({ navigation, route }: any) {
         gap: 8,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderColor: theme.colors.border, // 👈 Color del borde
+        borderColor: theme.colors.border,
       }}
     >
       <View style={{ flex: 1 }}>
@@ -465,8 +466,8 @@ export default function ScanAdd({ navigation, route }: any) {
           paddingHorizontal: 12,
           paddingVertical: 6,
           borderWidth: 1,
-          borderColor: theme.colors.primary, // 👈 Borde primario
-          backgroundColor: theme.colors.card, // 👈 Fondo para contraste
+          borderColor: theme.colors.primary,
+          backgroundColor: theme.colors.card,
           borderRadius: 8,
         }}
         activeOpacity={0.8}
@@ -493,7 +494,7 @@ export default function ScanAdd({ navigation, route }: any) {
         style={{
           paddingHorizontal: 12,
           paddingVertical: 6,
-          backgroundColor: theme.colors.primary, // 👈 Fondo primario
+          backgroundColor: theme.colors.primary,
           borderRadius: 8,
         }}
         activeOpacity={0.8}
@@ -508,7 +509,7 @@ export default function ScanAdd({ navigation, route }: any) {
           paddingHorizontal: 12,
           paddingVertical: 6,
           borderRadius: 8,
-          backgroundColor: theme.colors.primary, // 👈 Usamos primary (azul)
+          backgroundColor: theme.colors.primary,
           marginLeft: 6,
         }}
         activeOpacity={0.8}
@@ -521,7 +522,14 @@ export default function ScanAdd({ navigation, route }: any) {
   const totalAdds = catalogAdds.reduce((a, r) => a + r.count, 0);
 
   return (
-    <View style={{ flex: 1, padding: 12, gap: 12, backgroundColor: theme.colors.background }}> 
+    <View
+      style={{
+        flex: 1,
+        padding: 12,
+        gap: 12,
+        backgroundColor: theme.colors.background,
+      }}
+    >
       <Text
         style={{ fontSize: 18, fontWeight: "600", color: theme.colors.text }}
       >
@@ -530,12 +538,12 @@ export default function ScanAdd({ navigation, route }: any) {
       {lastScanned ? (
         <View
           style={{
-            backgroundColor: theme.colors.card, // 👈 Fondo de la notificación
+            backgroundColor: theme.colors.card,
             padding: 8,
             borderRadius: 6,
             marginBottom: 8,
             borderWidth: 1,
-            borderColor: theme.colors.border, // 👈 Borde de la notificación
+            borderColor: theme.colors.border,
           }}
         >
           <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
@@ -553,7 +561,7 @@ export default function ScanAdd({ navigation, route }: any) {
             <View
               style={{
                 borderWidth: 1,
-                borderColor: theme.colors.border, // 👈 Borde del contenedor de la cámara
+                borderColor: theme.colors.border,
                 borderRadius: 12,
                 overflow: "hidden",
                 height: 200,
@@ -590,7 +598,7 @@ export default function ScanAdd({ navigation, route }: any) {
                   marginTop: -40,
                   marginLeft: -100,
                   borderWidth: 2,
-                  borderColor: theme.colors.primary, // 👈 Borde del recuadro de escaneo
+                  borderColor: theme.colors.primary,
                   borderRadius: 4,
                   backgroundColor: "transparent",
                 }}
@@ -652,15 +660,15 @@ export default function ScanAdd({ navigation, route }: any) {
             borderWidth: 1,
             borderColor: manualCode
               ? theme.colors.primary
-              : theme.colors.inputBorder, // 👈 Color del borde y foco
+              : theme.colors.inputBorder,
             borderRadius: 8,
             padding: 8,
             flex: 1,
-            backgroundColor: theme.colors.inputBackground, // 👈 Fondo del input
-            color: theme.colors.text, // 👈 Color del texto del input
+            backgroundColor: theme.colors.inputBackground,
+            color: theme.colors.text,
           }}
           placeholder="Código manual"
-          placeholderTextColor={theme.colors.textMuted} // 👈 Placeholder color
+          placeholderTextColor={theme.colors.textMuted}
           value={manualCode}
           onChangeText={setManualCode}
           onSubmitEditing={() => {
@@ -672,7 +680,7 @@ export default function ScanAdd({ navigation, route }: any) {
           style={{
             backgroundColor: manualCode.trim()
               ? theme.colors.primary
-              : theme.colors.neutral, // 👈 Fondo del botón
+              : theme.colors.neutral,
             paddingHorizontal: 16,
             paddingVertical: 8,
             borderRadius: 8,
@@ -711,7 +719,7 @@ export default function ScanAdd({ navigation, route }: any) {
           <TouchableOpacity
             style={{
               backgroundColor:
-                items.length > 0 ? theme.colors.primary : theme.colors.neutral, // 👈 Fondo primario/neutral
+                items.length > 0 ? theme.colors.primary : theme.colors.neutral,
               paddingVertical: 12,
               borderRadius: 8,
               alignItems: "center",
@@ -738,9 +746,9 @@ export default function ScanAdd({ navigation, route }: any) {
           style={{
             padding: 10,
             borderWidth: 1,
-            borderColor: theme.colors.border, // 👈 Borde del panel
+            borderColor: theme.colors.border,
             borderRadius: 10,
-            backgroundColor: theme.colors.card, // 👈 Fondo del panel
+            backgroundColor: theme.colors.card,
             gap: 10,
           }}
         >
@@ -752,7 +760,7 @@ export default function ScanAdd({ navigation, route }: any) {
                 flex: 1,
                 paddingVertical: 10,
                 borderRadius: 8,
-                backgroundColor: theme.colors.primary, // 👈 Fondo primario
+                backgroundColor: theme.colors.primary,
                 alignItems: "center",
               }}
               activeOpacity={0.9}
@@ -769,7 +777,7 @@ export default function ScanAdd({ navigation, route }: any) {
                 paddingVertical: 10,
                 paddingHorizontal: 14,
                 borderRadius: 8,
-                backgroundColor: theme.colors.inputBorder, // 👈 Fondo neutral/input
+                backgroundColor: theme.colors.inputBorder,
               }}
               activeOpacity={0.9}
             >
@@ -805,7 +813,7 @@ export default function ScanAdd({ navigation, route }: any) {
                   marginTop: 8,
                   paddingVertical: 12,
                   borderRadius: 8,
-                  backgroundColor: theme.colors.primary, // 👈 Fondo primario
+                  backgroundColor: theme.colors.primary,
                   alignItems: "center",
                   opacity: committing ? 0.85 : 1,
                 }}

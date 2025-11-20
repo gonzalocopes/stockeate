@@ -14,6 +14,7 @@ import ScanAdd from "./src/screens/ScanAdd";
 import RemitoForm from "./src/screens/RemitoForm";
 import RemitoResult from "./src/screens/RemitoResult";
 import { initDb } from "./src/db";
+import { wakeServer } from "./src/api";
 
 import BranchProducts from "./src/screens/BranchProducts";
 import BranchArchived from "./src/screens/BranchArchived";
@@ -42,6 +43,7 @@ export default function App() {
     initDb();
     hydrateAuth();
     hydrateBranch();
+    wakeServer();
   }, []);
 
   const navigationTheme = useMemo(() => {

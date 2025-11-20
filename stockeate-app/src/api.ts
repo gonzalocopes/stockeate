@@ -42,7 +42,9 @@ api.interceptors.request.use(async (config) => {
 export async function wakeServer() {
   try {
     await api.get("/branches", { timeout: 20000 });
-  } catch {}
+  } catch (e) {
+    console.error("WAKE_SERVER_FAIL", e);
+  }
 }
 
 // -------- Tipos de Sync --------

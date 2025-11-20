@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   FlatList,
-  Pressable,
+  TouchableOpacity,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -13,7 +13,10 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { useBranch } from "../stores/branch";
 import { useBatch } from "../stores/batch";
@@ -53,8 +56,14 @@ export default function RemitoForm({ navigation }: any) {
   const [menuVisible, setMenuVisible] = useState(false);
   const menuItems = React.useMemo(
     () => [
-      { label: mode === "light" ? "Tema Oscuro" : "Tema Claro", onPress: toggleTheme },
-      { label: "Configuración", onPress: () => navigation.navigate("Settings") },
+      {
+        label: mode === "light" ? "Tema Oscuro" : "Tema Claro",
+        onPress: toggleTheme,
+      },
+      {
+        label: "Configuración",
+        onPress: () => navigation.navigate("Settings"),
+      },
       { label: "Cerrar sesión", onPress: logout, isDestructive: true },
     ],
     [mode, toggleTheme, logout, navigation]
@@ -70,7 +79,9 @@ export default function RemitoForm({ navigation }: any) {
   // --- Header ---
   useEffect(() => {
     navigation.setOptions({
-      headerStyle: { backgroundColor: theme.colors.header ?? theme.colors.background },
+      headerStyle: {
+        backgroundColor: theme.colors.header ?? theme.colors.background,
+      },
       headerTitleStyle: { color: theme.colors.text },
       headerTintColor: theme.colors.text,
       headerRight: () => (
@@ -87,8 +98,12 @@ export default function RemitoForm({ navigation }: any) {
 
   if (!branchId) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
-        <Text style={{ color: theme.colors.text }}>Primero elegí una sucursal.</Text>
+      <View
+        style={[styles.centered, { backgroundColor: theme.colors.background }]}
+      >
+        <Text style={{ color: theme.colors.text }}>
+          Primero elegí una sucursal.
+        </Text>
       </View>
     );
   }
@@ -100,15 +115,21 @@ export default function RemitoForm({ navigation }: any) {
       "0"
     )}-${String(d.getDate()).padStart(2, "0")}`;
     const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `R-${(branchName || branchId).slice(0, 4).toUpperCase()}-${ymd}-${rnd}`;
+    return `R-${(branchName || branchId)
+      .slice(0, 4)
+      .toUpperCase()}-${ymd}-${rnd}`;
   };
 
   // --- Renderizado de Ítems del Lote ---
   const renderItem = ({ item }: { item: LoteItem }) => (
     <View style={[styles.itemContainer, { borderColor: theme.colors.border }]}>
       <View style={styles.itemDetails}>
-        <Text style={[styles.itemName, { color: theme.colors.text }]}>{item.name}</Text>
-        <Text style={[styles.itemCode, { color: theme.colors.textMuted }]}>{item.code}</Text>
+        <Text style={[styles.itemName, { color: theme.colors.text }]}>
+          {item.name}
+        </Text>
+        <Text style={[styles.itemCode, { color: theme.colors.textMuted }]}>
+          {item.code}
+        </Text>
         <Text style={[styles.itemPrice, { color: theme.colors.textSecondary }]}>
           ${item.unit_price ?? 0} c/u
         </Text>
@@ -118,18 +139,30 @@ export default function RemitoForm({ navigation }: any) {
           onPress={() => dec(item.code)}
           style={[
             styles.itemButton,
-            { borderColor: theme.colors.primary, backgroundColor: theme.colors.card },
+            {
+              borderColor: theme.colors.primary,
+              backgroundColor: theme.colors.card,
+            },
           ]}
           activeOpacity={0.8}
         >
-          <Text style={[styles.itemButtonText, { color: theme.colors.primary }]}>-</Text>
-        </Pressable>
-        <Text style={[styles.itemQty, { color: theme.colors.text }]}>{item.qty}</Text>
+          <Text
+            style={[styles.itemButtonText, { color: theme.colors.primary }]}
+          >
+            -
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.itemQty, { color: theme.colors.text }]}>
+          {item.qty}
+        </Text>
         <TouchableOpacity
           onPress={() => addOrInc(item, 1)}
           style={[
             styles.itemButton,
-            { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary },
+            {
+              borderColor: theme.colors.primary,
+              backgroundColor: theme.colors.primary,
+            },
           ]}
           activeOpacity={0.8}
         >
@@ -139,12 +172,16 @@ export default function RemitoForm({ navigation }: any) {
           onPress={() => remove(item.code)}
           style={[
             styles.itemButton,
-            { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger, marginLeft: 6 },
+            {
+              backgroundColor: theme.colors.danger,
+              borderColor: theme.colors.danger,
+              marginLeft: 6,
+            },
           ]}
           activeOpacity={0.8}
         >
           <Text style={[styles.itemButtonText, { color: "white" }]}>🗑️</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -215,7 +252,11 @@ export default function RemitoForm({ navigation }: any) {
       try {
         await pushMovesBatchByCodes(
           branchId,
-          items.map((r) => ({ code: r.code, qty: r.qty, reason: "Remito egreso" })),
+          items.map((r) => ({
+            code: r.code,
+            qty: r.qty,
+            reason: "Remito egreso",
+          })),
           "OUT"
         );
         await api.post("/sync", {
@@ -243,7 +284,10 @@ export default function RemitoForm({ navigation }: any) {
           })),
         });
       } catch (e) {
-        console.log("⚠️ Sync remito OUT falló (local ok):", (e as Error).toString());
+        console.log(
+          "⚠️ Sync remito OUT falló (local ok):",
+          (e as Error).toString()
+        );
       }
 
       try {
@@ -260,9 +304,7 @@ export default function RemitoForm({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -298,9 +340,7 @@ export default function RemitoForm({ navigation }: any) {
               ]}
             >
               Sucursal:{" "}
-              <Text
-                style={{ fontWeight: "700", color: theme.colors.text }}
-              >
+              <Text style={{ fontWeight: "700", color: theme.colors.text }}>
                 {branchName || branchId}
               </Text>
             </Text>
@@ -412,9 +452,7 @@ export default function RemitoForm({ navigation }: any) {
 
           {/* --- Encabezado de la Lista de Items --- */}
           <View style={styles.itemsHeader}>
-            <Text
-              style={[styles.itemsTitle, { color: theme.colors.text }]}
-            >
+            <Text style={[styles.itemsTitle, { color: theme.colors.text }]}>
               Items ({totalQty} u.)
             </Text>
             <TouchableOpacity
@@ -426,11 +464,7 @@ export default function RemitoForm({ navigation }: any) {
                 navigation.navigate("BranchProducts", { mode: "picker" })
               }
             >
-              <Ionicons
-                name="search"
-                size={16}
-                color={theme.colors.primary}
-              />
+              <Ionicons name="search" size={16} color={theme.colors.primary} />
               <Text
                 style={[
                   styles.searchButtonText,
@@ -474,9 +508,7 @@ export default function RemitoForm({ navigation }: any) {
             },
           ]}
         >
-          <Text
-            style={[styles.totalText, { color: theme.colors.text }]}
-          >
+          <Text style={[styles.totalText, { color: theme.colors.text }]}>
             Total estimado: ${totalImporte.toFixed(2)}
           </Text>
 
@@ -574,10 +606,30 @@ function buildHtml(
         </div>
         
         <div style="color:#334155;margin-bottom:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
-          ${customer ? `<div><strong>Cliente:</strong> ${escapeHtml(customer)}</div>` : ""}
-          ${customerCuit ? `<div><strong>CUIT:</strong> ${escapeHtml(customerCuit)}</div>` : ""}
-          ${customerAddress ? `<div><strong>Dirección:</strong> ${escapeHtml(customerAddress)}</div>` : ""}
-          ${customerTaxCondition ? `<div><strong>Cond. IVA:</strong> ${escapeHtml(customerTaxCondition)}</div>` : ""}
+          ${
+            customer
+              ? `<div><strong>Cliente:</strong> ${escapeHtml(customer)}</div>`
+              : ""
+          }
+          ${
+            customerCuit
+              ? `<div><strong>CUIT:</strong> ${escapeHtml(customerCuit)}</div>`
+              : ""
+          }
+          ${
+            customerAddress
+              ? `<div><strong>Dirección:</strong> ${escapeHtml(
+                  customerAddress
+                )}</div>`
+              : ""
+          }
+          ${
+            customerTaxCondition
+              ? `<div><strong>Cond. IVA:</strong> ${escapeHtml(
+                  customerTaxCondition
+                )}</div>`
+              : ""
+          }
         </div>
 
         <table style="border-collapse:collapse;width:100%;font-size:12px;margin-bottom:10px;">
@@ -595,7 +647,13 @@ function buildHtml(
         <div style="text-align:right;font-size:14px;margin:8px 0;">
           <strong>Total: $${totalImporte.toFixed(2)}</strong>
         </div>
-        ${notes ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(notes)}</div>` : ""}
+        ${
+          notes
+            ? `<div style="margin-top:10px;color:#475569;"><strong>Notas:</strong> ${escapeHtml(
+                notes
+              )}</div>`
+            : ""
+        }
         <div style="margin-top:24px;font-size:11px;color:#64748b;">ID interno: ${remitoId}</div>
       </body>
     </html>
