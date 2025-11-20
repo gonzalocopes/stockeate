@@ -53,13 +53,17 @@ export default function ValidationScreen({ route, navigation }: any) {
   const [date, setDate] = useState('');
   const [customerCuit, setCustomerCuit] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [customerTaxCondition, setCustomerTaxCondition] = useState('');
+  const [customerTaxCondition, setCustomerTaxCondition] =
+    useState('');
 
   const [items, setItems] = useState<ItemData[]>([]);
   const [loadingState, setLoadingState] = useState<
     'fetching' | 'processing' | 'failed' | 'success'
   >('fetching');
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 👉 NUEVO: controla si se puede confirmar
+  const [canSubmit, setCanSubmit] = useState(false);
 
   // --- Carga y polling ---
   useEffect(() => {
@@ -73,7 +77,10 @@ export default function ValidationScreen({ route, navigation }: any) {
         if (data.status === 'PROCESSING') {
           setLoadingState('processing');
           if (!pollingIntervalRef.current) {
-            pollingIntervalRef.current = setInterval(fetchRemitoDetails, 3000);
+            pollingIntervalRef.current = setInterval(
+              fetchRemitoDetails,
+              3000,
+            );
           }
         } else if (data.status === 'PENDING_VALIDATION') {
           setLoadingState('success');
@@ -84,7 +91,9 @@ export default function ValidationScreen({ route, navigation }: any) {
             setProvider(data.extractedData.provider || '');
             setDate(data.extractedData.date || '');
             setCustomerCuit(data.extractedData.customerCuit || '');
-            setCustomerAddress(data.extractedData.customerAddress || '');
+            setCustomerAddress(
+              data.extractedData.customerAddress || '',
+            );
             setCustomerTaxCondition(
               data.extractedData.customerTaxCondition || '',
             );
@@ -171,6 +180,35 @@ export default function ValidationScreen({ route, navigation }: any) {
     setItems((prev) => [...prev, newItem]);
   };
 
+  // 👉 NUEVO: validación para habilitar / deshabilitar el botón
+  useEffect(() => {
+    if (!items || items.length === 0) {
+      setCanSubmit(false);
+      return;
+    }
+
+    const allOk = items.every((it) => {
+      const code = (it.detectedCode || '').trim();
+      const name = (it.detectedName || '').trim();
+      const qtyNum = Number(it.qty);
+      const priceNumRaw =
+        it.price !== undefined && it.price !== null
+          ? String(it.price).replace(',', '.')
+          : '';
+      const priceNum = Number(priceNumRaw);
+
+      const codeOk = code.length > 0 && code !== 'ingresar código';
+      const nameOk =
+        name.length > 0 && name !== 'Ítem no detectado (Editar)';
+      const qtyOk = Number.isFinite(qtyNum) && qtyNum > 0;
+      const priceOk = Number.isFinite(priceNum) && priceNum > 0;
+
+      return codeOk && nameOk && qtyOk && priceOk;
+    });
+
+    setCanSubmit(allOk);
+  }, [items]);
+
   // --- Confirmar ---
   const handleConfirm = async () => {
     setIsSubmitting(true);
@@ -178,7 +216,9 @@ export default function ValidationScreen({ route, navigation }: any) {
       const normalizedItems = items.map((it) => {
         const qtyNumber = Number(it.qty);
         const priceNumber =
-          it.price !== undefined && it.price !== null && String(it.price) !== ''
+          it.price !== undefined &&
+          it.price !== null &&
+          String(it.price) !== ''
             ? Number(String(it.price).replace(',', '.'))
             : 0;
 
@@ -186,7 +226,10 @@ export default function ValidationScreen({ route, navigation }: any) {
           detectedCode: (it.detectedCode || '').trim(),
           detectedName: (it.detectedName || '').trim(),
           qty: Number.isFinite(qtyNumber) && qtyNumber >= 0 ? qtyNumber : 0,
-          price: Number.isFinite(priceNumber) && priceNumber >= 0 ? priceNumber : 0,
+          price:
+            Number.isFinite(priceNumber) && priceNumber >= 0
+              ? priceNumber
+              : 0,
         };
       });
 
@@ -218,7 +261,11 @@ export default function ValidationScreen({ route, navigation }: any) {
   };
 
   // --- Estados de carga / error ---
-  if (loadingState === 'fetching' || loadingState === 'processing' || !remito) {
+  if (
+    loadingState === 'fetching' ||
+    loadingState === 'processing' ||
+    !remito
+  ) {
     return (
       <View
         style={[
@@ -489,7 +536,7 @@ export default function ValidationScreen({ route, navigation }: any) {
                   : 'Confirmar y Actualizar Stock'
               }
               onPress={handleConfirm}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canSubmit}
               color={theme.colors.success}
             />
           </View>

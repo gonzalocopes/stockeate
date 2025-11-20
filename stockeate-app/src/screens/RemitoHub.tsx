@@ -45,7 +45,9 @@ export default function RemitoHub({ navigation }: any) {
 
   // Paletas de gradientes (Añadidos los nuevos)
   const gradSalida: [string, string, string] =
-    mode === "dark" ? ["#fcd34d", "#facc15", "#eab308"] : ["#fcd34d", "#facc15", "#eab308"]; // Gradiente de Home (ajustado)
+    mode === "dark"
+      ? ["#fcd34d", "#facc15", "#eab308"]
+      : ["#fcd34d", "#facc15", "#eab308"]; // Gradiente de Home (ajustado)
   const gradEntrada: [string, string] =
     mode === "dark" ? ["#3b82f6", "#2563eb"] : ["#60a5fa", "#3b82f6"]; // Azul (cambiado para diferenciar)
   const gradDigitalizar: [string, string] =
