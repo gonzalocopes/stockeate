@@ -5,7 +5,7 @@ import {
   Text,
   TextInput,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   Platform,
@@ -247,7 +247,7 @@ export default function RemitoIngreso({ navigation }: any) {
       </View>
       
       {/* Botón - */}
-      <TouchableOpacity onPress={() => setCount(item.code, -1)} 
+      <Pressable onPress={() => setCount(item.code, -1)} 
         style={{ 
             paddingHorizontal: 12, 
             paddingVertical: 6, 
@@ -256,25 +256,23 @@ export default function RemitoIngreso({ navigation }: any) {
             backgroundColor: theme.colors.card,
             borderRadius: 8 
         }} 
-        activeOpacity={0.9}
       >
         <Text style={{ color: theme.colors.primary, fontWeight: "800" }}>-</Text>
-      </TouchableOpacity>
+      </Pressable>
       
       <Text style={{ width: 28, textAlign: "center", fontWeight: "800", color: theme.colors.text }}>{item.count}</Text>
       
       {/* Botón + */}
-      <TouchableOpacity onPress={() => setCount(item.code, +1)} 
+      <Pressable onPress={() => setCount(item.code, +1)} 
         style={{ 
             paddingHorizontal: 12, 
             paddingVertical: 6, 
             backgroundColor: theme.colors.success,
             borderRadius: 8 
         }} 
-        activeOpacity={0.9}
       >
         <Text style={{ color: "white", fontWeight: "800" }}>+</Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 
@@ -512,7 +510,7 @@ export default function RemitoIngreso({ navigation }: any) {
           }}
           onSubmitEditing={() => { const c = manual.trim(); if (c) onScan(c); }}
         />
-        <TouchableOpacity
+        <Pressable
           onPress={() => { const c = manual.trim(); if (c) onScan(c); }}
           style={{ 
             paddingHorizontal: 14, 
@@ -520,11 +518,10 @@ export default function RemitoIngreso({ navigation }: any) {
             backgroundColor: manual ? theme.colors.primary : theme.colors.neutral,
             borderRadius: 8 
           }}
-          activeOpacity={0.9}
           disabled={!manual.trim()}
         >
           <Text style={{ color: "white", fontWeight: "700" }}>Agregar</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Lista */}
@@ -534,7 +531,7 @@ export default function RemitoIngreso({ navigation }: any) {
       {/* Acciones */}
       <View style={{ gap: 8, borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 10 }}>
         <Text style={{ fontWeight: "700", color: theme.colors.text }}>Total estimado: ${totalImporte.toFixed(2)}</Text>
-        <TouchableOpacity
+        <Pressable
           onPress={confirmAndSave}
           style={{ 
             paddingVertical: 14, 
@@ -543,11 +540,10 @@ export default function RemitoIngreso({ navigation }: any) {
             alignItems: "center", 
             opacity: saving ? 0.85 : 1 
           }}
-          activeOpacity={0.9}
           disabled={saving || rows.length === 0}
         >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "white", fontWeight: "800" }}>Confirmar ingreso</Text>}
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <ProductEditModal
