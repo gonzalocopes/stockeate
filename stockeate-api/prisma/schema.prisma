@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  // --- NUEVOS CAMPOS DE PERFIL DE USUARIO ---
+  firstName String? // Nombre
+  lastName  String? // Apellido
+  dni       String? @unique // DNI (debe ser único)
+
+  // --- Relaciones ---
+  branches           BranchUser[]
+  passwordResets     PasswordReset[]
+  digitalizedRemitos DigitalizedRemito[]
+}
+
+model Branch {
+  id                 String              @id @default(uuid())
+  name               String
+  location           String?
+  users              BranchUser[]
+  products           Product[]
+  remitos            Remito[]
+  digitalizedRemitos DigitalizedRemito[]
+
+  // --- NUEVOS CAMPOS DE PERFIL DE SUCURSAL ---
+  businessName String? // Razón Social (para el emisor del remito)
+  cuit         String? // CUIT (del emisor)
+  address      String? // Dirección (del emisor)
+  phone        String? // Teléfono (del emisor)
+  taxCondition String? // Condición de IVA (del emisor)
+}
+
+model BranchUser {
+  id       String @id @default(uuid())
+  role     String // <-- Mantenemos el 'String' simple por ahora
+  userId   String
+  branchId String
+  user     User   @relation(fields: [userId], references: [id])
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([userId, branchId]) // Buena práctica
+}
+
+model Product {
+  id         String       @id @default(uuid())
+  branchId   String
+  code       String       @unique
+  name       String
+  price      Decimal      @default(0)
+  stock      Int          @default(0)
+  version    Int          @default(0)
+  updatedAt  DateTime     @updatedAt
+  isActive   Boolean      @default(true)
+  branch     Branch       @relation(fields: [branchId], references: [id])
+  RemitoItem RemitoItem[]
+}
+
+model Remito {
+  id             String       @id @default(uuid())
+  branchId       String
+  tmpNumber      String       @unique
+  officialNumber String?      @unique
+  customer       String? // Nombre/Razón Social del Cliente
+  notes          String?
+  createdAt      DateTime     @default(now())
+  items          RemitoItem[]
+  branch         Branch       @relation(fields: [branchId], references: [id])
+
+  // 🔗 Relación 1 a 1 con DigitalizedRemito (desde REMITO)
+  digitalizedOriginId String?            @unique
+  digitalizedOrigin   DigitalizedRemito? @relation("DigitalizedRemitoToRemito", fields: [digitalizedOriginId], references: [id])
+
+  // --- CAMPOS EXTRAS DEL CLIENTE ---
+  customerCuit         String? // CUIT/CUIL del Cliente
+  customerAddress      String? // Dirección del Cliente
+  customerTaxCondition String? // Condición de IVA del Cliente
+
+  @@index([branchId], map: "idx_remito_branchId")
+  @@index([createdAt], map: "idx_remito_createdAt")
+}
+
+model RemitoItem {
+  id        String  @id @default(uuid())
+  remitoId  String
+  productId String
+  qty       Int
+  unitPrice Decimal @default(0)
+  remito    Remito  @relation(fields: [remitoId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model StockMove {
+  id        String   @id @default(uuid())
+  productId String
+  branchId  String
+  qty       Int
+  type      String // 'IN' | 'OUT'
+  ref       String?
+  createdAt DateTime @default(now())
+
+  @@index([ref], map: "idx_stockmove_ref")
+}
+
+model DigitalizedRemito {
+  id String @id @default(uuid())
+
+  // 🔗 AHORA userId ES OPCIONAL
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  // 🔗 Campo "de vuelta" de la relación 1 a 1 con Remito
+  remito Remito? @relation("DigitalizedRemitoToRemito")
+
+  originalFileUrl String
+  extractedData   Json?
+  status          DigitalizationStatus
+  errorMessage    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum DigitalizationStatus {
+  PROCESSING
+  PENDING_VALIDATION
+  COMPLETED
+  FAILED
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// --- Los modelos Role y Permission se omiten por ahora ---

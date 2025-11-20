@@ -1,0 +1,21 @@
+{
+  "name": "stockeate",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "@nestjs/swagger": "^11.2.0",
+    "expo": "54.0.9",
+    "expo-av": "~16.0.7",
+    "expo-barcode-scanner": "^13.0.1",
+    "expo-camera": "~17.0.8",
+    "expo-sqlite": "~16.0.8",
+    "react": "^18.2.0",
+    "react-native": "0.75.3",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.26",
+    "typescript": "~5.9.2"
+  }
+}
