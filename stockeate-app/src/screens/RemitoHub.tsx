@@ -26,28 +26,16 @@ export default function RemitoHub({ navigation }: any) {
   const [menuVisible, setMenuVisible] = useState(false);
   const menuItems = useMemo(
     () => [
-      {
-        label: mode === "light" ? "Tema Oscuro" : "Tema Claro",
-        onPress: toggleTheme,
-      },
-      {
-        label: "Configuración",
-        onPress: () => navigation.navigate("Settings"),
-      },
-      {
-        label: "Cerrar sesión",
-        onPress: useAuth.getState().logout,
-        isDestructive: true,
-      },
+      { label: mode === "light" ? "Tema Oscuro" : "Tema Claro", onPress: toggleTheme },
+      { label: "Configuración", onPress: () => navigation.navigate("Settings") },
+      { label: "Cerrar sesión", onPress: useAuth.getState().logout, isDestructive: true },
     ],
     [mode, toggleTheme]
   );
 
   // Paletas de gradientes (Añadidos los nuevos)
-  const gradSalida: [string, string, string] =
-    mode === "dark"
-      ? ["#fcd34d", "#facc15", "#eab308"]
-      : ["#fcd34d", "#facc15", "#eab308"]; // Gradiente de Home (ajustado)
+  const gradSalida: [string, string] =
+    mode === "dark" ? ["#1FBF7A", "#14A36D"] : ["#2ECF8D", "#1FBF7A"]; // Verde claro
   const gradEntrada: [string, string] =
     mode === "dark" ? ["#3b82f6", "#2563eb"] : ["#60a5fa", "#3b82f6"]; // Azul (cambiado para diferenciar)
   const gradDigitalizar: [string, string] =
@@ -93,13 +81,11 @@ export default function RemitoHub({ navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Usamos ScrollView para permitir desplazamiento si hay muchos botones */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 90 }}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 90 }}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Gestión de Remitos
         </Text>
+
         <FullButton
           title="Remito de Salida (Egreso)"
           subtitle="Usa el lote actual o armá uno nuevo. Descuenta stock."
@@ -108,6 +94,8 @@ export default function RemitoHub({ navigation }: any) {
           onPress={() => navigation.navigate("RemitoForm")}
           isFocused={isFocused} // <-- 3. Pasamos isFocused
         />
+
+  
         {/* --- 👇 BOTONES NUEVOS INTEGRADOS --- */}
         <FullButton
           title="Digitalizar Remito Externo"
@@ -117,7 +105,7 @@ export default function RemitoHub({ navigation }: any) {
           onPress={() => navigation.navigate("UploadRemito")}
           isFocused={isFocused}
         />
-        {/* 
+{/* 
          <FullButton
           title="Validar Remitos Digitalizados"
           subtitle="Revisa y aprueba los datos extraídos."
@@ -127,6 +115,7 @@ export default function RemitoHub({ navigation }: any) {
           isFocused={isFocused}
         />
         {/* --- FIN BOTONES NUEVOS --- */}
+
         <FullButton
           title="Historial de Remitos"
           subtitle="Buscá por número, cliente/proveedor o producto."
@@ -135,6 +124,7 @@ export default function RemitoHub({ navigation }: any) {
           onPress={() => navigation.navigate("RemitosHistory")}
           isFocused={isFocused} // <-- 3. Pasamos isFocused
         />
+
         {/* <FullButton
           title="Transferencia entre Sucursales"
           subtitle="Enviar/recibir entre depósitos. (Próximo)"
@@ -181,20 +171,15 @@ function FullButton({
   const [size, setSize] = useState({ w: 0, h: 0 });
   const tx = useRef(new Animated.Value(0)).current;
 
-  const pressIn = () =>
-    !disabled &&
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start();
-  const pressOut = () =>
-    !disabled &&
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+  const pressIn = () => !disabled && Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start();
+  const pressOut = () => !disabled && Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
 
   // --- 👇 5. LÓGICA DE ANIMACIÓN MODIFICADA (IGUAL QUE EN HOME) ---
   useEffect(() => {
     if (size.w === 0) return;
     const stripeW = Math.max(60, size.w * 0.55);
 
-    if (isFocused && !disabled) {
-      // Solo animar si está enfocado Y NO está deshabilitado
+    if (isFocused && !disabled) { // Solo animar si está enfocado Y NO está deshabilitado
       tx.setValue(-stripeW);
       Animated.sequence([
         Animated.delay(300), // Pequeña pausa inicial
@@ -238,26 +223,25 @@ function FullButton({
           }}
         >
           {/* shimmer responsive */}
-          {size.w > 0 &&
-            !disabled && ( // No mostrar shimmer si está deshabilitado
-              <Animated.View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  top: -12,
-                  height: size.h + 24,
-                  width: stripeW,
-                  transform: [{ translateX: tx }, { rotate: "18deg" }],
-                }}
-              >
-                <LinearGradient
-                  colors={["#ffffff00", "#ffffff40", "#ffffff00"]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </Animated.View>
-            )}
+          {size.w > 0 && !disabled && ( // No mostrar shimmer si está deshabilitado
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: -12,
+                height: size.h + 24,
+                width: stripeW,
+                transform: [{ translateX: tx }, { rotate: "18deg" }],
+              }}
+            >
+              <LinearGradient
+                colors={["#ffffff00", "#ffffff40", "#ffffff00"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          )}
 
           <View style={styles.fullButtonContent}>
             <View style={styles.fullButtonIcon}>
@@ -268,12 +252,7 @@ function FullButton({
               <Text style={styles.fullButtonSubtitle}>{subtitle}</Text>
             </View>
             {!disabled && (
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#fff"
-                style={{ opacity: 0.8 }}
-              />
+              <Ionicons name="chevron-forward" size={20} color="#fff" style={{ opacity: 0.8 }} />
             )}
           </View>
         </LinearGradient>

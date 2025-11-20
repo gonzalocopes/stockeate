@@ -1,4 +1,4 @@
-import axios, { AxiosRequestHeaders } from "axios";
+﻿import axios, { AxiosRequestHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
@@ -41,9 +41,11 @@ api.interceptors.request.use(async (config) => {
 // -------- Wake / Health --------
 export async function wakeServer() {
   try {
-    await api.get("/branches", { timeout: 20000 });
-  } catch (e) {
-    console.error("WAKE_SERVER_FAIL", e);
+    await api.get("/health", { timeout: 5000 });
+  } catch {
+    try {
+      await api.get("/branches", { timeout: 8000 });
+    } catch {}
   }
 }
 
