@@ -29,7 +29,8 @@ export default function RemitoResult({ route }: any) {
     }
   }, [remitoId, pdfPath]);
 
-  const qrData = { type: 'remito', remitoId, tmp };
+  // 🔴 AHORA EL QR APUNTA AL DASHBOARD
+  const qrUrl = "https://stockeate-dashboard.vercel.app/";
 
   const handleOpenPdf = async () => {
     if (!pdfPath) {
@@ -64,7 +65,8 @@ export default function RemitoResult({ route }: any) {
       <Text>Número: {tmp}</Text>
 
       <View style={{ marginVertical: 24 }}>
-        <RemitoQR data={qrData} />
+        {/* QR ahora usa el link */}
+        <RemitoQR data={qrUrl} />
       </View>
 
       <Button title="Ver / Compartir PDF" onPress={handleOpenPdf} />
