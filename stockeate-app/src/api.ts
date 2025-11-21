@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 // Config por ENV, fallback a Render
 const baseURL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  "https://stockeate.onrender.com";
+  "https://5d46d68b4dea.ngrok-free.app";
 
 console.log("[API baseURL]", baseURL);
 

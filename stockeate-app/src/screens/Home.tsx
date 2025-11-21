@@ -138,6 +138,8 @@ export default function Home({ navigation }: any) {
             <View style={styles.alertIcon}>
               <Ionicons name="warning-outline" size={22} color="#78350f" />
             </View>
+
+            {/* <-- Agregado View envolvente para los Text */}
             <View>
               <Text style={styles.alertTitle}>Atención</Text>
               <Text style={styles.alertSubtitle}>
@@ -145,6 +147,7 @@ export default function Home({ navigation }: any) {
               </Text>
             </View>
           </View>
+
           <Text style={styles.alertCountOnly}>
             {loadingLow ? "…" : lowCount}
           </Text>
