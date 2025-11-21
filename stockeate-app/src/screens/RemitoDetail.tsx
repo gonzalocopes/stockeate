@@ -199,32 +199,24 @@ export default function RemitoDetail({ route, navigation }: any) { // Añadido n
             <Text style={{ fontWeight: "600" }}>{it.name || '(Producto no sincronizado)'}</Text>
             <Text style={{ color: "#64748b", fontSize: 12 }}>{it.code || `(ID: ${it.product_id.slice(0,8)}...)`}</Text>
             <Text style={{ color: "#334155", fontSize: 12 }}>
-              Cantidad: {it.qty} — P. Unit.: ${it.unit_price.toFixed(2)} — Importe: ${(it.unit_price * it.qty).toFixed(2)}
+              Cantidad: {it.qty}
             </Text>
           </View>
         ))}
-
-        <Text style={{ textAlign: "right", fontWeight: "800", marginTop: 6 }}>
-          Total: ${totalAmount.toFixed(2)}
-        </Text>
+        
+        {/* (Se eliminó la línea de total y el costo unitario/importe de la vista) */}
       </View>
 
       {/* Acciones */}
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 'auto' }}>
-        <TouchableOpacity
-          onPress={openPdf}
-          style={{ flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: "#0ea5e9", alignItems: "center" }}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: "white", fontWeight: "800" }}>Abrir / compartir PDF</Text>
-        </TouchableOpacity>
+      <View style={{ marginTop: 12, alignItems: "center" }}>
+        
         <TouchableOpacity
           onPress={reprint}
-          style={{ paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#e5e7eb", alignItems: "center", opacity: busy ? 0.85 : 1 }}
+          style={{ width: "100%", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#0ea5e9", alignItems: "center", opacity: busy ? 0.85 : 1 }}
           activeOpacity={0.9}
           disabled={busy}
         >
-          {busy ? <ActivityIndicator /> : <Text style={{ color: "#111827", fontWeight: "800" }}>Reimprimir</Text>}
+          {busy ? <ActivityIndicator /> : <Text style={{ color: "white", fontWeight: "800" }}>Reimprimir</Text>}
         </TouchableOpacity>
       </View>
     </View>

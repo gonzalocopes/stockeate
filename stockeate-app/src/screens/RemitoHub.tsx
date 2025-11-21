@@ -87,7 +87,7 @@ export default function RemitoHub({ navigation }: any) {
         </Text>
 
         <FullButton
-          title="Remito de Salida (Egreso)"
+          title="Remito de Salida"
           subtitle="Usa el lote actual o armá uno nuevo. Descuenta stock."
           icon="arrow-up-circle-outline" // Icono más específico
           gradient={gradSalida}
@@ -98,7 +98,7 @@ export default function RemitoHub({ navigation }: any) {
   
         {/* --- 👇 BOTONES NUEVOS INTEGRADOS --- */}
         <FullButton
-          title="Digitalizar Remito Externo"
+          title="Digitalizar Remito"
           subtitle="Sube una foto o PDF de un proveedor."
           icon="camera-outline"
           gradient={gradDigitalizar}

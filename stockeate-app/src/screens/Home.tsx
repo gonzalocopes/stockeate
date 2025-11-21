@@ -154,7 +154,7 @@ export default function Home({ navigation }: any) {
         <View style={{ gap: 16, marginTop: 8 }}>
           <FullButton
             title="Escanear"
-            subtitle="Agregar productos por código de barras / QR"
+            subtitle="Agregar productos por código de barras"
             icon="scan-outline"
             gradient={["#10b981", "#059669"]}
             onPress={() => navigation.navigate("ScanAdd")}
