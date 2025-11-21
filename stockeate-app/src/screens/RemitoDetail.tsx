@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, StyleSheet } from "react-native";
 import { DB } from "../db";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 
-// --- TIPOS DE DATOS --- (Mantener fuera de la función principal)
+
 type Remito = {
   id: string;
   tmp_number: string | null;
@@ -29,7 +29,7 @@ type Item = {
   name?: string;
 };
 
-// Función helper para obtener dirección del remito (Mantener fuera del componente si no usa hooks)
+
 const getRemitoDirection = (tmpNumber: string) => {
   if (Platform.OS === 'web') return null; 
   const SQLite = require('expo-sqlite');
@@ -71,9 +71,32 @@ export default function RemitoDetail({ route, navigation }: any) {
 
   const totalQty = useMemo(() => items.reduce((a, r) => a + (r.qty ?? 0), 0), [items]);
 
+  const reprint = async () => {
+    if (!remito) return; // Ya verificamos que remito existe
+    
+    // Necesitamos el ID para la base de datos local
+    const currentRemitoId = remito.id; 
+    
+    setBusy(true);
+    try {
+
+
+      const html =
+        dir === "IN"
+          ? buildHtmlIN(remito, items) // remito no es null
+          : buildHtmlOUT(remito, items); // remito no es null
+      
+      const { uri } = await Print.printToFileAsync({ html });
+      
+      if (uri) {
+
+        DB.setRemitoPdfPath(currentRemitoId, uri);
+
+
+
 
   const openPdf = async () => {
-    // 1. 📁 Verifica si el PDF local existe (la ruta que guardó 'reprint')
+
     if (!remito?.pdf_path) {
         Alert.alert("PDF", "Este remito no tiene archivo guardado. Presiona Reimprimir primero.");
         return;
@@ -85,7 +108,7 @@ export default function RemitoDetail({ route, navigation }: any) {
         return;
     }
     try {
-        // Usa la ruta local guardada (remito.pdf_path)
+
         await Sharing.shareAsync(remito.pdf_path); 
     } catch (e) {
         Alert.alert("Compartir", "No se pudo abrir/compartir el PDF.");
@@ -93,10 +116,6 @@ export default function RemitoDetail({ route, navigation }: any) {
 };
 
 
-  // 🛑 FUNCIÓN REPRINT CORREGIDA (Guarda el PDF generado)
-  // ... (código anterior)
-
-  // 🟢 LA FUNCIÓN REPRINT CORREGIDA
   const reprint = async () => {
     if (!remito) return; // Ya verificamos que remito existe
     
@@ -116,9 +135,9 @@ export default function RemitoDetail({ route, navigation }: any) {
       const { uri } = await Print.printToFileAsync({ html });
       
       if (uri) {
-        // 1. 💾 GUARDAR LA RUTA LOCAL EN LA BD
-        // 🛑 SOLUCIÓN TS18047: Usamos el ID capturado previamente que sabemos que existe.
+
         DB.setRemitoPdfPath(currentRemitoId, uri);
+
 
         // 2. 🔄 ACTUALIZAR EL ESTADO DEL COMPONENTE 
         setRemito((prev) => (prev ? { ...prev, pdf_path: uri } : null));
@@ -133,7 +152,7 @@ export default function RemitoDetail({ route, navigation }: any) {
     }
   };
 
-  // ... (El resto del componente sigue igual)
+
   if (!remito) {
 
   
@@ -150,7 +169,11 @@ export default function RemitoDetail({ route, navigation }: any) {
   const isDigitalized = remito.notes?.startsWith("Ingreso por digitalización");
 
   return (
+
+    <View style={{ flex: 1, padding: 16, gap: 12, paddingBottom: Platform.OS === "android" ? 120 : 28 }}>
+
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
+
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Text style={{ fontSize: 18, fontWeight: "700" }}>
           {remito.tmp_number || "(sin nro.)"}
@@ -228,6 +251,24 @@ export default function RemitoDetail({ route, navigation }: any) {
         ))}
       </View>
 
+
+
+      <View style={styles.actionsWrapper}>
+        <TouchableOpacity
+          onPress={reprint}
+          style={[
+            styles.reprintButton,
+            { opacity: busy ? 0.85 : 1 }
+          ]}
+          activeOpacity={0.9}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator color="#0b4f6c" />
+          ) : (
+            <Text style={styles.reprintText}>Reimprimir</Text>
+          )}
+
       {/* Acciones */}
       <View style={{ flexDirection: "row", gap: 8, marginTop: 'auto' }}>
         <TouchableOpacity
@@ -244,13 +285,48 @@ export default function RemitoDetail({ route, navigation }: any) {
           disabled={busy}
         >
           {busy ? <ActivityIndicator /> : <Text style={{ color: "#111827", fontWeight: "800" }}>Reimprimir</Text>}
+
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-/* ===== Helpers PDF (ACTUALIZADOS) ===== */
+
+const styles = StyleSheet.create({
+  actionsWrapper: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: Platform.OS === "android" ? 48 : 20,
+    flexDirection: "row",
+    // aseguro que el contenedor no sobresalga y mantenga el botón centrado
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reprintButton: {
+    flex: 1,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#0ea5e9",
+    justifyContent: "center",
+    alignItems: "center",
+    // sombra / elevación para Android / iOS
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    paddingHorizontal: 16,
+  },
+  reprintText: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+});
+
+
 
 function buildHtmlOUT(remito: Remito, items: Item[]) { 
   const rows = items
@@ -294,7 +370,7 @@ function buildHtmlOUT(remito: Remito, items: Item[]) {
     </html>`;
 }
 
-// 🛑 CORRECCIÓN: LA FUNCIÓN YA NO RECIBE EL PARÁMETRO 'total: number'
+
 function buildHtmlIN(remito: Remito, items: Item[]) {
   const rows = items
     .map(
