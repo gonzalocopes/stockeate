@@ -147,17 +147,59 @@ export class DigitalizedRemitoService {
     const cuit = this.findFirstMatch(texto, patronesCuit) || '';
     const address = this.findFirstMatch(texto, patronesDireccion) || '';
 
+    // --- Intento de parseo del bloque "DETALLE DE PRODUCTOS" ---
+    try {
+      const lineas = texto
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      const startIdx = lineas.findIndex((l) =>
+        /DETALLE\s+DE\s+PRODUCTOS/i.test(l),
+      );
+
+      if (startIdx !== -1) {
+        for (let i = startIdx + 1; i < lineas.length; i++) {
+          const linea = lineas[i];
+
+          // Cortamos al llegar a OBSERVACIONES u otro título
+          if (/^OBSERVACIONES/i.test(linea)) break;
+
+          // Ejemplo: PRD001 Aceite Girasol 1L 12 56
+          const match = linea.match(
+            /^([A-Z0-9]{3,})\s+(.+?)\s+(\d+)\s+(\d+)\s*$/,
+          );
+          if (match) {
+            const code = match[1].trim();
+            const name = match[2].trim();
+            const qtyNum = Number(match[3]);
+            const qty = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1;
+
+            items.push({
+              detectedCode: code,
+              detectedName: name,
+              qty,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error(
+        `[Parser] Error intentando parsear DETALLE DE PRODUCTOS: ${(e as Error).message}`,
+      );
+    }
+
     // Si no se detectan ítems, dejamos uno "dummy" editable
     if (items.length === 0) {
       items.push({
-        detectedCode: 'ingresar código',
+        detectedCode: '', // vacío -> el placeholder se maneja en el front
         detectedName: 'Ítem no detectado (Editar)',
         qty: 1,
       });
     }
 
     this.logger.log(
-      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}`,
+      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Dirección: ${address}, items=${items.length}`,
     );
 
     return {
@@ -228,10 +270,14 @@ export class DigitalizedRemitoService {
       const processedItems = await Promise.all(
         (validationData.items || []).map(async (item, index) => {
           // --- Normalizar campos básicos ---
-
-          // 👇 AQUÍ EL CAMBIO: tratamos '???' como "sin código"
           let rawCode = (item.detectedCode || '').trim();
-          if (!rawCode || rawCode === '???') {
+
+          // Tratamos '???' o textos tipo "ingresar código" como "sin código"
+          if (
+            !rawCode ||
+            rawCode === '???' ||
+            rawCode.toLowerCase().includes('ingresar código')
+          ) {
             rawCode = '';
           }
 
@@ -253,7 +299,7 @@ export class DigitalizedRemitoService {
             isNaN(parsedPrice) || parsedPrice < 0 ? 0 : parsedPrice;
           const unitPriceDecimal = new Prisma.Decimal(unitPriceNumber);
 
-          // Si no trae código (o era '???'), generamos uno
+          // Si no trae código, generamos uno
           const code =
             rawCode ||
             `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;

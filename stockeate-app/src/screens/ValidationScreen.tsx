@@ -53,8 +53,7 @@ export default function ValidationScreen({ route, navigation }: any) {
   const [date, setDate] = useState('');
   const [customerCuit, setCustomerCuit] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
-  const [customerTaxCondition, setCustomerTaxCondition] =
-    useState('');
+  const [customerTaxCondition, setCustomerTaxCondition] = useState('');
 
   const [items, setItems] = useState<ItemData[]>([]);
   const [loadingState, setLoadingState] = useState<
@@ -62,8 +61,29 @@ export default function ValidationScreen({ route, navigation }: any) {
   >('fetching');
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 👉 NUEVO: controla si se puede confirmar
-  const [canSubmit, setCanSubmit] = useState(false);
+  // --- helper de validación de ítem ---
+  const isItemValid = (item: ItemData): boolean => {
+    const code = String(item.detectedCode || '').trim();
+    const name = String(item.detectedName || '').trim();
+    const qtyNum = Number(item.qty);
+    const priceNum = Number(
+      String(item.price ?? '').replace(',', '.'),
+    );
+
+    const codeOk =
+      code.length > 0 &&
+      code !== '???' &&
+      code.toLowerCase() !== 'ingresar código';
+    const nameOk =
+      name.length > 0 && name !== 'Ítem no detectado (Editar)';
+    const qtyOk = Number.isFinite(qtyNum) && qtyNum > 0;
+    const priceOk = Number.isFinite(priceNum) && priceNum > 0;
+
+    return codeOk && nameOk && qtyOk && priceOk;
+  };
+
+  const allItemsValid =
+    items.length > 0 && items.every((it) => isItemValid(it));
 
   // --- Carga y polling ---
   useEffect(() => {
@@ -91,20 +111,29 @@ export default function ValidationScreen({ route, navigation }: any) {
             setProvider(data.extractedData.provider || '');
             setDate(data.extractedData.date || '');
             setCustomerCuit(data.extractedData.customerCuit || '');
-            setCustomerAddress(
-              data.extractedData.customerAddress || '',
-            );
+            setCustomerAddress(data.extractedData.customerAddress || '');
             setCustomerTaxCondition(
               data.extractedData.customerTaxCondition || '',
             );
 
             const mappedItems =
-              (data.extractedData.items || []).map((it: any) => ({
-                detectedCode: it.detectedCode ?? it.code ?? '',
-                detectedName: it.detectedName ?? it.name ?? '',
-                qty: it.qty ?? 1,
-                price: it.price ?? it.unitPrice ?? 0,
-              })) || [];
+              (data.extractedData.items || []).map((it: any) => {
+                const name =
+                  it.detectedName ?? it.name ?? '';
+                const isDummy =
+                  name === 'Ítem no detectado (Editar)';
+
+                return {
+                  detectedCode:
+                    it.detectedCode ?? it.code ?? '',
+                  detectedName: name,
+                  // Para el dummy dejamos qty y price vacíos para usar placeholder
+                  qty: isDummy ? '' : it.qty ?? 1,
+                  price: isDummy
+                    ? ''
+                    : it.price ?? it.unitPrice ?? '',
+                } as ItemData;
+              }) || [];
 
             setItems(mappedItems);
           }
@@ -174,43 +203,22 @@ export default function ValidationScreen({ route, navigation }: any) {
     const newItem: ItemData = {
       detectedCode: '',
       detectedName: '',
-      qty: 1,
-      price: 0,
+      qty: '',
+      price: '',
     };
     setItems((prev) => [...prev, newItem]);
   };
 
-  // 👉 NUEVO: validación para habilitar / deshabilitar el botón
-  useEffect(() => {
-    if (!items || items.length === 0) {
-      setCanSubmit(false);
+  // --- Confirmar ---
+  const handleConfirm = async () => {
+    if (!allItemsValid) {
+      Alert.alert(
+        'Datos incompletos',
+        'Completá código, nombre, cantidad y precio de todos los ítems antes de confirmar.',
+      );
       return;
     }
 
-    const allOk = items.every((it) => {
-      const code = (it.detectedCode || '').trim();
-      const name = (it.detectedName || '').trim();
-      const qtyNum = Number(it.qty);
-      const priceNumRaw =
-        it.price !== undefined && it.price !== null
-          ? String(it.price).replace(',', '.')
-          : '';
-      const priceNum = Number(priceNumRaw);
-
-      const codeOk = code.length > 0 && code !== 'ingresar código';
-      const nameOk =
-        name.length > 0 && name !== 'Ítem no detectado (Editar)';
-      const qtyOk = Number.isFinite(qtyNum) && qtyNum > 0;
-      const priceOk = Number.isFinite(priceNum) && priceNum > 0;
-
-      return codeOk && nameOk && qtyOk && priceOk;
-    });
-
-    setCanSubmit(allOk);
-  }, [items]);
-
-  // --- Confirmar ---
-  const handleConfirm = async () => {
     setIsSubmitting(true);
     try {
       const normalizedItems = items.map((it) => {
@@ -225,7 +233,10 @@ export default function ValidationScreen({ route, navigation }: any) {
         return {
           detectedCode: (it.detectedCode || '').trim(),
           detectedName: (it.detectedName || '').trim(),
-          qty: Number.isFinite(qtyNumber) && qtyNumber >= 0 ? qtyNumber : 0,
+          qty:
+            Number.isFinite(qtyNumber) && qtyNumber >= 0
+              ? qtyNumber
+              : 0,
           price:
             Number.isFinite(priceNumber) && priceNumber >= 0
               ? priceNumber
@@ -261,11 +272,7 @@ export default function ValidationScreen({ route, navigation }: any) {
   };
 
   // --- Estados de carga / error ---
-  if (
-    loadingState === 'fetching' ||
-    loadingState === 'processing' ||
-    !remito
-  ) {
+  if (loadingState === 'fetching' || loadingState === 'processing' || !remito) {
     return (
       <View
         style={[
@@ -448,7 +455,7 @@ export default function ValidationScreen({ route, navigation }: any) {
                     { color: theme.colors.textMuted, marginBottom: 4 },
                   ]}
                   value={String(item.detectedCode ?? '')}
-                  placeholder="Código"
+                  placeholder="Ingresar código"
                   placeholderTextColor={theme.colors.textMuted}
                   onChangeText={(text) =>
                     handleItemChange(index, 'detectedCode', text)
@@ -487,7 +494,7 @@ export default function ValidationScreen({ route, navigation }: any) {
                     handleItemChange(index, 'price', text)
                   }
                   keyboardType="numeric"
-                  placeholder="0.00"
+                  placeholder="0"
                   placeholderTextColor={theme.colors.textMuted}
                 />
               </View>
@@ -505,6 +512,8 @@ export default function ValidationScreen({ route, navigation }: any) {
                 value={String(item.qty ?? '')}
                 onChangeText={(text) => handleItemChange(index, 'qty', text)}
                 keyboardType="numeric"
+                placeholder="Cant."
+                placeholderTextColor={theme.colors.textMuted}
               />
             </View>
           ))}
@@ -536,7 +545,7 @@ export default function ValidationScreen({ route, navigation }: any) {
                   : 'Confirmar y Actualizar Stock'
               }
               onPress={handleConfirm}
-              disabled={isSubmitting || !canSubmit}
+              disabled={isSubmitting || !allItemsValid}
               color={theme.colors.success}
             />
           </View>
