@@ -30,15 +30,18 @@ type Item = {
 
 const getRemitoDirection = (tmpNumber: string) => {
   if (Platform.OS === 'web') return null;
+  if (Platform.OS === 'web') return null;
   const SQLite = require('expo-sqlite');
   const db = SQLite.openDatabaseSync("stockeate.db");
   const row = db.getFirstSync(
     `SELECT type FROM stock_moves WHERE ref = ? LIMIT 1`,
     [tmpNumber]
   ) as { type: string } | null;
+  ) as { type: string } | null;
   return row?.type === "IN" || row?.type === "OUT" ? row.type as "IN" | "OUT" : null;
 };
 
+export default function RemitoDetail({ route, navigation }: any) {
 export default function RemitoDetail({ route, navigation }: any) {
   const remitoId: string = route?.params?.remitoId;
 
@@ -69,6 +72,7 @@ export default function RemitoDetail({ route, navigation }: any) {
   const openPdf = async () => {
     if (!remito?.pdf_path) {
       Alert.alert("PDF", "Este remito no tiene archivo guardado. Presiona Reimprimir primero.");
+      Alert.alert("PDF", "Este remito no tiene archivo guardado. Presiona Reimprimir primero.");
       return;
     }
     if (!(await Sharing.isAvailableAsync())) {
@@ -85,14 +89,19 @@ export default function RemitoDetail({ route, navigation }: any) {
   const reprint = async () => {
     if (!remito) return;
     const currentRemitoId = remito.id;
+    const currentRemitoId = remito.id;
     setBusy(true);
     try {
       const html =
         dir === "IN"
           ? buildHtmlIN(remito, items)
           : buildHtmlOUT(remito, items);
+          ? buildHtmlIN(remito, items)
+          : buildHtmlOUT(remito, items);
       const { uri } = await Print.printToFileAsync({ html });
       if (uri) {
+        DB.setRemitoPdfPath(currentRemitoId, uri);
+        setRemito((prev) => (prev ? { ...prev, pdf_path: uri } : null));
         DB.setRemitoPdfPath(currentRemitoId, uri);
         setRemito((prev) => (prev ? { ...prev, pdf_path: uri } : null));
         await Sharing.shareAsync(uri);
@@ -135,6 +144,7 @@ export default function RemitoDetail({ route, navigation }: any) {
         {remito.customer ? ` — ${isIN ? "Proveedor" : "Cliente"}: ${remito.customer}` : ""}
       </Text>
 
+
       {remito.customer_cuit && (
         <Text style={{ color: "#475569", fontSize: 12 }}>CUIT: {remito.customer_cuit}</Text>
       )}
@@ -146,8 +156,10 @@ export default function RemitoDetail({ route, navigation }: any) {
       )}
 
       {remito.notes && !isDigitalized ? (
+      {remito.notes && !isDigitalized ? (
         <Text style={{ color: "#334155", fontSize: 12, marginTop: 4 }}>Notas: {remito.notes}</Text>
       ) : null}
+
 
       {isDigitalized && (
         <Text style={{ color: "#059669", fontSize: 12, fontWeight: 'bold', fontStyle: 'italic', marginTop: 4 }}>
@@ -166,6 +178,7 @@ export default function RemitoDetail({ route, navigation }: any) {
         }}
       >
         <Text style={{ fontWeight: "700" }}>Items ({totalQty} u.)</Text>
+
 
         {items.length === 0 && (
           <Text style={{color: '#64748b', textAlign: 'center', paddingVertical: 10}}>
@@ -186,6 +199,7 @@ export default function RemitoDetail({ route, navigation }: any) {
             <Text style={{ fontWeight: "600" }}>{it.name || '(Producto no sincronizado)'}</Text>
             <Text style={{ color: "#64748b", fontSize: 12 }}>{it.code || `(ID: ${it.product_id.slice(0,8)}...)`}</Text>
             <Text style={{ color: "#334155", fontSize: 12 }}>
+              Cantidad: {it.qty}
               Cantidad: {it.qty}
             </Text>
           </View>
@@ -208,6 +222,7 @@ export default function RemitoDetail({ route, navigation }: any) {
 }
 
 function buildHtmlOUT(remito: Remito, items: Item[]) {
+function buildHtmlOUT(remito: Remito, items: Item[]) {
   const rows = items
     .map(
       (r) => `
@@ -219,6 +234,7 @@ function buildHtmlOUT(remito: Remito, items: Item[]) {
     )
     .join("");
 
+  return `<html>
   return `<html>
       <head><meta charset="utf-8"/><title>Remito salida ${remito.tmp_number || ""}</title></head>
       <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
@@ -250,6 +266,7 @@ function buildHtmlOUT(remito: Remito, items: Item[]) {
 }
 
 function buildHtmlIN(remito: Remito, items: Item[]) {
+function buildHtmlIN(remito: Remito, items: Item[]) {
   const rows = items
     .map(
       (r) => `
@@ -261,6 +278,7 @@ function buildHtmlIN(remito: Remito, items: Item[]) {
     )
     .join("");
 
+  return `<html>
   return `<html>
       <head><meta charset="utf-8"/><title>Remito entrada ${remito.tmp_number || ""}</title></head>
       <body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px;">
