@@ -64,7 +64,7 @@ export class DigitalizedRemitoService {
         branchId,
         originalFileUrl: file.path,
         status: DigitalizationStatus.PROCESSING,
-      } as any, 
+      }, 
     });
 
     // Lanzamos OCR en background (sin esperar)
@@ -168,115 +168,117 @@ export class DigitalizedRemitoService {
 // ---------------------------------------------------------------------
 // -------- 3) Parser "inteligente" del texto del OCR -------------------
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// -------- 3) Parser "inteligente" del texto del OCR (FINAL) -----------
+// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// -------- 3) Parser "inteligente" del texto del OCR (FINAL Y CORREGIDO)
+// ---------------------------------------------------------------------
 private parsearTextoDeTesseract(textoBruto: string): ParsedData {
-    this.logger.log('[Parser] Analizando texto con RegEx optimizado para códigos cortos y Cantidad opcional...');
+    this.logger.log('[Parser] Analizando texto con RegEx FINAL (Corregida la captura del Código)...');
 
     const texto = this.cleanText(textoBruto);
     const lines = texto.split('\n');
     let items: ParsedItem[] = [];
 
     // --- A) Patrones de cabecera (Se mantienen igual) ---
-    // ... (patronesProveedor, patronesFecha, patronesCuit, etc. aquí) ...
+    const patronesProveedor: RegExp[] = [
+        /RAZON SOCIAL\s*:\s*(.+)/, /PROVEEDOR\s*:\s*(.+)/, /SEÑOR(?:ES)?\s*:\s*(.+)/, /CLIENTE\s*:\s*(.+)/,
+    ];
+    const patronesFecha: RegExp[] = [
+        /FECHA(?: DE EMISION| ORDEN| DE \w+)?\s*:\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/, 
+        /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/,
+    ];
+    const patronesCuit: RegExp[] = [
+        /C\.?U\.?I\.?T\.?|C\.?U\.?I\.?L\.?\s*N?°?\s*:\s*(\d{2}[-.\s]?\d{8}[-.\s]?\d)/,
+        /(\d{2}[-.\s]\d{8}[-.\s]\d)/,
+    ];
+    const patronesDireccion: RegExp[] = [
+        /(?:DIRECCION|DOMICILIO|CALLE)\s*:\s*(.+)/,
+    ];
+    const patronesCondicionFiscal: RegExp[] = [
+        /CONDICION (?:TRIBUTARIA|IVA)\s*:\s*(.+)/, 
+        /(IVA RESPONSABLE INSCRIPTO|RESPONSABLE INSCRIPTO|MONOTRIBUTO|CONSUMIDOR FINAL)/,
+    ];
 
-    // (Se asume que la extracción de datos de cabecera sigue aquí y funciona correctamente)
-    const provider = this.findFirstMatch(texto, [/* ... */]) || 'Proveedor (no detectado)';
-    const date = this.findFirstMatch(texto, [/* ... */]) || new Date().toISOString().slice(0, 10);
-    const cuitRaw = this.findFirstMatch(texto, [/* ... */]);
-    const cuit = cuitRaw ? cuitRaw.replace(/[-.\s]/g, '') : '';
-    const address = this.findFirstMatch(texto, [/* ... */]) || '';
-    const customerTaxCondition = this.findFirstMatch(texto, [/* ... */]) || '';
+    // --- B) Extracción y normalización de Cabecera ---
+    const provider = this.findFirstMatch(texto, patronesProveedor) || 'PROVEEDOR (NO DETECTADO)';
+    const date = this.findFirstMatch(texto, patronesFecha) || new Date().toISOString().slice(0, 10);
+    const cuitRaw = this.findFirstMatch(texto, patronesCuit);
+    const cuit = cuitRaw ? cuitRaw.replace(/[-.\s]/g, '') : ''; 
+    const address = this.findFirstMatch(texto, patronesDireccion) || '';
+    const customerTaxCondition = this.findFirstMatch(texto, patronesCondicionFiscal) || '';
 
 
-    // --- B) Extracción de Ítems (RegEx Súper Agresiva) ---
+    // --- C) Extracción de Ítems (RegEx Agresiva con Exclusión) ---
+    
+    // Palabras que indican que la línea es parte de la cabecera/pie y no un ítem.
+    const exclusionKeywords = /(CUIT|TELEFONO|DIRECCION|LOCALIDAD|PROVINCIA|C\.?P\.?|DOMICILIO|RAZON\s*SOCIAL)/;
 
     // 1. Delimitación de Tabla
-    const startOfItemsKeywords = /(?:N[o°]|\s)C[OÓ]DIGO|ART[IÍ]CULO|CANTIDAD|DETALLE|DESCRIPCI[OÓ]N|PRODUCTO|CANT\. ENVIADA/i;
+    const startOfItemsKeywords = /(?:N[O°]|\s)CODIGO|ART[IÍ]CULO|CANTIDAD|DETALLE|DESCRIPCION|PRODUCTO|CANT\.\s*ENVIADA/i;
     let startIndex = lines.findIndex(line => line.match(startOfItemsKeywords));
-    
     startIndex = startIndex !== -1 ? startIndex + 1 : (lines.length > 5 ? 5 : 0); 
 
-    // 2. RegEx ÚNICA: Solo busca [Código] [Nombre/Descripción] [Cantidad (Opcional)]
-    const itemRegexAgresiva = new RegExp(
+    // 2. RegEx FINAL CORREGIDA: Código sin espacios.
+    const itemRegexFinal = new RegExp(
         [
-            /^\s*(?:\d{1,4}\s*)?/.source, // Opcional: Número de línea (Ej: 1, 2, 3...)
+            /^\s*(?:\d{1,4}\s*)?/.source, 
             
-            // 1. Código: Acepta números cortos (1 o 2 dígitos) o alfanuméricos (min 2 chars)
-            /\b(?<code>[A-Z0-9\-\.\/\s]{1,20})\b/.source, 
+            // 1. CÓDIGO CORREGIDO: SOLO ALFANUMÉRICO, GUIONES Y PUNTOS. SIN ESPACIOS.
+            /\b(?<code>[A-Z0-9\-\.]{1,20})\b/.source, 
+            
             /\s{1,}/.source, 
+            // 2. Nombre: Captura cualquier cosa, incluidos ESPACIOS
+            /(?<name>.*?)/i.source, 
             
-            // 2. Nombre/Descripción: Captura caracteres amplios, hasta que encuentra el patrón de número final.
-            /(?<name>[A-ZÁÉÍÓÚÑ0-9 ,.\-\/\(\)\[\]\%]{3,80}?)/i.source, 
             /\s{1,}/.source, 
-            
-            // 3. Cantidad: El último valor numérico esperado. (LO HACEMOS OPCIONAL)
+            // 3. Cantidad: Último bloque numérico (OPCIONAL)
             /(?<qty>\d{1,8}(?:[.,]\d{1,3})?)?/.source, 
-            /.*$/i.source // Captura el resto de la línea
+            /.*$/i.source
         ].join(''), 
         'i'
     );
 
     for (let i = startIndex; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (line.length < 5) continue; // Si la línea es muy corta, ignoramos.
+        if (line.length < 5) continue; 
 
-        // Condición de fin de tabla (delimitación)
-        if (line.match(/(SUBTOTAL|TOTAL|IVA|PERCEPCIONES|NOTAS|OBSERVACIONES|RECIBI|FIRMA|PESO TOTAL|SUMA)/i)) {
-            break;
+        // 🛑 FILTRO DE EXCLUSIÓN: Ignorar líneas de cabecera.
+        if (line.match(exclusionKeywords)) {
+            this.logger.debug(`[Parser] Línea excluida: ${line}`);
+            continue;
         }
 
-        const m = line.match(itemRegexAgresiva);
-        if (!m || !m.groups || !m.groups.code) continue; // Si no hay match válido, seguimos.
+        // Condición de fin de tabla (pie de página)
+        if (line.match(/(SUBTOTAL|TOTAL|IVA|NOTAS|OBSERVACIONES|RECIBI|FIRMA|PESO TOTAL|SUMA)/i)) break;
 
-        // Extracción de grupos
+        const m = line.match(itemRegexFinal);
+        if (!m || !m.groups || !m.groups.code) continue; 
+
         const code = m.groups.code.trim();
         const name = m.groups.name.trim();
-        const qtyRaw = m.groups.qty; // Puede ser undefined si la cantidad es opcional
+        const qtyRaw = m.groups.qty;
 
         let qty: number;
-        
-        // 1. Asignación de Cantidad: Si se detecta, se parsea. Si no, se asigna 1 (por defecto).
         if (qtyRaw) {
             qty = parseFloat(qtyRaw.replace(',', '.'));
         } else {
-            qty = 1; // Asumimos 1 si no se detectó la columna QTY.
+            qty = 1; 
         }
 
-
-        // Filtro de calidad final:
-        // Aseguramos que el código no sea solo una letra o un símbolo, y que el nombre sea útil.
         if (code.length < 1 || name.length < 3 || !Number.isFinite(qty) || qty <= 0) continue;
 
-        items.push({
-            detectedCode: code,
-            detectedName: name,
-            qty: qty, 
-            price: undefined, // Siempre indefinido por regla de negocio
-        });
+        items.push({ detectedCode: code, detectedName: name, qty: qty, price: undefined });
     }
 
     // Fallback si no se encontró nada
     if (items.length === 0) {
         this.logger.warn('[Parser] No se detectaron ítems válidos. Usando fallback.');
-        items.push({
-            detectedCode: 'FALLBACK-ITEM',
-            detectedName: 'Ítem no detectado (Requiere edición)',
-            qty: 1,
-            price: 0
-        });
+        items.push({ detectedCode: 'FALLBACK-ITEM', detectedName: 'ITEM NO DETECTADO (EDITAR)', qty: 1, price: 0 });
     }
 
-    this.logger.log(
-      `[Parser] Detectado: ${provider}, CUIT: ${cuit}, Fecha: ${date}, Items: ${items.length}`,
-    );
-
-    return {
-        provider,
-        date,
-        customerCuit: cuit,
-        customerAddress: address,
-        customerTaxCondition,
-        items,
-    };
+    return { provider, date, customerCuit: cuit, customerAddress: address, customerTaxCondition, items };
 }
 
 // ---------------------------------------------------------------------
